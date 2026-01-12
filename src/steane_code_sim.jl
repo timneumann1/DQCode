@@ -145,6 +145,8 @@ Legend(fig[1,2][2,1],[lZ1],["Fidelity"],
 
 display(fig)
 
+steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
+
 record(fig, "steane-7-fidelity.mp4", step_ts, framerate=1, visible=true) do t
     run(sim, t)
     
