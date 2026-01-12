@@ -1,12 +1,29 @@
-include("helper_functions.jl") 
-using GLMakie
-GLMakie.activate!()
+module Evolutionary
+
+#include("helper_functions.jl") 
+# For convenient graph data structures
+using Graphs
+
+# For discrete event simulation
+using ResumableFunctions
+using ConcurrentSim
+
+# Useful for interactive work
+# Enables automatic re-compilation of modified codes
+using Revise
+
+# The workhorse for the simulation
+using QuantumSavory
+
+using QuantumSavory.ProtocolZoo: EntanglerProt
+
 
 # System Parameters
 sizes = [6,3]        # Number of qubits in each register
 T1 = 1000.00         # T1 relaxation time of all qubits
 T2 = 100000.0         # T2 dephasing time of all qubits
 F = 1              # Fidelity of the raw Bell pairs
+t = 75
 
 # TODO: Define units and insert realistic values
 entangler_wait_time = 0.1  # How long to wait if all qubits are busy before retrying entangling
@@ -18,13 +35,11 @@ purifier_busy_time = 0.2   # How long the purification circuit takes to execute
 single_qubit_gate_execution_time = 1  # Execution Time of a single qubit gate
 two_qubit_gate_execution_time = 3     # Execution Time of a two qubit gate
 projective_measurement_time = 0.5     # Time to peform a measurement
-noisy_pair = noisy_pair_func(F)       # Retrieving a (noisy) Bell pair with fidelity F
 init_time = 1                         # Time to initialise the system (e.g., in the all-zero state)
 
-#@resumable function bell_pair(sim, network, ri, rj)
-#    eprot = EntanglerProt(sim, network, ri, rj; pairstate=noisy_pair, chooseslotA=1, chooseslotB=1, rounds=1, success_prob=1.)
-#    @process eprot()
-#end
+bell = StabilizerState("XX ZZ")
+noisy_pair_func(F) = (1-F)*MixedState(bell) + F*projector(bell)
+noisy_pair = noisy_pair_func(F)       # Retrieving a (noisy) Bell pair with fidelity F
 
 @resumable function apply_single_qubit_ops(sim, network, register_array, qubit_array, ops_array)
     # Accepts an array of single-qubit operations and executes them in parallel (during on time slice)
@@ -109,9 +124,7 @@ end
 @resumable function circuit(sim, network)
     # Initialize memory qubits in zero state
     initialize!([network[i,j] for i in 1:length(sizes) for j in 2:sizes[i]], SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  ) 
-    @yield timeout(sim, init_time)    
-    @simlog sim "Network after initialization: $network"
-    
+
     # TODO: For each layer, identify the longest execution time among parallel operations
     @yield @process apply_single_qubit_ops(sim, network, [1,1,1],[2,3,5],[H,H,H])
     @yield @process apply_CNOTs(sim, network, 1, 2, 4)
@@ -125,39 +138,50 @@ end
     @yield @process apply_CNOTs(sim, network, 1, 5, 6)
 end
 
+
 # Initialise the network
-sim, network = simulation_setup(sizes, T2; representation = QuantumOpticsRepr)  
+
+R = length(sizes) # Number of registers
+
+# All of the quantum register we will be simulating
+registers = Register[]
+for s in sizes
+    traits = [Qubit() for _ in 1:s]
+    repr = [QuantumOpticsRepr() for _ in 1:s]
+    bg = [T2Dephasing(T2) for _ in 1:s]
+    push!(registers, Register(traits,repr, bg)) 
+end
+
+# A graph structure defining the connectivity among registers
+# It is not necessary to use such a structure, however, it is a convenient way to
+# store data about the simulation (and we have created helper plotting functions
+# expecting such a structure).
+graph = grid([R])
+network = RegisterNet(graph, registers) # A graphs with extra "meta data"
+
+# The scheduler datastructure for the discrete event simulation
+sim = get_time_tracker(network)
+
+# Add a register datastructures and event locks to each node.
+for v in vertices(network)
+    # Create an array specifying whether a qubit is entangled with another qubit
+    network[v,:enttrackers] = Any[nothing for i in 1:sizes[v]]
+end
+
+#sim, network = simulation_setup(sizes, T2; representation = QuantumOpticsRepr)  
 @process circuit(sim, network)
 
-step_ts = range(0, 75, step=0.2)
+run(sim, t)
 
-# Plotting capabilities
-fig = Figure(size=(800,400))
-_,ax,_,obs = registernetplot_axis(fig[1,1],network)
-ts = Observable(Float64[0])
-fidelities = Observable(Float64[0])
-ax_fid = Axis(fig[1,2][1,1], xlabel="time", ylabel="Steane-7 Stabilizer State Fidelity")
-lZ1 = stairs!(ax_fid,ts,fidelities,label="X")
-xlims!(0, nothing)
-ylims!(-1.05, 1.05)
-Legend(fig[1,2][2,1],[lZ1],["Fidelity"],
-            orientation = :horizontal, tellwidth = false, tellheight = true)
+#step_ts = range(0, 50, step=0.2)
 
-display(fig)
+#ts = Observable(Float64[0])
+#fidelities = Observable(Float64[0])
+
 
 steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
 
-record(fig, "steane-7-fidelity.mp4", step_ts, framerate=1, visible=true) do t
-    run(sim, t)
-    
-    fidelity = real(observable(vcat( [network[1,i] for i in 2:6],[network[2,j] for j in 2:3]), SProjector(steane_7_state)))
-    print("Fidelity: $fidelity at time $t \n")
-    
+fidelity = real(observable(vcat( [network[1,i] for i in 2:6],[network[2,j] for j in 2:3]), SProjector(steane_7_state)))
+print("Fidelity: $fidelity at time $t \n")
 
-    push!(fidelities[],fidelity)
-    push!(ts[],t)
-    ax.title = "t=$(t)"
-    notify(obs)
-    notify(ts)
-    xlims!(ax_fid, 0, t+0.5)
 end
