@@ -1,15 +1,16 @@
 include("types.jl")
 include("simulation.jl")
 
-using .Types
+#using .Types
+using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
 
-params = Types.SimulationParameters(
+params = SimulationParameters(
         [6,3],
         12000.0,
         4200.0,
         1.0,
         10.0,  
-        20e-6, # Execution Time of a single qubit gate
+        20e-2, # Execution Time of a single qubit gate
         200e-6,
         1e-5,
         1e-2,
@@ -25,10 +26,53 @@ params = Types.SimulationParameters(
 #TODO: Define single qubit error rate
 )
 
-# TODO: define the circuit here
+#TODO: Take care of scoping of register and register_start_index
+function create_lookup_array(params)
+    register_lookup_array = Vector{Int}(undef, sum(params.register_sizes))
+    register = 1
+    register_start_index = 1
+    for i in eachindex(params.register_sizes)
+        j = params.register_sizes[i]
+        register_lookup_array[register_start_index:register_start_index+j-1] .= register
+        register_start_index+=j
+        register +=1
+    end
+    return register_lookup_array
+end
+      
 
-fidelity = run_simulation(params)
+# register_lookup_array = Int[]
+# for (register, size) in enumerate(params.register_sizes)
+#     append!(register_lookup_array, fill(register, size))
+# end
+
+register_lookup_array = create_lookup_array(params)
+
+# TODO: define the circuit here
+circuit = Types.Circuit(sum(params.register_sizes), 8)  # params.register_sizes rows (qubits) and 8 columns (time steps)
+#print(circuit)
+# TODO: block all communication qubit layers
+#circuit_matrix.gate[2]
+circuit.gates[2,1] = HadamardGate()
+circuit.gates[3,1] = HadamardGate()
+circuit.gates[5,1] = HadamardGate()
+circuit.gates[2,2] = CNOT_Gate(2,4)
+circuit.gates[4,2] = CNOT_Gate(2,4)
+circuit.gates[5,2] = CNOT_Gate(5,8)
+circuit.gates[8,2] = CNOT_Gate(5,8)
+circuit.gates[2,3] = CNOT_Gate(2,7)
+circuit.gates[7,3] = CNOT_Gate(2,7)
+circuit.gates[5,4] = CNOT_Gate(5,9)
+circuit.gates[9,4] = CNOT_Gate(5,9)
+circuit.gates[3,5] = CNOT_Gate(3,8)
+circuit.gates[8,5] = CNOT_Gate(3,8)
+circuit.gates[2,6] = CNOT_Gate(2,9)
+circuit.gates[9,6] = CNOT_Gate(2,9)
+circuit.gates[3,7] = CNOT_Gate(3,4)
+circuit.gates[4,7] = CNOT_Gate(3,4)
+circuit.gates[5,8] = CNOT_Gate(5,7)
+circuit.gates[7,8] = CNOT_Gate(5,7)
+
+fidelity = run_simulation(params, circuit, register_lookup_array)
 
 print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
-
-

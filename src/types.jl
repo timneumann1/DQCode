@@ -2,7 +2,9 @@
 
 module Types
 
-export SimulationParameters, SimulationFidelity
+# types for simulation
+
+export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
 
 struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
@@ -22,6 +24,37 @@ end
 
 struct SimulationFidelity
     fidelity::Float64
+end
+
+# types for circuit representation
+
+abstract type Gate end
+
+# single-qubit gates
+struct IdentityGate <: Gate end
+struct PauliXGate <: Gate end
+struct PauliYGate <: Gate end
+struct PauliZGate <: Gate end
+struct HadamardGate <: Gate end
+
+# two-qubit gates (store the counterpart of the operation)
+struct CNOT_Gate <: Gate
+    control::Int
+    target::Int
+end
+
+# struct Target <: Gate
+#     control::Int
+# end
+
+struct Circuit
+    gates::Matrix{Gate}
+end
+
+function Circuit(num_qubits::Int, num_layers::Int)
+    @assert num_qubits > 0
+    @assert num_layers > 0
+    Circuit(fill(IdentityGate(), num_qubits, num_layers))
 end
 
 end

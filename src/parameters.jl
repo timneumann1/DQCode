@@ -8,7 +8,7 @@ using .Types
 #TODO: sweep over parameters and get fidelities
 
 params = Types.SimulationParameters(
-        [6,3],
+        [5,4],
         12000.0,
         4200.0,
         1.0,
@@ -24,8 +24,8 @@ params = Types.SimulationParameters(
 )
 
 #for ...
+# also need to pass circuit object
 fidelity = run_simulation(params)
 
 print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
 
-# also need to pass circuit obejct
