@@ -10,7 +10,7 @@ struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
     T1_relaxation::Float64          # T1 relaxation time of all qubits   [Wang]
     T2_dephasing::Float64         # T2 dephasing time of all qubits     [Wang]
-    fidelity_bell_pairs::Float64             # Fidelity of the raw Bell pairs
+    #fidelity_bell_pairs::Float64             # Fidelity of the raw Bell pairs
     simulation_time::Float64
     single_qubit_gate_exec_time::Float64   # Execution Time of a single qubit gate
     two_qubit_gate_exec_time::Float64      # Execution Time of a two qubit gate

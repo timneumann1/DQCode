@@ -5,17 +5,17 @@ include("simulation.jl")
 using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
 
 params = SimulationParameters(
-        [6,3],
+        [5,4],
         12000.0,
-        4200.0,
-        1.0,
-        10.0,  
-        20e-2, # Execution Time of a single qubit gate
-        200e-6,
-        1e-5,
-        1e-2,
+        100000000.0, #4200
+        #1.0,
+        10000.0,  
+        0.5, # Execution Time of a single qubit gate   #20e^-6
+        1.5,   # 200e^-6
+        0.1,  #1e^-5
+        0.1,  # 1e^-2
         0.001,
-        0.9689, # Bell state fidelity
+        1,#0.9689, # Bell state fidelity
         1.41e-4, # Bell state generation,from [Main, 2025]
         1.168e-9
 
@@ -26,6 +26,7 @@ params = SimulationParameters(
 #TODO: Define single qubit error rate
 )
 
+# Need to be run only once before the EA
 #TODO: Take care of scoping of register and register_start_index
 function create_lookup_array(params)
     register_lookup_array = Vector{Int}(undef, sum(params.register_sizes))
@@ -39,37 +40,58 @@ function create_lookup_array(params)
     end
     return register_lookup_array
 end
-      
+
+function comm_qubits_array(params)
+    comm_qubits_array = Vector{Int}(undef,length(params.register_sizes))
+    index = 1
+    for i in eachindex(params.register_sizes)
+        j = params.register_sizes[i]
+        comm_qubits_array[i] = index
+        index += j
+    end
+    return comm_qubits_array
+end
 
 # register_lookup_array = Int[]
 # for (register, size) in enumerate(params.register_sizes)
 #     append!(register_lookup_array, fill(register, size))
 # end
 
-register_lookup_array = create_lookup_array(params)
+print(comm_qubits_array(params))
 
+register_lookup_array = create_lookup_array(params)
 # TODO: define the circuit here
 circuit = Types.Circuit(sum(params.register_sizes), 8)  # params.register_sizes rows (qubits) and 8 columns (time steps)
 #print(circuit)
-# TODO: block all communication qubit layers
+# TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
+
 #circuit_matrix.gate[2]
 circuit.gates[2,1] = HadamardGate()
 circuit.gates[3,1] = HadamardGate()
 circuit.gates[5,1] = HadamardGate()
+
 circuit.gates[2,2] = CNOT_Gate(2,4)
 circuit.gates[4,2] = CNOT_Gate(2,4)
 circuit.gates[5,2] = CNOT_Gate(5,8)
 circuit.gates[8,2] = CNOT_Gate(5,8)
-circuit.gates[2,3] = CNOT_Gate(2,7)
-circuit.gates[7,3] = CNOT_Gate(2,7)
-circuit.gates[5,4] = CNOT_Gate(5,9)
-circuit.gates[9,4] = CNOT_Gate(5,9)
-circuit.gates[3,5] = CNOT_Gate(3,8)
-circuit.gates[8,5] = CNOT_Gate(3,8)
-circuit.gates[2,6] = CNOT_Gate(2,9)
-circuit.gates[9,6] = CNOT_Gate(2,9)
-circuit.gates[3,7] = CNOT_Gate(3,4)
-circuit.gates[4,7] = CNOT_Gate(3,4)
+
+circuit.gates[3,3] = CNOT_Gate(3,9)
+circuit.gates[9,3] = CNOT_Gate(3,9)
+
+circuit.gates[2,4] = CNOT_Gate(2,7)
+circuit.gates[7,4] = CNOT_Gate(2,7)
+
+circuit.gates[5,5] = CNOT_Gate(5,9)
+circuit.gates[9,5] = CNOT_Gate(5,9)
+
+circuit.gates[3,6] = CNOT_Gate(3,8)
+circuit.gates[8,6] = CNOT_Gate(3,8)
+
+circuit.gates[2,7] = CNOT_Gate(2,9)
+circuit.gates[9,7] = CNOT_Gate(2,9)
+
+circuit.gates[3,8] = CNOT_Gate(3,4)
+circuit.gates[4,8] = CNOT_Gate(3,4)
 circuit.gates[5,8] = CNOT_Gate(5,7)
 circuit.gates[7,8] = CNOT_Gate(5,7)
 

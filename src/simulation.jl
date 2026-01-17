@@ -20,24 +20,28 @@ const noisy_pair_func(F) = (1-F)*MixedState(bell) + F*projector(bell)
 
 gate_to_apply(::Type{Types.HadamardGate}) = H
 
+@resumable function single_qubit_gate(sim, network, register, qubit, gate, single_qubit_gates_layer_executed, num_single_qubit_gates_processes)
+    @simlog sim "Entered single_qubit_gate"
 
-@resumable function single_qubit_gate(sim, network, register, qubit, gate)
     # Accepts an array of single-qubit operations and executes them in parallel (during on time slice)
     #num_ops = length(register_array)
     #@assert num_ops === length(qubit_array) === length(ops_array)
-    print("Single qubit gate:")
-    print("\n $register, $qubit, $gate")
+    #print("Single qubit gate:")
+    #print("\n $register, $qubit, $gate")
     @yield request(network[register, qubit])
-    print("HEEEERE")
-    print("Executing $gate gate on ($register, $qubit)")
-    print(network[register,qubit])
+    #print("Executing $gate gate on ($register, $qubit)")
+    #print(network[register,qubit])
     apply!(network[register,qubit], gate)
     @simlog sim "Executing $gate gate on ($register, $qubit)"
     @yield unlock(network[register, qubit])
-    print("HEEEERE")
+    num_single_qubit_gates_processes[]-=1
+    @simlog sim "num_single_qubit_gates_processes processes: $(num_single_qubit_gates_processes[])"   
+    num_single_qubit_gates_processes[]==0 && succeed(single_qubit_gates_layer_executed)
+
 end
 
-@resumable function CNOT_gate(sim, network, register, control_qubit, target_qubit)
+@resumable function CNOT_gate(sim, network, register, control_qubit, target_qubit, num_CNOT_gate_processes, CNOT_gate_layer_executed)
+    @simlog sim "Entered CNOT_gate"
     # Accepts an array of control and target qubits for CNOT applications
     # that can be executed in parallel (during on time slice) within one core
     @yield request(network[register, control_qubit])
@@ -45,10 +49,17 @@ end
     apply!( ( network[register, control_qubit], network[register, target_qubit]), CNOT)
     @simlog sim "Executing CNOT between ($register, $control_qubit) and ($register, $target_qubit)"
     @yield unlock(network[register, control_qubit])
-    @yield unlock(network[register, target_qubit])    
+    @yield unlock(network[register, target_qubit])  
+    
+    @simlog sim "cnot gate processes $num_CNOT_gate_processes"
+    num_CNOT_gate_processes[]-=1
+    #@simlog sim "num_CNOT_gate_processes processes: $(num_CNOT_gate_processes[])"
+    num_CNOT_gate_processes[]==0 && succeed(CNOT_gate_layer_executed)
 end
 
-@resumable function CNOT_telegate(sim, network, control_register, target_register, control_qubit, target_qubit, params)
+@resumable function CNOT_telegate(sim, network, control_register, target_register, control_qubit, target_qubit, params, num_CNOT_telegate_processes, CNOT_telegate_layer_executed)
+    @simlog sim "Entered CNOT_telegate"
+    
     # Accepts control and target qubit for remote CNOT application across cores
     @assert network[control_register, 1] !== nothing "Missing flying qubit at control register"
     @assert network[target_register, 1] !== nothing "Missing flying qubit at target register"
@@ -60,8 +71,10 @@ end
     # Create Bell Pair between first qubits of registers i and j
     noisy_pair = noisy_pair_func(params.bell_state_fidelity)       # Retrieving a (noisy) Bell pair with fidelity F
 
-    eprot = EntanglerProt(sim, network, control_register, target_register; pairstate=noisy_pair, chooseslotA=1, chooseslotB=1, rounds=-1, attempts = -1, success_prob=params.success_prob, attempt_time = params.attempt_time) 
-    @process eprot()
+    eprot = EntanglerProt(sim, network, control_register, target_register; pairstate=noisy_pair, chooseslotA=1, chooseslotB=1, rounds=1, attempts = -1, success_prob=params.success_prob, attempt_time = params.attempt_time) 
+    @simlog sim "Before entanglement creation"
+    @yield @process eprot()
+    @simlog sim "After entanglement creation"  
     #@yield timeout(sim, entangler_busy_time)
     
     # Perform CNOT telegate between qubits q1 and q2 (TODO: extend to application of more gates, cf. EJPP protocol)
@@ -97,88 +110,85 @@ end
     @yield unlock(network[target_register,target_qubit])
     @yield unlock(network[control_register,1])
     @yield unlock(network[target_register,1])
+    
+    num_CNOT_telegate_processes[]-=1
+    @simlog sim "num_CNOT_telegate_processes processes: $(num_CNOT_telegate_processes[])"
+    num_CNOT_telegate_processes[]==0 && succeed(CNOT_telegate_layer_executed)
 end
 
-#function gate_to_apply(::Type{HadamardGate}) = H
+@resumable function single_qubit_gates_per_layer(sim, network, single_qubit_gates, params, register_lookup_array, layer_executed, num_processes)
+    single_qubit_gates_layer_executed = Event(sim)
+    num_single_qubit_gates_processes = isempty(single_qubit_gates) ? Ref(0) : Ref(sum(length, values(single_qubit_gates)))#@isdefined(single_qubit_gates) ? Ref() : Ref(0)
 
-# function gate_to_apply(g::Gate)
-#     if g isa HadamardGate
-#         return H
-#     elseif g isa PauliXGate
-#         return X
-#     elseif g isa PauliYGate
-#         return Y
-#     elseif g isa PauliZGate
-#         return Z
-#     # elseif g isa IdentityGate
-#     #     return nothing  # identity, skip
-#     # elseif g isa CNOTGate
-#     #     return CNOT  # or whatever simulator CNOT expects
-#     # else
-#     #     error("Unknown gate")
-#     end
-# end
-
-
-#     elseif g isa PauliXGate
-#         return X
-#     elseif g isa PauliYGate
-#         return Y
-#     elseif g isa PauliZGate
-#         return Z
-
-@resumable function single_qubit_gates_per_layer(sim, network, single_qubit_gates, params, register_lookup_array)
-    print("In the function for single qubit gate*s now.")
-    print(single_qubit_gates)
+    @simlog sim "Entered single_qubit_gates_per_layer with $num_single_qubit_gates_processes processes"
     for gtype in keys(single_qubit_gates)
-        indices = get!(single_qubit_gates, gtype, Int[])   
-        print(indices) 
-        print(gtype)    
+        indices = get!(single_qubit_gates, gtype, Int[])     
         for index in indices
-            print(register_lookup_array[index], index, gate_to_apply(gtype))
-            print("Initialising a process of single qubit gate for $gate_to_apply(gtype) on index $index")
-            @process single_qubit_gate(sim, network, register_lookup_array[index], index, gate_to_apply(gtype))#gate_to_apply(gtype))
-            print("Made it here")
+            register = register_lookup_array[index]
+            index_in_register = index - sum(params.register_sizes[1:(register-1)])  # need to account for index of qubit within register
+            @process single_qubit_gate(sim, network, register, index_in_register, gate_to_apply(gtype), single_qubit_gates_layer_executed, num_single_qubit_gates_processes)#gate_to_apply(gtype))
         end
     end
-    @yield timeout(sim, params.single_qubit_gate_exec_time)
+    if num_single_qubit_gates_processes[] != 0
+        @yield single_qubit_gates_layer_executed 
+        @yield timeout(sim, params.single_qubit_gate_exec_time)
+    end
+    
+    num_processes[]-=1
+    @simlog sim "layer_executed processes: $(num_processes[])"
+    num_processes[]==0 && succeed(layer_executed)
 end
 
-@resumable function CNOT_gates_per_layer(sim, network, CNOT_gates, params, register_lookup_array)
-    for (control, target) in CNOT_gates
-        @process CNOT_gate(sim, network, register_lookup_array[control], control, target)
-    end
-    @yield timeout(sim, params.single_qubit_gate_exec_time)
+@resumable function CNOT_gates_per_layer(sim, network, CNOT_gates, params, register_lookup_array, layer_executed, num_processes)
+    
+    CNOT_gate_layer_executed = Event(sim)
+    num_CNOT_gate_processes = isempty(CNOT_gates) ? Ref(0) : Ref(length(CNOT_gates))  #@isdefined(CNOT_gates) ?  : Ref(0)
+    @simlog sim "How many CNOT gate proceess? $num_CNOT_gate_processes"
 
+    @simlog sim "Entered CNOT_gates_per_layer with $num_CNOT_gate_processes processes "
+
+    for (control, target) in CNOT_gates
+        register = register_lookup_array[control]
+        control_index_in_register = control - sum(params.register_sizes[1:(register-1)])
+        target_index_in_register = target - sum(params.register_sizes[1:(register-1)])
+        @process CNOT_gate(sim, network, register, control_index_in_register, target_index_in_register, num_CNOT_gate_processes, CNOT_gate_layer_executed)
+    end
+
+    if num_CNOT_gate_processes[] != 0
+        @yield CNOT_gate_layer_executed
+        @yield timeout(sim, params.two_qubit_gate_exec_time)
+    end
+    
+    #num_CNOT_gate_processes[] == 0 || 
+    num_processes[]-=1
+    @simlog sim "layer_executed processes: $(num_processes[])"
+    num_processes[]==0 && succeed(layer_executed)
 end
 
 #TODO: potentially refactor back to simple function (if single telegate is kept as assumption)
-@resumable function CNOT_telegates_per_layer(sim, network, CNOT_telegates, params, register_lookup_array)
+@resumable function CNOT_telegates_per_layer(sim, network, CNOT_telegates, params, register_lookup_array, layer_executed, num_processes)
+    CNOT_telegate_layer_executed = Event(sim)
+    #num_CNOT_telegates = something(size(CNOT_telegates), 0)
+    #@simlog sim "number of CNOT telegates in array is $num_CNOT_telegates"
+    num_CNOT_telegate_processes = isempty(CNOT_telegates) ? Ref(0) : Ref(length(CNOT_telegates))
+    @simlog sim "Entered CNOT_telegates_per_layer with $num_CNOT_telegate_processes processes "
+
     for (control, target) in CNOT_telegates
-        @process CNOT_telegate(sim, network, register_lookup_array[control], register_lookup_array[target], control, target, params)
+        control_register = register_lookup_array[control]
+        target_register = register_lookup_array[target]
+        control_index_in_register = control - sum(params.register_sizes[1:(control_register-1)])
+        target_index_in_register = target - sum(params.register_sizes[1:(target_register-1)])
+        @process CNOT_telegate(sim, network, control_register, target_register, control_index_in_register, target_index_in_register, params, num_CNOT_telegate_processes, CNOT_telegate_layer_executed)
     end
+    # print("num_processestelee_before$num_processes")
+    if num_CNOT_telegate_processes[] != 0
+        @yield CNOT_telegate_layer_executed
+    end
+
+    num_processes[]-=1
+    @simlog sim "layer_executed processes: $(num_processes[])"
+    num_processes[]==0 && succeed(layer_executed)
 end
-
-# @resumable function steane_encoding_circuit(sim, network, params)
-#     # Initialize memory qubits in zero state
-#     initialize!([network[i,j] for i in 1:length(params.register_sizes) for j in 2:params.register_sizes[i]], SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  ) 
-
-#     # TODO: For each layer, identify the longest execution time among parallel operations
-#     # make adding gates possible
-#     @yield @process single_qubit_gate(sim, network, 1, 2, H, params)
-#     @yield @process single_qubit_gate(sim, network, 1, 3, H, params)
-#     @yield @process single_qubit_gate(sim, network, 1, 5, H, params)
-
-#     @yield @process CNOT_gate(sim, network, 1, 2, 4, params)
-#     @yield @process telegate_CNOT(sim, network, 1, 2, 5, 2, params)
-#     @yield @process telegate_CNOT(sim, network, 1, 2, 3, 3, params)
-#     @yield @process CNOT_gate(sim, network, 1, 2, 6, params)
-#     @yield @process telegate_CNOT(sim, network, 1, 2, 5, 3, params)
-#     @yield @process telegate_CNOT(sim, network, 1, 2, 3, 2, params)
-#     @yield @process telegate_CNOT(sim, network, 1, 2, 2, 3, params)
-#     @yield @process CNOT_gate(sim, network, 1, 3, 4, params)
-#     @yield @process CNOT_gate(sim, network, 1, 5, 6, params)
-# end
 
 function initialise_simulation(params)
     # Initialise the network
@@ -197,18 +207,40 @@ function initialise_simulation(params)
     network = RegisterNet(graph, registers) # A graphs with extra "meta data"
 
     # The scheduler datastructure for the discrete event simulation
-    sim = get_time_tracker(network)
-    initialize!([network[i,j] for i in eachindex(sizes) for j in 2:sizes[i]], SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  ) 
+    sim = get_time_tracker(network) # creates Simulation() for all registers
+    data_qubits = [network[i,j] for i in eachindex(sizes) for j in 2:sizes[i]]
+    initialize!(data_qubits, SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  ) 
+    
+    return sim, network, data_qubits
+end
 
-    return sim, network
+@resumable function execute_layer(sim, network, single_qubit_gates, CNOT_gates, CNOT_telegates, params, register_lookup_array)
+    layer_executed = Event(sim)
+    num_processes = Ref(3)
+    @process single_qubit_gates_per_layer(sim, network, single_qubit_gates, params, register_lookup_array, layer_executed, num_processes)
+    @process CNOT_gates_per_layer(sim, network, CNOT_gates, params, register_lookup_array, layer_executed, num_processes)#, layer_executed, num_processes)
+    @process CNOT_telegates_per_layer(sim, network, CNOT_telegates, params, register_lookup_array, layer_executed, num_processes)
+    @yield layer_executed
 end
 
 function run_simulation(params::Types.SimulationParameters, circuit::Types.Circuit, register_lookup_array::Array{Int})::Types.SimulationFidelity
-    
-    sim, network = initialise_simulation(params)
-    
+    sim, network, data_qubits = initialise_simulation(params)
     circuit_matrix = circuit.gates
+
+    execute = @process execute_simulation(sim, network, params, circuit_matrix, register_lookup_array)
+    
+    run(sim, execute)#params.simulation_time)#circuit_simulation_process)# )
+
+    steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
+
+    fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
+    return Types.SimulationFidelity(fidelity)
+end
+
+@resumable function execute_simulation(sim, network, params, circuit_matrix, register_lookup_array)
+    
     for col in axes(circuit_matrix, 2) # each column corresponds to one layer
+        @simlog sim "Entered the iteration $col in the outer loop"
         single_qubit_gates = Dict{Type, Vector{Int}}() # stores single qubit gates and corresponding qubit indices per layer
         CNOT_gates = Vector{Tuple{Int, Int}}()
         CNOT_telegates = Vector{Tuple{Int, Int}}()
@@ -216,14 +248,13 @@ function run_simulation(params::Types.SimulationParameters, circuit::Types.Circu
 
         for row in axes(circuit_matrix, 1) # each row corresponds to one qubit
             gate = circuit_matrix[row,col]
-            #print(gate)
             if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} #  Gate && !(gate isa CNOT) 
                 gate_type = typeof(gate)
+                
                 push!(get!(single_qubit_gates, gate_type, Int[]), row)
                 #single_qubit_gates add row (value) to circuit_matrix.gates[row, column] (gate) in the dict
-            elseif gate isa CNOTGate
+            elseif gate isa CNOT_Gate
                 row in flags && continue
-
                 control = gate.control
                 target = gate.target
                 if register_lookup_array[control] == register_lookup_array[target]
@@ -237,21 +268,13 @@ function run_simulation(params::Types.SimulationParameters, circuit::Types.Circu
                 push!(flags, target)
             end
         end
-        println("Constructed my matrix: $circuit_matrix")
-        @process single_qubit_gates_per_layer(sim, network, single_qubit_gates, params, register_lookup_array)
-        println("Here now")
-        #@yield @process CNOT_gates(sim, network, CNOT_gates, params, register_lookup_array)
-        #@yield @process CNOT_telegates(sim, network, CNOT_telegates, params, register_lookup_array)
+        @simlog sim "Now yielding the process for column $col: $single_qubit_gates, $CNOT_gates, $CNOT_telegates"
+        @yield @process execute_layer(sim, network, single_qubit_gates, CNOT_gates, CNOT_telegates, params, register_lookup_array)
 
     end
 
     #TODO: per slice, add check that all cnots are correct
 
     #@process simulate_circuit(sim, network, circuit, params)
-
-    run(sim, params.simulation_time)
-    steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
-
-    fidelity = real(observable(vcat( [network[1,i] for i in 2:6],[network[2,j] for j in 2:3]), SProjector(steane_7_state)))
-    return Types.SimulationFidelity(fidelity)
 end
+
