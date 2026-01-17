@@ -1,0 +1,141 @@
+Validation of Steane logical zero state encoding. Circuit is prepared according to textbook description (see genetic.jl in the commit "Steane circuit encoding validation", and running the simulation yields
+
+[ Info: t=0.0000 @ 00005 : Entered the iteration 1 in the outer loop
+[ Info: t=0.0000 @ 00005 : Now yielding the process for column 1: Dict{Type, Vector{Int64}}(HadamardGate => [2, 3, 5]), Tuple{Int64, Int64}[], Tuple{Int64, Int64}[]
+[ Info: t=0.0000 @ 00012 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(3) processes
+[ Info: t=0.0000 @ 00014 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0000 @ 00014 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0000 @ 00014 : num layer_executed processes remaining: 2
+[ Info: t=0.0000 @ 00016 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0000 @ 00016 : num layer_executed processes remaining: 1
+[ Info: t=0.0000 @ 00019 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00021 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00023 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00019 : Executing H gate on (1, 2)
+[ Info: t=0.0000 @ 00021 : Executing H gate on (1, 3)
+[ Info: t=0.0000 @ 00023 : Executing H gate on (1, 5)
+[ Info: t=0.0000 @ 00019 : num_single_qubit_gates_processes remaining: 2
+[ Info: t=0.0000 @ 00021 : num_single_qubit_gates_processes remaining: 1
+[ Info: t=0.0000 @ 00023 : num_single_qubit_gates_processes remaining: 0
+[ Info: t=0.0000 @ 00012 : num layer_executed processes remaining: 0
+[ Info: t=0.0000 @ 00005 : Entered the iteration 2 in the outer loop
+[ Info: t=0.0000 @ 00005 : Now yielding the process for column 2: Dict{Type, Vector{Int64}}(), [(2, 4)], [(5, 8)]
+[ Info: t=0.0000 @ 00037 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.0000 @ 00037 : num layer_executed processes remaining: 2
+[ Info: t=0.0000 @ 00039 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=0.0000 @ 00039 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0000 @ 00041 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0000 @ 00045 : Entered CNOT_gate
+[ Info: t=0.0000 @ 00048 : Entered CNOT_telegate
+[ Info: t=0.0000 @ 00048 : Before entanglement creation
+[ Info: t=0.0000 @ 00045 : Executing CNOT between (1, 2) and (1, 4)
+[ Info: t=0.0000 @ 00045 : num CNOT_gate_processes remaining: 0
+[ Info: t=0.0000 @ 00048 : After entanglement creation
+[ Info: t=0.0000 @ 00048 : Executing Telegate-CNOT between (1, 5) and (2, 3)
+[ Info: t=0.0002 @ 00039 : num layer_executed processes remaining: 1
+[ Info: t=0.0002 @ 00048 : Measured m1 = 1
+[ Info: t=0.0105 @ 00048 : Measured m2 = 2
+[ Info: t=0.0205 @ 00048 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.0205 @ 00041 : num layer_executed processes remaining: 0
+[ Info: t=0.0205 @ 00005 : Entered the iteration 3 in the outer loop
+[ Info: t=0.0205 @ 00005 : Now yielding the process for column 3: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(3, 9)]
+[ Info: t=0.0205 @ 00084 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.0205 @ 00084 : num layer_executed processes remaining: 2
+[ Info: t=0.0205 @ 00086 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0205 @ 00086 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0205 @ 00086 : num layer_executed processes remaining: 1
+[ Info: t=0.0205 @ 00088 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0205 @ 00093 : Entered CNOT_telegate
+[ Info: t=0.0205 @ 00093 : Before entanglement creation
+[ Info: t=0.0205 @ 00093 : After entanglement creation
+[ Info: t=0.0205 @ 00093 : Executing Telegate-CNOT between (1, 3) and (2, 4)
+[ Info: t=0.0207 @ 00093 : Measured m1 = 2
+[ Info: t=0.0310 @ 00093 : Measured m2 = 2
+[ Info: t=0.0410 @ 00093 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.0410 @ 00088 : num layer_executed processes remaining: 0
+[ Info: t=0.0410 @ 00005 : Entered the iteration 4 in the outer loop
+[ Info: t=0.0410 @ 00005 : Now yielding the process for column 4: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(2, 7)]
+[ Info: t=0.0410 @ 00125 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.0410 @ 00125 : num layer_executed processes remaining: 2
+[ Info: t=0.0410 @ 00127 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0410 @ 00127 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0410 @ 00127 : num layer_executed processes remaining: 1
+[ Info: t=0.0410 @ 00129 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0410 @ 00134 : Entered CNOT_telegate
+[ Info: t=0.0410 @ 00134 : Before entanglement creation
+[ Info: t=0.0410 @ 00134 : After entanglement creation
+[ Info: t=0.0410 @ 00134 : Executing Telegate-CNOT between (1, 2) and (2, 2)
+[ Info: t=0.0412 @ 00134 : Measured m1 = 1
+[ Info: t=0.0515 @ 00134 : Measured m2 = 2
+[ Info: t=0.0615 @ 00134 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.0615 @ 00129 : num layer_executed processes remaining: 0
+[ Info: t=0.0615 @ 00005 : Entered the iteration 5 in the outer loop
+[ Info: t=0.0615 @ 00005 : Now yielding the process for column 5: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(5, 9)]
+[ Info: t=0.0615 @ 00165 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.0615 @ 00165 : num layer_executed processes remaining: 2
+[ Info: t=0.0615 @ 00167 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0615 @ 00167 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0615 @ 00167 : num layer_executed processes remaining: 1
+[ Info: t=0.0615 @ 00169 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0615 @ 00174 : Entered CNOT_telegate
+[ Info: t=0.0615 @ 00174 : Before entanglement creation
+[ Info: t=0.0615 @ 00174 : After entanglement creation
+[ Info: t=0.0615 @ 00174 : Executing Telegate-CNOT between (1, 5) and (2, 4)
+[ Info: t=0.0617 @ 00174 : Measured m1 = 2
+[ Info: t=0.0719 @ 00174 : Measured m2 = 1
+[ Info: t=0.0819 @ 00174 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.0819 @ 00169 : num layer_executed processes remaining: 0
+[ Info: t=0.0819 @ 00005 : Entered the iteration 6 in the outer loop
+[ Info: t=0.0819 @ 00005 : Now yielding the process for column 6: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(3, 8)]
+[ Info: t=0.0819 @ 00205 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.0819 @ 00205 : num layer_executed processes remaining: 2
+[ Info: t=0.0819 @ 00207 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0819 @ 00207 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0819 @ 00207 : num layer_executed processes remaining: 1
+[ Info: t=0.0819 @ 00209 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0819 @ 00214 : Entered CNOT_telegate
+[ Info: t=0.0819 @ 00214 : Before entanglement creation
+[ Info: t=0.0819 @ 00214 : After entanglement creation
+[ Info: t=0.0819 @ 00214 : Executing Telegate-CNOT between (1, 3) and (2, 3)
+[ Info: t=0.0821 @ 00214 : Measured m1 = 1
+[ Info: t=0.0924 @ 00214 : Measured m2 = 1
+[ Info: t=0.1024 @ 00214 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.1024 @ 00209 : num layer_executed processes remaining: 0
+[ Info: t=0.1024 @ 00005 : Entered the iteration 7 in the outer loop
+[ Info: t=0.1024 @ 00005 : Now yielding the process for column 7: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(2, 9)]
+[ Info: t=0.1024 @ 00244 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.1024 @ 00244 : num layer_executed processes remaining: 2
+[ Info: t=0.1024 @ 00246 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.1024 @ 00246 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.1024 @ 00246 : num layer_executed processes remaining: 1
+[ Info: t=0.1024 @ 00248 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.1024 @ 00253 : Entered CNOT_telegate
+[ Info: t=0.1024 @ 00253 : Before entanglement creation
+[ Info: t=0.1024 @ 00253 : After entanglement creation
+[ Info: t=0.1024 @ 00253 : Executing Telegate-CNOT between (1, 2) and (2, 4)
+[ Info: t=0.1026 @ 00253 : Measured m1 = 1
+[ Info: t=0.1128 @ 00253 : Measured m2 = 2
+[ Info: t=0.1228 @ 00253 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.1228 @ 00248 : num layer_executed processes remaining: 0
+[ Info: t=0.1228 @ 00005 : Entered the iteration 8 in the outer loop
+[ Info: t=0.1228 @ 00005 : Now yielding the process for column 8: Dict{Type, Vector{Int64}}(), [(3, 4)], [(5, 7)]
+[ Info: t=0.1228 @ 00284 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=0.1228 @ 00284 : num layer_executed processes remaining: 2
+[ Info: t=0.1228 @ 00286 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=0.1228 @ 00286 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.1228 @ 00288 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.1228 @ 00292 : Entered CNOT_gate
+[ Info: t=0.1228 @ 00295 : Entered CNOT_telegate
+[ Info: t=0.1228 @ 00295 : Before entanglement creation
+[ Info: t=0.1228 @ 00292 : Executing CNOT between (1, 3) and (1, 4)
+[ Info: t=0.1228 @ 00292 : num CNOT_gate_processes remaining: 0
+[ Info: t=0.1228 @ 00295 : After entanglement creation
+[ Info: t=0.1228 @ 00295 : Executing Telegate-CNOT between (1, 5) and (2, 2)
+[ Info: t=0.1230 @ 00286 : num layer_executed processes remaining: 1
+[ Info: t=0.1230 @ 00295 : Measured m1 = 1
+[ Info: t=0.1333 @ 00295 : Measured m2 = 1
+[ Info: t=0.1433 @ 00295 : num CNOT_telegate_processes remaining: 0
+[ Info: t=0.1433 @ 00288 : num layer_executed processes remaining: 0
+
+Final Steane-7 fidelity: 0.9999999968265784 
+
