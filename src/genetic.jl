@@ -5,19 +5,16 @@ include("simulation.jl")
 using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
 
 params = SimulationParameters(
-        [5,4],
-        12000.0,
-        100000000.0, #4200
-        #1.0,
-        10000.0,  
+        [5,4], #register sizes
+        12000.0,#T1
+        100000000.0, #4200 T2
         0.5, # Execution Time of a single qubit gate   #20e^-6
-        1.5,   # 200e^-6
-        0.1,  #1e^-5
-        0.1,  # 1e^-2
-        0.001,
+        1.5,   # Two-qubit gates 200e^-6
+        2.5,  #1e^-5  projective measurement time
+        0.1,  # 1e^-2 classical comm time
         1,#0.9689, # Bell state fidelity
-        1.41e-4, # Bell state generation,from [Main, 2025]
-        1.168e-9
+        1.41e-4, # Bell state generation,from [Main, 2025]    success probability 
+        1e-15 #1.168e-9  # attempt time
 
 #TODO: Define units and insert realistic values
 #TODO: Add state preparation fidelity and single-shot readout of 99.93% [Harty], single-qubit gate fidelity of 99.99916%, two-qubit fidelity of 99.97% [Löschnauer]
@@ -61,14 +58,18 @@ print(comm_qubits_array(params))
 
 register_lookup_array = create_lookup_array(params)
 # TODO: define the circuit here
-circuit = Types.Circuit(sum(params.register_sizes), 8)  # params.register_sizes rows (qubits) and 8 columns (time steps)
+circuit = Types.Circuit(sum(params.register_sizes), 10)  # params.register_sizes rows (qubits) and 10 columns (time steps)
 #print(circuit)
 # TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
+#TODO: Include check for no overlaps within one layer
 
 #circuit_matrix.gate[2]
+# make double assignment
 circuit.gates[2,1] = HadamardGate()
 circuit.gates[3,1] = HadamardGate()
 circuit.gates[5,1] = HadamardGate()
+circuit.gates[4,1] = CNOT_Gate(4,7)
+circuit.gates[7,1] = CNOT_Gate(4,7)
 
 circuit.gates[2,2] = CNOT_Gate(2,4)
 circuit.gates[4,2] = CNOT_Gate(2,4)
@@ -78,22 +79,25 @@ circuit.gates[8,2] = CNOT_Gate(5,8)
 circuit.gates[3,3] = CNOT_Gate(3,9)
 circuit.gates[9,3] = CNOT_Gate(3,9)
 
-circuit.gates[2,4] = CNOT_Gate(2,7)
-circuit.gates[7,4] = CNOT_Gate(2,7)
+circuit.gates[2,4] = CNOT_Gate(2,3)
+circuit.gates[3,4] = CNOT_Gate(2,3)
 
-circuit.gates[5,5] = CNOT_Gate(5,9)
-circuit.gates[9,5] = CNOT_Gate(5,9)
+circuit.gates[7,5] = CNOT_Gate(7,9)
+circuit.gates[9,5] = CNOT_Gate(7,9)
+circuit.gates[2,5] = HadamardGate()
 
 circuit.gates[3,6] = CNOT_Gate(3,8)
 circuit.gates[8,6] = CNOT_Gate(3,8)
 
-circuit.gates[2,7] = CNOT_Gate(2,9)
-circuit.gates[9,7] = CNOT_Gate(2,9)
+circuit.gates[2,7] = CNOT_Gate(2,3)
+circuit.gates[3,7] = CNOT_Gate(2,3)
 
 circuit.gates[3,8] = CNOT_Gate(3,4)
 circuit.gates[4,8] = CNOT_Gate(3,4)
 circuit.gates[5,8] = CNOT_Gate(5,7)
 circuit.gates[7,8] = CNOT_Gate(5,7)
+
+circuit.gates[2,9] = HadamardGate()
 
 fidelity = run_simulation(params, circuit, register_lookup_array)
 

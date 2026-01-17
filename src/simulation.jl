@@ -35,7 +35,7 @@ gate_to_apply(::Type{Types.HadamardGate}) = H
     @simlog sim "Executing $gate gate on ($register, $qubit)"
     @yield unlock(network[register, qubit])
     num_single_qubit_gates_processes[]-=1
-    @simlog sim "num_single_qubit_gates_processes processes: $(num_single_qubit_gates_processes[])"   
+    @simlog sim "num_single_qubit_gates_processes remaining: $(num_single_qubit_gates_processes[])"   
     num_single_qubit_gates_processes[]==0 && succeed(single_qubit_gates_layer_executed)
 
 end
@@ -51,9 +51,8 @@ end
     @yield unlock(network[register, control_qubit])
     @yield unlock(network[register, target_qubit])  
     
-    @simlog sim "cnot gate processes $num_CNOT_gate_processes"
     num_CNOT_gate_processes[]-=1
-    #@simlog sim "num_CNOT_gate_processes processes: $(num_CNOT_gate_processes[])"
+    @simlog sim "num CNOT_gate_processes remaining: $(num_CNOT_gate_processes[])"
     num_CNOT_gate_processes[]==0 && succeed(CNOT_gate_layer_executed)
 end
 
@@ -73,7 +72,7 @@ end
 
     eprot = EntanglerProt(sim, network, control_register, target_register; pairstate=noisy_pair, chooseslotA=1, chooseslotB=1, rounds=1, attempts = -1, success_prob=params.success_prob, attempt_time = params.attempt_time) 
     @simlog sim "Before entanglement creation"
-    @yield @process eprot()
+    @yield @process eprot() # @yield is redundant since the request depends on the process to finish already
     @simlog sim "After entanglement creation"  
     #@yield timeout(sim, entangler_busy_time)
     
@@ -92,9 +91,10 @@ end
     # TODO: Add communication channel
     if m1 == 2
         apply!(network[target_register,1], X)
-        @yield timeout(sim, params.classical_communication_time)
         @yield timeout(sim, params.single_qubit_gate_exec_time)
     end
+    @simlog sim "Measured m1 = $m1"
+    @yield timeout(sim, params.classical_communication_time)
     apply!((network[target_register,1], network[target_register,target_qubit]), CNOT)
     @yield timeout(sim, params.two_qubit_gate_exec_time)
     apply!(network[target_register,1], H)
@@ -106,13 +106,15 @@ end
         apply!(network[control_register,control_qubit], Z)
         @yield timeout(sim, params.single_qubit_gate_exec_time)
     end
+    @simlog sim "Measured m2 = $m2"
+    @yield timeout(sim, params.classical_communication_time)
     @yield unlock(network[control_register,control_qubit])
     @yield unlock(network[target_register,target_qubit])
     @yield unlock(network[control_register,1])
     @yield unlock(network[target_register,1])
     
     num_CNOT_telegate_processes[]-=1
-    @simlog sim "num_CNOT_telegate_processes processes: $(num_CNOT_telegate_processes[])"
+    @simlog sim "num CNOT_telegate_processes remaining: $(num_CNOT_telegate_processes[])"
     num_CNOT_telegate_processes[]==0 && succeed(CNOT_telegate_layer_executed)
 end
 
@@ -135,7 +137,7 @@ end
     end
     
     num_processes[]-=1
-    @simlog sim "layer_executed processes: $(num_processes[])"
+    @simlog sim "num layer_executed processes remaining: $(num_processes[])"
     num_processes[]==0 && succeed(layer_executed)
 end
 
@@ -161,7 +163,7 @@ end
     
     #num_CNOT_gate_processes[] == 0 || 
     num_processes[]-=1
-    @simlog sim "layer_executed processes: $(num_processes[])"
+    @simlog sim "num layer_executed processes remaining: $(num_processes[])"
     num_processes[]==0 && succeed(layer_executed)
 end
 
@@ -186,7 +188,7 @@ end
     end
 
     num_processes[]-=1
-    @simlog sim "layer_executed processes: $(num_processes[])"
+    @simlog sim "num layer_executed processes remaining: $(num_processes[])"
     num_processes[]==0 && succeed(layer_executed)
 end
 
@@ -229,7 +231,7 @@ function run_simulation(params::Types.SimulationParameters, circuit::Types.Circu
 
     execute = @process execute_simulation(sim, network, params, circuit_matrix, register_lookup_array)
     
-    run(sim, execute)#params.simulation_time)#circuit_simulation_process)# )
+    run(sim, execute)
 
     steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
 

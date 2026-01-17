@@ -1,0 +1,158 @@
+10 layers (see commit "Simple Circuit validation" under genetic.jl) with a mix of single-qubit, two-qubit and telegates. Process times are successfully validated.
+
+
+[ Info: t=0.0000 @ 00005 : Entered the iteration 1 in the outer loop
+[ Info: t=0.0000 @ 00005 : Now yielding the process for column 1: Dict{Type, Vector{Int64}}(HadamardGate => [2, 3, 5]), Tuple{Int64, Int64}[], [(4, 7)]
+[ Info: t=0.0000 @ 00012 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(3) processes
+[ Info: t=0.0000 @ 00014 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=0.0000 @ 00014 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=0.0000 @ 00014 : num layer_executed processes remaining: 2
+[ Info: t=0.0000 @ 00016 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=0.0000 @ 00019 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00021 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00023 : Entered single_qubit_gate
+[ Info: t=0.0000 @ 00027 : Entered CNOT_telegate
+[ Info: t=0.0000 @ 00027 : Before entanglement creation
+[ Info: t=0.0000 @ 00019 : Executing H gate on (1, 2)
+[ Info: t=0.0000 @ 00021 : Executing H gate on (1, 3)
+[ Info: t=0.0000 @ 00023 : Executing H gate on (1, 5)
+[ Info: t=0.0000 @ 00019 : num_single_qubit_gates_processes remaining: 2
+[ Info: t=0.0000 @ 00021 : num_single_qubit_gates_processes remaining: 1
+[ Info: t=0.0000 @ 00023 : num_single_qubit_gates_processes remaining: 0
+[ Info: t=0.0000 @ 00027 : After entanglement creation
+[ Info: t=0.0000 @ 00027 : Executing Telegate-CNOT between (1, 4) and (2, 2)
+[ Info: t=0.5000 @ 00012 : num layer_executed processes remaining: 1
+[ Info: t=4.0000 @ 00027 : Measured m1 = 1
+[ Info: t=9.1000 @ 00027 : Measured m2 = 2
+[ Info: t=9.2000 @ 00027 : num CNOT_telegate_processes remaining: 0
+[ Info: t=9.2000 @ 00016 : num layer_executed processes remaining: 0
+[ Info: t=9.2000 @ 00005 : Entered the iteration 2 in the outer loop
+[ Info: t=9.2000 @ 00005 : Now yielding the process for column 2: Dict{Type, Vector{Int64}}(), [(2, 4)], [(5, 8)]
+[ Info: t=9.2000 @ 00065 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=9.2000 @ 00065 : num layer_executed processes remaining: 2
+[ Info: t=9.2000 @ 00067 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=9.2000 @ 00067 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=9.2000 @ 00069 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=9.2000 @ 00073 : Entered CNOT_gate
+[ Info: t=9.2000 @ 00076 : Entered CNOT_telegate
+[ Info: t=9.2000 @ 00076 : Before entanglement creation
+[ Info: t=9.2000 @ 00073 : Executing CNOT between (1, 2) and (1, 4)
+[ Info: t=9.2000 @ 00073 : num CNOT_gate_processes remaining: 0
+[ Info: t=9.2000 @ 00076 : After entanglement creation
+[ Info: t=9.2000 @ 00076 : Executing Telegate-CNOT between (1, 5) and (2, 3)
+[ Info: t=10.7000 @ 00067 : num layer_executed processes remaining: 1
+[ Info: t=13.2000 @ 00076 : Measured m1 = 1
+[ Info: t=17.8000 @ 00076 : Measured m2 = 1
+[ Info: t=17.9000 @ 00076 : num CNOT_telegate_processes remaining: 0
+[ Info: t=17.9000 @ 00069 : num layer_executed processes remaining: 0
+[ Info: t=17.9000 @ 00005 : Entered the iteration 3 in the outer loop
+[ Info: t=17.9000 @ 00005 : Now yielding the process for column 3: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(3, 9)]
+[ Info: t=17.9000 @ 00111 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=17.9000 @ 00111 : num layer_executed processes remaining: 2
+[ Info: t=17.9000 @ 00113 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=17.9000 @ 00113 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=17.9000 @ 00113 : num layer_executed processes remaining: 1
+[ Info: t=17.9000 @ 00115 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=17.9000 @ 00120 : Entered CNOT_telegate
+[ Info: t=17.9000 @ 00120 : Before entanglement creation
+[ Info: t=17.9000 @ 00120 : After entanglement creation
+[ Info: t=17.9000 @ 00120 : Executing Telegate-CNOT between (1, 3) and (2, 4)
+[ Info: t=21.9000 @ 00120 : Measured m1 = 1
+[ Info: t=26.5000 @ 00120 : Measured m2 = 1
+[ Info: t=26.6000 @ 00120 : num CNOT_telegate_processes remaining: 0
+[ Info: t=26.6000 @ 00115 : num layer_executed processes remaining: 0
+[ Info: t=26.6000 @ 00005 : Entered the iteration 4 in the outer loop
+[ Info: t=26.6000 @ 00005 : Now yielding the process for column 4: Dict{Type, Vector{Int64}}(), [(2, 3)], Tuple{Int64, Int64}[]
+[ Info: t=26.6000 @ 00150 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=26.6000 @ 00150 : num layer_executed processes remaining: 2
+[ Info: t=26.6000 @ 00152 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=26.6000 @ 00152 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=26.6000 @ 00154 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=26.6000 @ 00154 : num layer_executed processes remaining: 1
+[ Info: t=26.6000 @ 00158 : Entered CNOT_gate
+[ Info: t=26.6000 @ 00158 : Executing CNOT between (1, 2) and (1, 3)
+[ Info: t=26.6000 @ 00158 : num CNOT_gate_processes remaining: 0
+[ Info: t=28.1000 @ 00152 : num layer_executed processes remaining: 0
+[ Info: t=28.1000 @ 00005 : Entered the iteration 5 in the outer loop
+[ Info: t=28.1000 @ 00005 : Now yielding the process for column 5: Dict{Type, Vector{Int64}}(HadamardGate => [2]), [(7, 9)], Tuple{Int64, Int64}[]
+[ Info: t=28.1000 @ 00169 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(1) processes
+[ Info: t=28.1000 @ 00171 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=28.1000 @ 00171 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=28.1000 @ 00173 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=28.1000 @ 00173 : num layer_executed processes remaining: 2
+[ Info: t=28.1000 @ 00176 : Entered single_qubit_gate
+[ Info: t=28.1000 @ 00179 : Entered CNOT_gate
+[ Info: t=28.1000 @ 00176 : Executing H gate on (1, 2)
+[ Info: t=28.1000 @ 00176 : num_single_qubit_gates_processes remaining: 0
+[ Info: t=28.1000 @ 00179 : Executing CNOT between (2, 2) and (2, 4)
+[ Info: t=28.1000 @ 00179 : num CNOT_gate_processes remaining: 0
+[ Info: t=28.6000 @ 00169 : num layer_executed processes remaining: 1
+[ Info: t=29.6000 @ 00171 : num layer_executed processes remaining: 0
+[ Info: t=29.6000 @ 00005 : Entered the iteration 6 in the outer loop
+[ Info: t=29.6000 @ 00005 : Now yielding the process for column 6: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], [(3, 8)]
+[ Info: t=29.6000 @ 00193 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=29.6000 @ 00193 : num layer_executed processes remaining: 2
+[ Info: t=29.6000 @ 00195 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=29.6000 @ 00195 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=29.6000 @ 00195 : num layer_executed processes remaining: 1
+[ Info: t=29.6000 @ 00197 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=29.6000 @ 00202 : Entered CNOT_telegate
+[ Info: t=29.6000 @ 00202 : Before entanglement creation
+[ Info: t=29.6000 @ 00202 : After entanglement creation
+[ Info: t=29.6000 @ 00202 : Executing Telegate-CNOT between (1, 3) and (2, 3)
+[ Info: t=34.1000 @ 00202 : Measured m1 = 2
+[ Info: t=39.2000 @ 00202 : Measured m2 = 2
+[ Info: t=39.3000 @ 00202 : num CNOT_telegate_processes remaining: 0
+[ Info: t=39.3000 @ 00197 : num layer_executed processes remaining: 0
+[ Info: t=39.3000 @ 00005 : Entered the iteration 7 in the outer loop
+[ Info: t=39.3000 @ 00005 : Now yielding the process for column 7: Dict{Type, Vector{Int64}}(), [(2, 3)], Tuple{Int64, Int64}[]
+[ Info: t=39.3000 @ 00234 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=39.3000 @ 00234 : num layer_executed processes remaining: 2
+[ Info: t=39.3000 @ 00236 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=39.3000 @ 00236 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=39.3000 @ 00238 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=39.3000 @ 00238 : num layer_executed processes remaining: 1
+[ Info: t=39.3000 @ 00242 : Entered CNOT_gate
+[ Info: t=39.3000 @ 00242 : Executing CNOT between (1, 2) and (1, 3)
+[ Info: t=39.3000 @ 00242 : num CNOT_gate_processes remaining: 0
+[ Info: t=40.8000 @ 00236 : num layer_executed processes remaining: 0
+[ Info: t=40.8000 @ 00005 : Entered the iteration 8 in the outer loop
+[ Info: t=40.8000 @ 00005 : Now yielding the process for column 8: Dict{Type, Vector{Int64}}(), [(3, 4)], [(5, 7)]
+[ Info: t=40.8000 @ 00253 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=40.8000 @ 00253 : num layer_executed processes remaining: 2
+[ Info: t=40.8000 @ 00255 : How many CNOT gate proceess? Base.RefValue{Int64}(1)
+[ Info: t=40.8000 @ 00255 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=40.8000 @ 00257 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(1) processes 
+[ Info: t=40.8000 @ 00261 : Entered CNOT_gate
+[ Info: t=40.8000 @ 00264 : Entered CNOT_telegate
+[ Info: t=40.8000 @ 00264 : Before entanglement creation
+[ Info: t=40.8000 @ 00261 : Executing CNOT between (1, 3) and (1, 4)
+[ Info: t=40.8000 @ 00261 : num CNOT_gate_processes remaining: 0
+[ Info: t=40.8000 @ 00264 : After entanglement creation
+[ Info: t=40.8000 @ 00264 : Executing Telegate-CNOT between (1, 5) and (2, 2)
+[ Info: t=42.3000 @ 00255 : num layer_executed processes remaining: 1
+[ Info: t=44.8000 @ 00264 : Measured m1 = 1
+[ Info: t=49.4000 @ 00264 : Measured m2 = 1
+[ Info: t=49.5000 @ 00264 : num CNOT_telegate_processes remaining: 0
+[ Info: t=49.5000 @ 00257 : num layer_executed processes remaining: 0
+[ Info: t=49.5000 @ 00005 : Entered the iteration 9 in the outer loop
+[ Info: t=49.5000 @ 00005 : Now yielding the process for column 9: Dict{Type, Vector{Int64}}(HadamardGate => [2]), Tuple{Int64, Int64}[], Tuple{Int64, Int64}[]
+[ Info: t=49.5000 @ 00299 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(1) processes
+[ Info: t=49.5000 @ 00301 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=49.5000 @ 00301 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=49.5000 @ 00301 : num layer_executed processes remaining: 2
+[ Info: t=49.5000 @ 00303 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=49.5000 @ 00303 : num layer_executed processes remaining: 1
+[ Info: t=49.5000 @ 00306 : Entered single_qubit_gate
+[ Info: t=49.5000 @ 00306 : Executing H gate on (1, 2)
+[ Info: t=49.5000 @ 00306 : num_single_qubit_gates_processes remaining: 0
+[ Info: t=50.0000 @ 00299 : num layer_executed processes remaining: 0
+[ Info: t=50.0000 @ 00005 : Entered the iteration 10 in the outer loop
+[ Info: t=50.0000 @ 00005 : Now yielding the process for column 10: Dict{Type, Vector{Int64}}(), Tuple{Int64, Int64}[], Tuple{Int64, Int64}[]
+[ Info: t=50.0000 @ 00316 : Entered single_qubit_gates_per_layer with Base.RefValue{Int64}(0) processes
+[ Info: t=50.0000 @ 00316 : num layer_executed processes remaining: 2
+[ Info: t=50.0000 @ 00318 : How many CNOT gate proceess? Base.RefValue{Int64}(0)
+[ Info: t=50.0000 @ 00318 : Entered CNOT_gates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=50.0000 @ 00318 : num layer_executed processes remaining: 1
+[ Info: t=50.0000 @ 00320 : Entered CNOT_telegates_per_layer with Base.RefValue{Int64}(0) processes 
+[ Info: t=50.0000 @ 00320 : num layer_executed processes remaining: 0
