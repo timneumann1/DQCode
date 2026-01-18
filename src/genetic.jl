@@ -1,10 +1,12 @@
-include("types.jl")
-include("simulation.jl")
+module Genetic
 
-#using .Types
-using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
+using ..Types
+using ..Simulation
 
-params = SimulationParameters(
+export run_genetic_search
+
+function define_parameters()
+    params = SimulationParameters(
         [5,4], #register sizes
         12000.0,#T1
         100000000.0, #4200 T2
@@ -21,7 +23,9 @@ params = SimulationParameters(
 # characteristic_time = 1000
 # p = 1-exp(-1/characteristic_time) # define probability for Pauli Noise application (Poisson point process)
 #TODO: Define single qubit error rate
-)
+    )
+    return params
+end
 
 # Need to be run only once before the EA
 #TODO: Take care of scoping of register and register_start_index
@@ -54,36 +58,44 @@ end
 #     append!(register_lookup_array, fill(register, size))
 # end
 
-print(comm_qubits_array(params))
+function build_start_circuit(params)
+    circuit = Circuit(sum(params.register_sizes), 8)   # params.register_sizes rows (qubits) and 8 columns (time steps)
+    circuit.gates[2,1] = HadamardGate()
+    circuit.gates[3,1] = HadamardGate()
+    circuit.gates[5,1] = HadamardGate()
 
-register_lookup_array = create_lookup_array(params)
-# TODO: define the circuit here
-circuit = Types.Circuit(sum(params.register_sizes), 8)  # params.register_sizes rows (qubits) and 8 columns (time steps)
-#print(circuit)
-# TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
-#TODO: Include check for no overlaps within one layer
+    circuit.gates[2,2] = circuit.gates[4,2] = CNOT_Gate(2,4)
+    circuit.gates[5,2] = circuit.gates[8,2] = CNOT_Gate(5,8)
 
-# make double assignment
-circuit.gates[2,1] = HadamardGate()
-circuit.gates[3,1] = HadamardGate()
-circuit.gates[5,1] = HadamardGate()
+    circuit.gates[3,3] = circuit.gates[9,3] = CNOT_Gate(3,9)
 
-circuit.gates[2,2] = circuit.gates[4,2] = CNOT_Gate(2,4)
-circuit.gates[5,2] = circuit.gates[8,2] = CNOT_Gate(5,8)
+    circuit.gates[2,4] = circuit.gates[7,4] = CNOT_Gate(2,7)
 
-circuit.gates[3,3] = circuit.gates[9,3] = CNOT_Gate(3,9)
+    circuit.gates[5,5] = circuit.gates[9,5] = CNOT_Gate(5,9)
 
-circuit.gates[2,4] = circuit.gates[7,4] = CNOT_Gate(2,7)
+    circuit.gates[3,6] = circuit.gates[8,6] = CNOT_Gate(3,8)
 
-circuit.gates[5,5] = circuit.gates[9,5] = CNOT_Gate(5,9)
+    circuit.gates[2,7] = circuit.gates[9,7] = CNOT_Gate(2,9)
 
-circuit.gates[3,6] = circuit.gates[8,6] = CNOT_Gate(3,8)
+    circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
+    circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
+    return circuit
+end
 
-circuit.gates[2,7] = circuit.gates[9,7] = CNOT_Gate(2,9)
 
-circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
-circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
+function run_genetic_search()
+    params = define_parameters()
+    register_lookup_array = create_lookup_array(params)
+    # TODO: define the circuit here
+    circuit = build_start_circuit(params)
+    # TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
+    #TODO: Include check for no overlaps within one layer
+    
+    fidelity = run_simulation(params, circuit, register_lookup_array)
 
-fidelity = run_simulation(params, circuit, register_lookup_array)
+    print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
 
-print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
+end
+
+
+end

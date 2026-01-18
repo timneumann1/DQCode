@@ -1,7 +1,9 @@
 # simulation.jl
+module Simulation
 
-#using .Types
-using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
+using ..Types
+#include("types.jl")
+#using .Types: SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
 
 # For convenient graph data structures
 using Graphs
@@ -15,10 +17,12 @@ using QuantumSavory
 using QuantumSavory.ProtocolZoo: EntanglerProt
 using QuantumSavory: H, CNOT
 
+export run_simulation
+
 const bell = StabilizerState("XX ZZ")
 const noisy_pair_func(F) = (1-F)*MixedState(bell) + F*projector(bell)
 
-gate_to_apply(::Type{Types.HadamardGate}) = H
+gate_to_apply(::Type{HadamardGate}) = H
 
 @resumable function single_qubit_gate(sim, network, register, qubit, gate, single_qubit_gates_layer_executed, num_single_qubit_gates_processes)
     @simlog sim "Entered single_qubit_gate"
@@ -225,21 +229,7 @@ end
     @yield layer_executed
 end
 
-function run_simulation(params::Types.SimulationParameters, circuit::Types.Circuit, register_lookup_array::Array{Int})::Types.SimulationFidelity
-    sim, network, data_qubits = initialise_simulation(params)
-    circuit_matrix = circuit.gates
-
-    execute = @process execute_simulation(sim, network, params, circuit_matrix, register_lookup_array)
-    
-    run(sim, execute)
-
-    steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
-
-    fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
-    return Types.SimulationFidelity(fidelity)
-end
-
-@resumable function execute_simulation(sim, network, params, circuit_matrix, register_lookup_array)
+@resumable function build_simulation_process(sim, network, params, circuit_matrix, register_lookup_array)
     
     for col in axes(circuit_matrix, 2) # each column corresponds to one layer
         @simlog sim "Entered the iteration $col in the outer loop"
@@ -280,3 +270,20 @@ end
     #@process simulate_circuit(sim, network, circuit, params)
 end
 
+function run_simulation(params::SimulationParameters, circuit::Circuit, register_lookup_array::Array{Int})::SimulationFidelity
+    sim, network, data_qubits = initialise_simulation(params)
+    circuit_matrix = circuit.gates
+
+    execute = @process build_simulation_process(sim, network, params, circuit_matrix, register_lookup_array)
+    
+    run(sim, execute)
+
+    steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
+
+    fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
+    return SimulationFidelity(fidelity)
+end
+
+
+
+end
