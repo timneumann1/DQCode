@@ -23,7 +23,7 @@ struct SimulationFidelity
     fidelity::Float64
 end
 
-# types for circuit representation
+### types for circuit representation
 
 abstract type Gate end
 
@@ -39,10 +39,6 @@ struct CNOT_Gate <: Gate
     control::Int
     target::Int
 end
-
-# struct Target <: Gate
-#     control::Int
-# end
 
 struct Circuit
     gates::Matrix{Gate}
