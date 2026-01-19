@@ -10,12 +10,22 @@ using QuantumSavory
 using QuantumSavory.ProtocolZoo: EntanglerProt
 using QuantumSavory: H, CNOT, X, Y, Z
 
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str
+
 export run_simulation
 
-const bell = StabilizerState("XX ZZ")
-const noisy_pair_func(F) = (1-F)*MixedState(bell) + F*projector(bell)
+# For QuantumOpticsRepr
+const bell_pair = StabilizerState("XX ZZ")
+const noisy_pair_func(F) = (1-F)*MixedState(bell_pair) + F*projector(bell_pair)
 
-gate_to_apply(::Type{HadamardGate}) = H
+# For CliffordRepr
+const bell_pair_tableau = S"XX ZZ"
+const bell_pair_stabilizer = StabilizerState(bell_pair_tableau)
+const bell_pair_stabilizer_density = SProjector(bell_pair_stabilizer)
+const noisy_pair_func_stabilizer(F) = (1-F)*MixedState(bell_pair)+ F*bell_pair_stabilizer_density
+
+# gate_to_apply(::Type{HadamardGate}) = H  # QuantumOpticsRepr
+gate_to_apply(::Type{HadamardGate}) = sHadamard  # CliffordRepr
 gate_to_apply(::Type{PauliXGate}) = X
 gate_to_apply(::Type{PauliYGate}) = Y
 gate_to_apply(::Type{PauliZGate}) = Z
@@ -57,7 +67,7 @@ end
     @assert target_qubit !== 1 "Target qubit is not a memory qubit"
         
     # Create Bell Pair between first qubits of registers i and j
-    noisy_pair = noisy_pair_func(params.bell_state_fidelity)       # Retrieving a (noisy) Bell pair with fidelity F
+    noisy_pair = noisy_pair_func_stabilizer(params.bell_state_fidelity)  # noisy_pair_func for QuantumOptics     # Retrieving a (noisy) Bell pair with fidelity F
     eprot = EntanglerProt(sim, network, control_register, target_register; pairstate=noisy_pair, chooseslotA=1, chooseslotB=1, rounds=1, attempts = -1, success_prob=params.success_prob, attempt_time = params.attempt_time) 
     @yield @process eprot() # @yield is redundant since the request depends on the process to finish already
     
@@ -68,7 +78,9 @@ end
     @yield request(network[target_register,1])
 
     @simlog sim "Executing Telegate-CNOT between ($control_register, $control_qubit) and ($target_register, $target_qubit)"
+    @simlog sim network[1]
     apply!((network[control_register,control_qubit], network[control_register,1]), CNOT)  
+
     @yield timeout(sim, params.two_qubit_gate_exec_time)
     m1 = project_traceout!(network[control_register,1], Z)
     @yield timeout(sim, params.projective_measurement_time)
@@ -82,7 +94,7 @@ end
     @yield timeout(sim, params.classical_communication_time)
     apply!((network[target_register,1], network[target_register,target_qubit]), CNOT)
     @yield timeout(sim, params.two_qubit_gate_exec_time)
-    apply!(network[target_register,1], H)
+    apply!(network[target_register,1], sHadamard) # only H for QuantumOpticsRepr
     @yield timeout(sim, params.single_qubit_gate_exec_time)
     m2 = project_traceout!(network[target_register,1], Z)
     @yield timeout(sim, params.projective_measurement_time)
@@ -177,20 +189,23 @@ function initialise_simulation(params)
     sizes = params.register_sizes
     R = length(sizes) # Number of registers
     registers = Register[]
-
+    
     for s in sizes
         traits = [Qubit() for _ in 1:s]
-        repr = [QuantumOpticsRepr() for _ in 1:s]               # TODO: recast to Clifford
+        repr = [CliffordRepr() for _ in 1:s]        #QuantumOpticsRepr  #CliffordRepr      # TODO: recast to Clifford
         bg = [T2Dephasing(params.T2_dephasing) for _ in 1:s]    # TODO: define other noise on the registers?
         push!(registers, Register(traits,repr, bg)) 
     end
 
+    # important: Currently, to switch between Clifford and QuantumOptics representation, must only change repr, the entangler prot argument for Bell states, and sHadamard
+
     graph = grid([R])
     network = RegisterNet(graph, registers)
     sim = get_time_tracker(network) # the scheduler datastructure for the discrete event simulation, creates Simulation() for all registers
-    
+
     data_qubits = [network[i,j] for i in eachindex(sizes) for j in 2:sizes[i]]
-    initialize!(data_qubits, SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  ) 
+    #initialize!(data_qubits, SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  )   # QuantumOpticsRepr() formulation
+    initialize!(data_qubits, one(MixedDestabilizer,7) )             # CliffordRepr() formulation
     
     return sim, network, data_qubits
 end
@@ -245,11 +260,18 @@ function run_simulation(params::SimulationParameters, circuit::Circuit, register
     sim, network, data_qubits = initialise_simulation(params)
     circuit_matrix = circuit.gates
 
+    print("Initial state is $(network[1]) \n $(network[2])")
+    print("Second qubit in first register is $(network[1,2])")
+
     execute = @process build_simulation_process(sim, network, params, circuit_matrix, register_lookup_array)
     run(sim, execute)
 
     steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
+    
+    print("Final state is $(network[1,2]) \n $(network[2])")
+    
     fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
+    # TODO: recast the fidelity as the Tableau distance to the canoncial form of the stabilizer tableau
 
     return SimulationFidelity(fidelity)
 end
