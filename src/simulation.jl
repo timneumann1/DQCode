@@ -271,6 +271,7 @@ function run_simulation(params::SimulationParameters, circuit::Circuit, register
     print("Final state is $(network[1,2]) \n $(network[2])")
     
     fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
+    # fidelity = real(observable(data_qubits, Z⊗Z⊗Z⊗Z⊗Z⊗Z⊗Z)) produces stack overflow
     # TODO: recast the fidelity as the Tableau distance to the canoncial form of the stabilizer tableau
 
     return SimulationFidelity(fidelity)
