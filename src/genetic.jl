@@ -2,6 +2,7 @@ module Genetic
 
 using ..Types
 using ..Simulation
+using ..Helper
 
 export run_genetic_search
 
@@ -9,7 +10,7 @@ function define_parameters()
     params = SimulationParameters(
         [5,4], #register sizes
         12000.0,#T1
-        100000000.0, #4200 T2
+        0.5, #4200 T2
         20e-6, # Execution Time of a single qubit gate   #20e^-6
         200e-6,   # Two-qubit gates 200e^-6
         1e-5,  #1e^-5  projective measurement time
@@ -25,39 +26,6 @@ function define_parameters()
     #TODO: Define single qubit error rate
     )
     return params
-end
-
-# lookup arrays needs to be created only once before executing the genetic search
-#TODO: replace with cleaner version
-function create_lookup_array(params)
-    register_lookup_array = Vector{Int}(undef, sum(params.register_sizes))
-    register = 1
-    register_start_index = 1
-    for i in eachindex(params.register_sizes)
-        j = params.register_sizes[i]
-        register_lookup_array[register_start_index:register_start_index+j-1] .= register
-        register_start_index+=j
-        register +=1
-    end
-    return register_lookup_array
-end
-
-#function create_lookup_array(params)
-# register_lookup_array = Int[]
-# for (register, size) in enumerate(params.register_sizes)
-#     append!(register_lookup_array, fill(register, size))
-# end
-#end
-
-function comm_qubits_array(params)
-    comm_qubits_array = Vector{Int}(undef,length(params.register_sizes))
-    index = 1
-    for i in eachindex(params.register_sizes)
-        j = params.register_sizes[i]
-        comm_qubits_array[i] = index
-        index += j
-    end
-    return comm_qubits_array
 end
 
 
