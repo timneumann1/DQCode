@@ -7,14 +7,16 @@ using ..Helper
 using GLMakie
 GLMakie.activate!()
 
+using BenchmarkTools
+
 export run_parameter_sweep
 
 
-function retrieve_parameters(T2_time)
+function retrieve_parameters(depolarising_noise_time)
     params = SimulationParameters(
         [5,4], #register sizes
-        12000.0,#T1
-        T2_time, #4200 T2
+        #12000.0,#T1
+        depolarising_noise_time, #4200 T2
         20e-6, # Execution Time of a single qubit gate   #20e^-6
         200e-6,   # Two-qubit gates 200e^-6
         1e-5,  #1e^-5  projective measurement time
@@ -36,7 +38,7 @@ end
 
 function steane_encoding_circuit(params)
 
-    circuit = Circuit(sum(params.register_sizes), 8)   # params.register_sizes rows (qubits) and 8 columns (time steps)
+    circuit = Circuit(sum(params.register_sizes), 9)   # params.register_sizes rows (qubits) and 8 columns (time steps)
     
     circuit.gates[2,1] = HadamardGate()
     circuit.gates[3,1] = HadamardGate()
@@ -58,6 +60,14 @@ function steane_encoding_circuit(params)
     circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
     circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
 
+    circuit.gates[2,9] = HadamardGate()
+    circuit.gates[3,9] = HadamardGate()
+    circuit.gates[4,9] = HadamardGate()
+    circuit.gates[5,9] = HadamardGate()
+    circuit.gates[7,9] = HadamardGate()
+    circuit.gates[8,9] = HadamardGate()
+    circuit.gates[9,9] = HadamardGate()
+
     return circuit
 end
 
@@ -65,9 +75,9 @@ function plot_sweep(parameter_values, state_fidelities, params)
     fig = Figure(resolution = (700, 500))
     ax = Axis(
         fig[1, 1],
-        xlabel = "T2 time (in seconds)",
+        xlabel = "Time (in seconds)",
         ylabel = "Final Steane-7 fidelity",
-        title = "Simulation fidelity vs T2 times")
+        title = "Simulation fidelity vs depolarising char. times")
 
     lines!(
         ax,
@@ -88,7 +98,7 @@ function plot_sweep(parameter_values, state_fidelities, params)
         state_fidelities,
         markersize = 8)
     
-    save("plots/fidelity_vs_T2_times.png", fig)
+    save("src/plots/fidelity_vs_depolarising_noise_time.png", fig)
 
 end
 
@@ -100,23 +110,26 @@ function run_parameter_sweep()
     #TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
     #TODO: Include check for no overlaps within one layer
     
-    T2_times = collect(0.025:0.1:1.6)
+    depolarising_times = collect(1e13:1:1e13+1)
     state_fidelities = Float64[]
 
-    for T2_time in T2_times
-        params = retrieve_parameters(T2_time)  # retrieve parameters, changing bell state fidelity in every sweep
-        fid_T2 = 0
-        num_runs = 300
-        for i in 1:num_runs
+    #TODO: Add standard deviation 
+    #TODO: sweep over other parameters as well
+    for depolarising_time in depolarising_times
+        params = retrieve_parameters(depolarising_time)  # retrieve parameters, changing bell state fidelity in every sweep
+        fid_depol = 0
+        num_runs = 1
+        for _ in 1:num_runs
             sim_fid = run_simulation(params, circuit, register_lookup_array)
-            fid_T2 += sim_fid.fidelity
+            #@btime run_simulation(params, circuit, register_lookup_array) #sim_fid = run_simulation(params, circuit, register_lookup_array)
+            fid_depol += sim_fid.fidelity
         end
-        fid_T2 = fid_T2/num_runs
-        push!(state_fidelities, fid_T2)
-        @info "For T2 $T2_time, we obtain final state fidelity $(fid_T2)"
+        fid_depol = fid_depol/num_runs
+        push!(state_fidelities, fid_depol)
+        @info "For depolarising tau $depolarising_time, we obtain final state fidelity $(fid_depol)"
     end
 
-    plot_sweep(T2_times, state_fidelities, params) # !! takes the last params iteration
+    plot_sweep(depolarising_times, state_fidelities, params) # !! takes the last params iteration
 end
 
 
