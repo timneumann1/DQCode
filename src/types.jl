@@ -8,8 +8,8 @@ export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, Identity
 
 struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
-    T1_relaxation::Float64          # T1 relaxation time of all qubits   [Wang]
-    T2_dephasing::Float64         # T2 dephasing time of all qubits     [Wang]
+    #T1_relaxation::Float64          # T1 relaxation time of all qubits   [Wang]
+    depolarising_noise::Float64       #  T2_dephasing::Float64         # T2 dephasing time of all qubits     [Wang]
     single_qubit_gate_exec_time::Float64   # Execution Time of a single qubit gate
     two_qubit_gate_exec_time::Float64      # Execution Time of a two qubit gate
     projective_measurement_time::Float64      # Time to peform a measurement
@@ -17,6 +17,7 @@ struct SimulationParameters
     bell_state_fidelity::Float64
     success_prob::Float64
     attempt_time::Float64
+    #TODO: Add measurement fidelity
 end
 
 struct SimulationFidelity

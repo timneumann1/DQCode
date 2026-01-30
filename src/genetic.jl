@@ -9,13 +9,13 @@ export run_genetic_search
 function define_parameters()
     params = SimulationParameters(
         [5,4], #register sizes
-        12000.0,#T1
-        0.5, #4200 T2
+        #12000.0,#T1
+        10, #4200 depolarising noise time
         20e-6, # Execution Time of a single qubit gate   #20e^-6
         200e-6,   # Two-qubit gates 200e^-6
         1e-5,  #1e^-5  projective measurement time
         1e-2,  # 1e^-2 classical comm time
-        1,#0.9689, # Bell state fidelity
+        1,#0.9689, # Bell state fidelity  #TODO: make this smaller than 1, should be fixed upon MixedDestabilizer fidelity
         1.41e-4, # Bell state generation,from [Main, 2025]    success probability 
         1.168e-9 #1.168e-9  # attempt time
 
