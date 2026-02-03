@@ -60,12 +60,12 @@ end
 function run_genetic_search()
 
     params = define_parameters()                             # retrieve parameters
-    register_lookup_array = create_lookup_array(params)      # create lookup array
+    register_lookup_array, register_start_indices = create_lookup_array(params)      # create lookup array
     circuit = build_start_circuit(params)                    # build initial circuit
     #TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
     #TODO: Include check for no overlaps within one layer
     
-    fidelity = run_simulation(params, circuit, register_lookup_array)
+    fidelity = run_simulation(params, circuit, register_lookup_array, register_start_indices)
     print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
 end
 

@@ -6,15 +6,19 @@ export create_lookup_array, comm_qubits_array
 #TODO: replace with cleaner version
 function create_lookup_array(params)
     register_lookup_array = Vector{Int}(undef, sum(params.register_sizes))
+    register_start_indices = Vector{Int}(undef, length(params.register_sizes))
     register = 1
     register_start_index = 1
+    
     for i in eachindex(params.register_sizes)
         j = params.register_sizes[i]
         register_lookup_array[register_start_index:register_start_index+j-1] .= register
+        register_start_indices[register] = register_start_index
         register_start_index+=j
         register +=1
     end
-    return register_lookup_array
+    #print(register_lookup_array, register_start_indices)
+    return register_lookup_array, register_start_indices
 end
 
 #function create_lookup_array(params)
