@@ -1,0 +1,16 @@
+Naive Encoding Test
+Test 1 successful: 1.0
+Test 2 successful: 0.0
+Test 3 successful: 1.0
+Test 4 successful: 1.0
+Test 5 successful: 0.0
+
+Golay Encoding Test
+Test 6 successful: 1.0
+Test 7 successful: 0.0
+Test 8 successful: 0.0
+Test 9 successful: 1.0
+Test 10 successful: 0.0
+
+Superposition Encoding Test
+Test successful: 1.0
