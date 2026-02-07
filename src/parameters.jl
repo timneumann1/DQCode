@@ -107,6 +107,8 @@ function steane_encoding_circuit(params)
 
     circuit.gates[2,7] = circuit.gates[9,7] = CNOT_Gate(2,9)
 
+    #circuit.gates[2,8] = circuit.gates[3,8] = CNOT_Gate(2,3)
+    #circuit.gates[4,8] = circuit.gates[5,8] = CNOT_Gate(4,5)
     circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
     circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
 
@@ -180,7 +182,7 @@ function run_parameter_sweep()
     end
 
     # Profiling
-    @btime run_simulation($params, $circuit, $register_lookup_array, $register_start_indices) # running profiling with last set of params
+    #@btime run_simulation($params, $circuit, $register_lookup_array, $register_start_indices) # running profiling with last set of params
     #@profile run_simulation(params, circuit, register_lookup_array, register_start_indices)
     plot_sweep(depolarising_times, state_fidelities, params) # !! takes the last params iteration
 end

@@ -77,6 +77,7 @@ end
     @yield request(network[control_register,1]) 
     @yield request(network[target_register,1])
 
+    #print(network[control_register,1]) 
     #@simlog sim "Executing Telegate-CNOT between ($control_register, $control_qubit) and ($target_register, $target_qubit)"
     apply!((network[control_register,control_qubit], network[control_register,1]), CNOT)  
 
@@ -116,23 +117,46 @@ end
 
 @resumable function single_qubit_gates_per_layer(sim, network, single_qubit_gates, params, register_lookup_array, register_start_indices, single_qubits_executed)# layer_executed, num_processes)
     
-    single_qubit_gates_layer_executed = Event(sim)
-    num_single_qubit_gates_processes = isempty(single_qubit_gates) ? Ref(0) : Ref(sum(length, values(single_qubit_gates)))#@isdefined(single_qubit_gates) ? Ref() : Ref(0)
-    empty_list = (num_single_qubit_gates_processes[] == 0)
+    #single_qubit_gates_layer_executed = Event(sim)
+    #num_single_qubit_gates_processes = isempty(single_qubit_gates) ? Ref(0) : Ref(sum(length, values(single_qubit_gates)))#@isdefined(single_qubit_gates) ? Ref() : Ref(0)
+    #empty_list = (num_single_qubit_gates_processes[] == 0)
+    
+    empty_list = isempty(single_qubit_gates)
+    #gates = Vector{Any}()
+    #registers  = Int[]
+    #indices_in_registers = Int[]
+    #@simlog sim "single qubit gates starting"
 
     for gtype in keys(single_qubit_gates)
         indices = get!(single_qubit_gates, gtype, Int[])     
         for index in indices
             register = register_lookup_array[index]
             index_in_register = index - register_start_indices[register] + 1 # sum(params.register_sizes[1:(register-1)])  # need to account for index of qubit within register
-            @process single_qubit_gate(sim, network, register, index_in_register, gate_to_apply(gtype), single_qubit_gates_layer_executed, num_single_qubit_gates_processes)#gate_to_apply(gtype))
+            @yield request(network[register, index_in_register])
+            apply!(network[register,index_in_register], gate_to_apply(gtype))
+            @yield unlock(network[register, index_in_register])
+            #push!(registers, register)
+            #push!(indices_in_registers, index_in_register)
+            #push!(gates, gate_to_apply(gtype))
+            #@process single_qubit_gate(sim, network, register, index_in_register, gate_to_apply(gtype), single_qubit_gates_layer_executed, num_single_qubit_gates_processes)#gate_to_apply(gtype))
         end
     end
+
+    
+    #@simlog sim "single qubit gates completed (beofre timeout)"
+    # for gtype in keys(single_qubit_gates)
+    #     indices = get!(single_qubit_gates, gtype, Int[])     
+    #     for index in indices
+    #         register = register_lookup_array[index]
+    #         index_in_register = index - register_start_indices[register] + 1 # sum(params.register_sizes[1:(register-1)])  # need to account for index of qubit within register
+    #         @process single_qubit_gate(sim, network, register, index_in_register, gate_to_apply(gtype), single_qubit_gates_layer_executed, num_single_qubit_gates_processes)#gate_to_apply(gtype))
+    #     end
+    # end
     if !(empty_list) # avoid waiting when there is no single qubit gate
-        @yield single_qubit_gates_layer_executed 
+        #@yield single_qubit_gates_layer_executed 
         @yield timeout(sim, params.single_qubit_gate_exec_time)
     end
-    
+    #@request @unlock to block
     #@simlog sim "single qubit gates completed"
     succeed(single_qubits_executed)
     #num_processes[]-=1
@@ -142,19 +166,28 @@ end
 
 @resumable function CNOT_gates_per_layer(sim, network, CNOT_gates, params, register_lookup_array, register_start_indices, CNOTs_executed) # layer_executed, num_processes)
     
-    CNOT_gate_layer_executed = Event(sim)
-    num_CNOT_gate_processes = isempty(CNOT_gates) ? Ref(0) : Ref(length(CNOT_gates)) 
-    empty_list = (num_CNOT_gate_processes[] == 0)
+    #CNOT_gate_layer_executed = Event(sim)
+    #num_CNOT_gate_processes = isempty(CNOT_gates) ? Ref(0) : Ref(length(CNOT_gates)) 
+    #empty_list = (num_CNOT_gate_processes[] == 0)
+
+    empty_list = isempty(CNOT_gates)
+
 
     for (control, target) in CNOT_gates
         register = register_lookup_array[control]
         control_index_in_register = control - register_start_indices[register] + 1 # sum(params.register_sizes[1:(register-1)])
         target_index_in_register = target - register_start_indices[register] + 1 #sum(params.register_sizes[1:(register-1)])
-        @process CNOT_gate(sim, network, register, control_index_in_register, target_index_in_register, num_CNOT_gate_processes, CNOT_gate_layer_executed)
+        @yield request(network[register, control_index_in_register])
+        @yield request(network[register, target_index_in_register])
+        apply!( ( network[register, control_index_in_register], network[register, target_index_in_register]), CNOT)
+        #@simlog sim "Executed CNOT between ($register, $control_index_in_register) and ($register, $target_index_in_register)"
+        @yield unlock(network[register, control_index_in_register])
+        @yield unlock(network[register, target_index_in_register])  
+        #@process CNOT_gate(sim, network, register, control_index_in_register, target_index_in_register, num_CNOT_gate_processes, CNOT_gate_layer_executed)
     end
 
     if !empty_list # num_CNOT_gate_processes[] != 0
-        @yield CNOT_gate_layer_executed
+        #@yield CNOT_gate_layer_executed
         @yield timeout(sim, params.two_qubit_gate_exec_time)
     end
     
@@ -214,6 +247,8 @@ function initialise_simulation(params)
     #initialize!(data_qubits, SProjector(Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1⊗Z1)  )   # QuantumOpticsRepr() formulation
 
     initialize!(data_qubits, one(MixedDestabilizer,7) )             # CliffordRepr() formulation
+    #print(data_qubits[1])
+    #stateof(network[1,1])
     #fidelity = real(observable(data_qubits , SProjector(steane_7_state) ) )
     #@info "Initial state has fidelity $fidelity"
     return sim, network, data_qubits
@@ -286,12 +321,12 @@ function run_simulation(params::SimulationParameters, circuit::Circuit, register
     
     #print("Final state is $(network[1,2]) \n $(network[2])")
     steane_7_state = StabilizerState("ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX ZZZZZZZ") 
-
     fidelity = real(observable(data_qubits, SProjector(steane_7_state)))
     # fidelity = real(observable(data_qubits, Z⊗Z⊗Z⊗Z⊗Z⊗Z⊗Z)) produces stack overflow
     #println()
     #print(stateof(network[1,2]).registers)  #TODO: verify that this indeed prints the tableua after QS fix
     #@infiltrate
+    # @view might display the tableau
     # TODO: recast the fidelity as the Tableau distance to the canoncial form of the stabilizer tableau
 
     return SimulationFidelity(fidelity)
