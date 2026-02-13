@@ -1,8 +1,15 @@
 """ Credit: https://github.com/QuantumSavory/QuantumClifford.jl/blob/4d524965a11b6d8594d578d4935ccd7bc385f56c/src/ecc/circuits.jl"""
 
+module LogicalEnc
+
 using QuantumClifford
 using QECCore
-using Quantikz
+using Quantikz: savecircuit
+using QuantumSavory: H, CNOT, X, Y, Z, stateof
+
+export naive_encoding_circuit
+export golay_encoding_circuit
+export run_tests
 
 """
 This function creates the naive encoding circuit by first obtaining the canonical form of the stabiliser tableau, without re-permuting
@@ -164,81 +171,86 @@ function test(;initial_state, circuit_type, hadamards, final_state_verify, plott
     petrajectories(initial_state, circuit)
 end
 
+
 ### TESTS ###
 
-# State to be encoded must be at indices 'n-k+1:n', so for Steane-7: |0>^6 \otimes |psi> at index 7
-initial_zero = S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII IIIIIIZ" 
-initial_one =  S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII -IIIIIIZ" 
-initial_plus = S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII IIIIIIX" 
+function run_tests()
+
+    # State to be encoded must be at indices 'n-k+1:n', so for Steane-7: |0>^6 \otimes |psi> at index 7
+    initial_zero = S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII IIIIIIZ" 
+    initial_one =  S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII -IIIIIIZ" 
+    initial_plus = S"IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII IIIIIIX" 
 
 
-encoded_zero = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI" # wotks with ZZZZZZZ
-encoded_one = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ -IZIZIZI"
-encoded_plus = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IIXIXXI" # works with XXXXXXX
+    encoded_zero = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI" # Z_L = Z_2 Z_4 Z_6, but works with ZZZZZZZ as well 
+    encoded_one = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ -IZIZIZI"
+    encoded_plus = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IIXIXXI" # works with XXXXXXX
 
-test1 = test(initial_state=initial_zero, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero, plotting=true, label="zero_to_logical_zero")
-test2 = test(initial_state=initial_one, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero,  plotting =false, label="")
-test3 = test(initial_state=initial_one, circuit_type="naive", hadamards=false, final_state_verify=encoded_one,  plotting =true, label="one_to_logical_one")
-test4 = test(initial_state=initial_zero, circuit_type="naive", hadamards=true, final_state_verify=encoded_plus, plotting =true, label="zero_to_logical_plus")
-test5 = test(initial_state=initial_zero, circuit_type="naive", hadamards=true, final_state_verify=encoded_zero, plotting =false, label="")
+    test1 = test(initial_state=initial_zero, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero, plotting=true, label="zero_to_logical_zero")
+    test2 = test(initial_state=initial_one, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero,  plotting =false, label="")
+    test3 = test(initial_state=initial_one, circuit_type="naive", hadamards=false, final_state_verify=encoded_one,  plotting =true, label="one_to_logical_one")
+    test4 = test(initial_state=initial_zero, circuit_type="naive", hadamards=true, final_state_verify=encoded_plus, plotting =true, label="zero_to_logical_plus")
+    test5 = test(initial_state=initial_zero, circuit_type="naive", hadamards=true, final_state_verify=encoded_zero, plotting =false, label="")
 
-"""
-Expected Test Results:
+    """
+    Expected Test Results:
 
-Test1: 1.0
-Test2: 0.0
-Test3: 1.0
-Test4: 1.0
-Test5: 0.0
-"""
+    Test1: 1.0
+    Test2: 0.0
+    Test3: 1.0
+    Test4: 1.0
+    Test5: 0.0
+    """
 
-test6 = test(initial_state=initial_zero, circuit_type="golay", hadamards=false, final_state_verify=encoded_zero, plotting=true, label="zero_to_logical_zero_golay")
-test7 = test(initial_state=initial_one, circuit_type="golay", hadamards=false, final_state_verify=encoded_zero,  plotting =false, label="")
-test8 = test(initial_state=initial_one, circuit_type="golay", hadamards=false, final_state_verify=encoded_one,  plotting =true, label="one_to_logical_one_golay")
-test9 = test(initial_state=initial_zero, circuit_type="golay", hadamards=true, final_state_verify=encoded_plus, plotting =true, label="zero_to_logical_plus_golay")
-test10 = test(initial_state=initial_zero, circuit_type="golay", hadamards=true, final_state_verify=encoded_zero, plotting =false, label="")
+    test6 = test(initial_state=initial_zero, circuit_type="golay", hadamards=false, final_state_verify=encoded_zero, plotting=true, label="zero_to_logical_zero_golay")
+    test7 = test(initial_state=initial_one, circuit_type="golay", hadamards=false, final_state_verify=encoded_zero,  plotting =false, label="")
+    test8 = test(initial_state=initial_one, circuit_type="golay", hadamards=false, final_state_verify=encoded_one,  plotting =true, label="one_to_logical_one_golay")
+    test9 = test(initial_state=initial_zero, circuit_type="golay", hadamards=true, final_state_verify=encoded_plus, plotting =true, label="zero_to_logical_plus_golay")
+    test10 = test(initial_state=initial_zero, circuit_type="golay", hadamards=true, final_state_verify=encoded_zero, plotting =false, label="")
 
-"""
-Expected Test Results:
-Test6: 1.0
-Test7: 0.0
-Test8: 0.0
-Test9: 1.0
-Test10: 0.0
-"""
+    """
+    Expected Test Results:
+    Test6: 1.0
+    Test7: 0.0
+    Test8: 0.0
+    Test9: 1.0
+    Test10: 0.0
+    """
 
-test_superposition = test(initial_state=initial_plus, circuit_type="naive", hadamards=false, final_state_verify=encoded_plus, plotting =true, label="superposition_circuit")
+    test_superposition = test(initial_state=initial_plus, circuit_type="naive", hadamards=false, final_state_verify=encoded_plus, plotting =true, label="superposition_circuit")
 
-"""
-Expected Test Results: 1.0
-"""
+    """
+    Expected Test Results: 1.0
+    """
 
-println()
-print("Naive Encoding Test\n")
+    println()
+    print("Naive Encoding Test\n")
 
-print("Test 1 successful: $( test1[ collect(keys(test1))[1] ]  )\n") # prints the result of true_success (verification was successful)
-print("Test 2 successful: $( test2[ collect(keys(test2))[1] ]  )\n") 
-print("Test 3 successful: $( test3[ collect(keys(test3))[1] ]  )\n") 
-print("Test 4 successful: $( test4[ collect(keys(test4))[1] ]  )\n") 
-print("Test 5 successful: $( test5[ collect(keys(test5))[1] ]  )\n") 
-
-
-println()
-print("Golay Encoding Test\n")
+    print("Test 1 successful: $( test1[ collect(keys(test1))[1] ]  )\n") # prints the result of true_success (verification was successful)
+    print("Test 2 successful: $( test2[ collect(keys(test2))[1] ]  )\n") 
+    print("Test 3 successful: $( test3[ collect(keys(test3))[1] ]  )\n") 
+    print("Test 4 successful: $( test4[ collect(keys(test4))[1] ]  )\n") 
+    print("Test 5 successful: $( test5[ collect(keys(test5))[1] ]  )\n") 
 
 
-print("Test 6 successful: $( test6[ collect(keys(test6))[1] ]  )\n") # prints the result of true_success (verification was successful)
-print("Test 7 successful: $( test7[ collect(keys(test7))[1] ]  )\n") 
-print("Test 8 successful: $( test8[ collect(keys(test8))[1] ]  )\n") 
-print("Test 9 successful: $( test9[ collect(keys(test9))[1] ]  )\n") 
-print("Test 10 successful: $( test10[ collect(keys(test10))[1] ] )\n") 
+    println()
+    print("Golay Encoding Test\n")
 
 
-# The compressed circuit in [Fault-tolerant ancilla preparation and noise threshold lower bounds  for the 23-qubit Golay code] is specific to the initial all-zero
-# state and therefore does not work for encoding arbitrary input states.
+    print("Test 6 successful: $( test6[ collect(keys(test6))[1] ]  )\n") # prints the result of true_success (verification was successful)
+    print("Test 7 successful: $( test7[ collect(keys(test7))[1] ]  )\n") 
+    print("Test 8 successful: $( test8[ collect(keys(test8))[1] ]  )\n") 
+    print("Test 9 successful: $( test9[ collect(keys(test9))[1] ]  )\n") 
+    print("Test 10 successful: $( test10[ collect(keys(test10))[1] ] )\n") 
 
-println()
-print("Superposition Encoding Test\n")
 
-print("Test successful: $( test_superposition[ collect(keys(test_superposition))[1] ]  )\n")
+    # The compressed circuit in [Fault-tolerant ancilla preparation and noise threshold lower bounds  for the 23-qubit Golay code] is specific to the initial all-zero
+    # state and therefore does not work for encoding arbitrary input states.
 
+    println()
+    print("Superposition Encoding Test\n")
+
+    print("Test successful: $( test_superposition[ collect(keys(test_superposition))[1] ]  )\n")
+end
+
+end
