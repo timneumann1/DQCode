@@ -4,7 +4,7 @@ module Types
 
 # types for simulation
 
-export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, Gate
+export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate
 
 struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
@@ -39,6 +39,11 @@ struct HadamardGate <: Gate end
 struct CNOT_Gate <: Gate
     control::Int
     target::Int
+end
+
+struct SWAP_Gate <: Gate
+    qubit_1::Int
+    qubit_2::Int
 end
 
 struct Circuit

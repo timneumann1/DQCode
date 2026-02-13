@@ -1,13 +1,14 @@
 module Parameters
 
 using ..Types
-using ..Simulation
+using ..DTSimulation
 using ..Helper
 
 using GLMakie
 GLMakie.activate!()
 
 using BenchmarkTools
+using Profile
 
 export run_parameter_sweep
 
@@ -107,8 +108,6 @@ function steane_encoding_circuit(params)
 
     circuit.gates[2,7] = circuit.gates[9,7] = CNOT_Gate(2,9)
 
-    #circuit.gates[2,8] = circuit.gates[3,8] = CNOT_Gate(2,3)
-    #circuit.gates[4,8] = circuit.gates[5,8] = CNOT_Gate(4,5)
     circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
     circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
 
@@ -119,7 +118,6 @@ function steane_encoding_circuit(params)
     circuit.gates[7,9] = HadamardGate()
     circuit.gates[8,9] = HadamardGate()
     circuit.gates[9,9] = HadamardGate()
-
     return circuit
 end
 
@@ -157,7 +155,7 @@ end
 function run_parameter_sweep()
     
     params = retrieve_parameters(1) #  TODO: Refactor this; dummy parms vector to enable the creation of the register lookup and circuit (both depend only on register_size!)
-    register_lookup_array, register_start_indices = create_lookup_array(params)      # create lookup array
+    register_lookup_array, register_start_indices = create_lookup_array(params.register_sizes)      # create lookup array
     circuit = steane_encoding_circuit(params)                # build initial circuit
     #TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
     #TODO: Include check for no overlaps within one layer
@@ -172,7 +170,7 @@ function run_parameter_sweep()
         fid_depol = 0
         num_runs = 1
         for _ in 1:num_runs
-            sim_fid = run_simulation(params, circuit, register_lookup_array, register_start_indices)
+            sim_fid = run_dtsimulation(params, circuit, register_lookup_array, register_start_indices)
             fid_depol += sim_fid.fidelity
         end
         
@@ -182,9 +180,14 @@ function run_parameter_sweep()
     end
 
     # Profiling
-    #@btime run_simulation($params, $circuit, $register_lookup_array, $register_start_indices) # running profiling with last set of params
-    #@profile run_simulation(params, circuit, register_lookup_array, register_start_indices)
-    plot_sweep(depolarising_times, state_fidelities, params) # !! takes the last params iteration
+    @btime run_dtsimulation($params, $circuit, $register_lookup_array, $register_start_indices) # running profiling with last set of params
+    #@timed run_dtsimulation(params, circuit, register_lookup_array, register_start_indices)
+    #@profile run_dtsimulation(params, circuit, register_lookup_array, register_start_indices)
+    #@profile for _ in 1:100
+    #    run_dtsimulation(params, circuit, register_lookup_array, register_start_indices)
+    #end
+    #Profile.print(format=:flat, sortedby=:count)
+    #plot_sweep(depolarising_times, state_fidelities, params) # !! takes the last params iteration
 end
 
 
