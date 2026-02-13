@@ -1,14 +1,22 @@
 module Genetic
 
 using ..Types
-using ..Simulation
-using ..Helper
+using ..CircuitSimulator
+#using ..Helper
+using ..LogicalEnc
+
+using Quantikz: savecircuit
+using QECCore: Steane7
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str
+using BenchmarkTools
+
 
 export run_genetic_search
 
+
 function define_parameters()
     params = SimulationParameters(
-        [5,4], #register sizes
+        [3,4], #register sizes
         #12000.0,#T1
         10, #4200 depolarising noise time
         20e-6, # Execution Time of a single qubit gate   #20e^-6
@@ -29,44 +37,91 @@ function define_parameters()
 end
 
 
-function build_start_circuit(params)
+function build_start_circuit(num_qubits)
+    #_, circuit = naive_encoding_circuit(Steane7())
 
-    circuit = Circuit(sum(params.register_sizes), 8)   # params.register_sizes rows (qubits) and 8 columns (time steps)
+
+    circuit = Circuit(num_qubits, 12)   # params.register_sizes rows (qubits) and 8 columns (time steps)
     
+    circuit.gates[1,1] = HadamardGate()
     circuit.gates[2,1] = HadamardGate()
     circuit.gates[3,1] = HadamardGate()
-    circuit.gates[5,1] = HadamardGate()
 
-    circuit.gates[2,2] = circuit.gates[4,2] = CNOT_Gate(2,4)
-    circuit.gates[5,2] = circuit.gates[8,2] = CNOT_Gate(5,8)
+    circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
 
-    circuit.gates[3,3] = circuit.gates[9,3] = CNOT_Gate(3,9)
+    circuit.gates[1,3] = circuit.gates[4,3] = CNOT_Gate(1,4)
+    circuit.gates[7,3] = circuit.gates[5,3] = CNOT_Gate(7,5)
 
-    circuit.gates[2,4] = circuit.gates[7,4] = CNOT_Gate(2,7)
+    circuit.gates[1,4] = circuit.gates[5,4] = CNOT_Gate(1,5)
 
-    circuit.gates[5,5] = circuit.gates[9,5] = CNOT_Gate(5,9)
+    circuit.gates[1,5] = circuit.gates[6,5] = CNOT_Gate(1,6)
 
-    circuit.gates[3,6] = circuit.gates[8,6] = CNOT_Gate(3,8)
+    circuit.gates[2,6] = circuit.gates[4,6] = CNOT_Gate(2,4)
 
-    circuit.gates[2,7] = circuit.gates[9,7] = CNOT_Gate(2,9)
+    circuit.gates[2,7] = circuit.gates[6,7] = CNOT_Gate(2,6)
 
-    circuit.gates[3,8] = circuit.gates[4,8] = CNOT_Gate(3,4)
-    circuit.gates[5,8] = circuit.gates[7,8] = CNOT_Gate(5,7)
+    circuit.gates[2,8] = circuit.gates[7,8] = CNOT_Gate(2,7)
 
-    return circuit
+    circuit.gates[3,9] = circuit.gates[5,9] = CNOT_Gate(3,5)
+
+    circuit.gates[3,10] = circuit.gates[6,10] = CNOT_Gate(3,6)
+
+    circuit.gates[3,11] = circuit.gates[7,11] = CNOT_Gate(3,7)
+
+    circuit.gates[3,12] = circuit.gates[4,12] = SWAP_Gate(3,4)
+    circuit.gates[6,12] = circuit.gates[7,12] = SWAP_Gate(6,7)
+
+
+    #print(typeof(circuit))
+    #savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
+
+    return circuit.gates
+    # could start with circuit from logical_encoding.jl here
 end
 
 
 function run_genetic_search()
 
     params = define_parameters()                             # retrieve parameters
-    register_lookup_array, register_start_indices = create_lookup_array(params)      # create lookup array
-    circuit = build_start_circuit(params)                    # build initial circuit
+
+    # TODO: Mapping stage -> use dictionary to map indices to one another
+    permutation = [1,7,4,2,3,5,6]
+    inv_perm = invperm(permutation)
+    mapping = perm_to_transpositions(deepcopy(permutation)) # careful: this does in-place substitution of permutation
+    # as extracted from Hypergraph Partitoning DO I WANT TO DO THIS HERE ONCE AND ALWAYS JSUT PASS IT?
+
+    register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(params.register_sizes, mapping)      # create lookup array
+    num_comm_qubits_per_register = length(params.register_sizes)-1
+    num_qubits = num_data_qubits + num_comm_qubits_per_register*(length(params.register_sizes))
+    print("number of qubits is $num_qubits, $num_comm_qubits_per_register")
+    #mapping = [(7,2),(6,2),(5,2),(4,3),(3,2)]  #this mapping is an update of the oroginal transpoitions, taking into account that we inserted comm qubits
+    # Make array of data qubits
+    println("Lookup Array: $register_lookup_array")
+    println("Data qubits: $data_qubits")
+    
+    circuit_tensor = build_start_circuit(num_qubits)                  # build initial circuit
+    target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI"
+    # convert tensor of DATA QUBITS to QS circuit
+    circuit = tensor_to_circuit(circuit_tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, target_state)
+    
+    @btime tensor_to_circuit($circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $target_state)
+
+    
+    
+    #circuit = add_verification(circuit, target_state, data_qubits)
+    
+    savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
+
+
+
     #TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
     #TODO: Include check for no overlaps within one layer
+    circuit_result = execute_circuit(circuit, num_qubits) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
     
-    fidelity = run_simulation(params, circuit, register_lookup_array, register_start_indices)
-    print("\nFinal Steane-7 fidelity: $(fidelity.fidelity) \n")
+    @btime execute_circuit($circuit, $num_qubits)
+
+
+    print("\nFinal Steane-7 fidelity: $(circuit_result) \n")
 end
 
 end
