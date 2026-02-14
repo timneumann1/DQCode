@@ -6,9 +6,10 @@ using ..Types
 
 using QuantumClifford
 #using QuantumSavory: H, CNOT, X, Y, Z, stateof
-using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str#, sX, SY, SZ
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register#, sX, SY, SZ
 using QECCore
 
+import QuantumClifford: apply!, affectedqubits # we want to extend this with ConditionalGate
 export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, tensor_to_circuit, perm_to_transpositions
 
 function create_lookup_array_cliff(num_data_qubits_per_register)
@@ -54,6 +55,9 @@ gate_to_apply(::Type{PauliXGate}, i::Int) = sX(i)
 gate_to_apply(::Type{PauliYGate}, i::Int) = sY(i)
 gate_to_apply(::Type{PauliZGate}, i::Int) = sZ(i)
 
+#We can also use NoisyGate: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/docs/src/noisycircuits_ops.md
+
+
 function perm_to_transpositions(perm)
     n = length(perm)
     transpositions = Tuple{Int, Int}[]
@@ -68,7 +72,43 @@ function perm_to_transpositions(perm)
     return transpositions
 end
 
-function tensor_to_circuit(tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, target_state)
+
+Pauli_gate_noise(::Type{PauliXGate}, p::Float64) = PauliNoise(p,0,0)
+Pauli_gate_noise(::Type{PauliYGate}, p::Float64) = PauliNoise(0,p,0)
+Pauli_gate_noise(::Type{PauliZGate}, p::Float64) = PauliNoise(0,0,p)
+Pauli_gate_noise(::Type{HadamardGate}, p::Float64) = PauliNoise(p/2,0,p/2)
+
+
+function apply!(state::Register, op::ConditionalGate)
+    #println("state:$state, op: $op, op control:  $(op.controlbit),statebits; $(state.bits), bit: $(state.bits[op.controlbit])" )
+    #println("state:$(state.stab)")
+    if state.bits[op.controlbit]
+        apply!(state, op.truegate)
+    else
+        apply!(state, op.falsegate)
+    end
+    return state
+end
+
+function affectedqubits(op::ConditionalGate)
+    qs = Int[]
+    append!(qs, collect(affectedqubits(op.truegate)))
+    #if op.falsegate !== nothing
+    #    append!(qs, collect(affectedqubits(op.falsegate)))
+    #end
+    return unique(qs)
+end
+
+
+function tensor_to_circuit(tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits)
+    
+
+    depolarising_prob = 0.0001
+    gate_noise_prob = 0.0001
+    # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
+
+#    print(typeof(circuit_noise))
+    
     
     #print("Comparing mapping and mapping 2: $mapping vs $mapping2")
     #idx(index::Int) =  index+num_comm_qubits_per_register * (register_lookup_array[index]-1)
@@ -97,10 +137,10 @@ function tensor_to_circuit(tensor, mapping, inv_perm, register_lookup_array, dat
     #print(tensor)
 
     # Add noise somewhere
-    #print(typeof(tensor))
-
+    circuit = add_noise(circuit, depolarising_prob)
     for col in axes(tensor, 2) # each column corresponds to one layer
-
+    
+        
         # For operations, we need to use the comm_perm_idx function to correctly permute
         #@simlog sim "Entered the iteration $col in the outer loop"
         # single_qubit_gates = Dict{Type, Vector{Int}}() # stores single qubit gates and corresponding qubit indices per layer
@@ -109,12 +149,19 @@ function tensor_to_circuit(tensor, mapping, inv_perm, register_lookup_array, dat
         #flags = Set{Int}() # to flag the control/target qubits that can be ignored
 
         for qubit in axes(tensor, 1) # each row corresponds to one qubit
+            
             #register = register_lookup_array[qubit]
             #offset = num_comm_qubits_per_register*(register-1)
             gate = tensor[qubit,col]
             
             if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} #  Gate && !(gate isa CNOT) 
+                #Apply unfiform noise!
+                if gate != IdentityGate
+                    circuit = add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(qubit), gate)
+                end
                 #gate_type = typeof(gate)
+
+
                 #println(gate, qubit+offset)
                 #println(idx(qubit))
                 #println("HEEERE:$gate")
@@ -167,9 +214,18 @@ function tensor_to_circuit(tensor, mapping, inv_perm, register_lookup_array, dat
         push!(circuit, sSWAP(comm_idx(i),comm_idx(j))) # We could also use comm_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
     end
 
-    push!(circuit, VerifyOp(target_state, data_qubits)) 
+    #push!(circuit, VerifyOp(target_state, data_qubits)) 
     # Here, we should extract the tableau and compute the tableau distance, can we still sample many times
-
+    circuit, pauli_string = measure_zero(circuit, data_qubits, num_qubits) # one verification qubit is appended, BUT SINCE WE INITIALISE IT IN ZERO AND CHANGE ITS STATE, WE CAN HANDLE IT TOO (instead of doing num_qubits -1)
+    print(circuit)
+    push!(circuit,ConditionalGate(sX(num_qubits),sId1(num_qubits),pauli_string.bit))
+    #mimicing a conditional gate: Only flip the indication bit at the last qubit index when the classicla bitis 1 (we measured all zero)
+    # if pauli_string.bit ==1
+    #     push!(circuit, sZ(num_qubits))
+    # else
+    #     push(circuit,sId1(num_qubits) )
+    # end
+    push!(circuit, VerifyOp(S"-Z", [num_qubits]))
     return circuit
 
 
@@ -185,17 +241,70 @@ function add_telegate(circuit)
     # and apply conditional operations on those qubits + the comm_inv_perm indices we normally apply ops on
 end
 
-function add_noise(circuit)
-#
-end
-
-function add_verification(circuit, target_state, data_qubits)
-    push!(circuit, VerifyOp(target_state , data_qubits)) 
+function add_noise(circuit, prob::Float64) 
+    """Circuit noise"""
+    circuit_noise = NoiseOpAll(UnbiasedUncorrelatedNoise(prob));
+    push!(circuit, circuit_noise)
     return circuit
 end
 
-function execute_circuit(circuit, num_qubits, num_traj)#, mode = "mc")
-    initial_state = one(MixedDestabilizer,num_qubits)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state
+function add_noise(circuit, prob::Float64, qubit::Int, gate::Gate)
+    #Determine the corresponding noise
+    gate_noise_channel = Pauli_gate_noise(typeof(gate), prob)
+    gate_noise = NoiseOp(gate_noise_channel, [qubit])
+    push!(circuit, gate_noise)
+    return circuit
+end
+
+function add_verification(circuit, target_state, data_qubits)
+    push!(circuit, VerifyOp(target_state,data_qubits)) 
+    return circuit
+end
+
+function build_pauli_string(num_qubits::Int, data_qubits::Vector{Int})
+    data_qubits_set = Set(data_qubits)
+    pauli = Z # we can always assume that the first qubit is a data qubit, since this is only false whenever there are zero qubits
+#Z⊗Z⊗Z⊗Z⊗I⊗Z⊗Z
+    @inbounds for i in 2:(num_qubits) #traverses all data and comm qubits (not the verification one)
+        pauli = (i in data_qubits_set) ? pauli⊗Z : pauli⊗I
+    end
+    return pauli
+end
+
+function measure_zero(circuit, data_qubits, num_qubits)
+    #logical_zero_steane = P"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI"
+    #print(data_qubits)
+    zero_pauli_string = build_pauli_string(num_qubits, data_qubits)
+    # pauli_string = ""
+    # for i in collect(1:9) #TODO; replace with total number of qubits
+    #     if i in data_qubits
+    #         pauli_string += "Z"
+    #     else
+    #         pauli_string += "I"
+    #     end
+    # end
+    print(zero_pauli_string)
+    #println("Output of project")
+    pauli_zero = PauliMeasurement(zero_pauli_string, 1)# Test: PauliMeasurement(P"-IIIZIIIIII", 1) yields true boolean when applied to a state |0>, since -Z|0> has eigenvalue -1, and  PauliMeasurement(P"IIIXIIIIII", 1) yield true or false in half of the cases
+    #println(project!(data_qubits, zero_pauli_string))
+    push!(circuit,pauli_zero)
+
+    #push!(circuit, project!(data_qubits, zero_pauli_string))
+
+    #push!(circuit, PauliMeasurement(zero_pauli_string, 1)) 
+    
+    
+    # #TODO: make the pauli string more general, e.g. by building it u
+    # for data_qubit in data_qubits
+    #     print("Here:$data_qubit")
+    #     #make the pauli string more general!
+    #     push!(circuit, PauliMeasurement(P"ZZZIZZZZI", 1))
+    # end
+    return circuit, pauli_zero
+end
+
+function execute_circuit(circuit, num_qubits; num_traj)#, mode = "mc")
+    initial_state = Register(one(MixedDestabilizer,num_qubits),1)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state
     return mctrajectories(initial_state, circuit, trajectories=num_traj)
 end
 

@@ -90,9 +90,9 @@ function run_genetic_search()
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: this does in-place substitution of permutation
     # as extracted from Hypergraph Partitoning DO I WANT TO DO THIS HERE ONCE AND ALWAYS JSUT PASS IT?
 
-    register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(params.register_sizes, mapping)      # create lookup array
+    register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(params.register_sizes)      # create lookup array
     num_comm_qubits_per_register = length(params.register_sizes)-1
-    num_qubits = num_data_qubits + num_comm_qubits_per_register*(length(params.register_sizes))
+    num_qubits = num_data_qubits + num_comm_qubits_per_register*(length(params.register_sizes)) +1 # one verification qubit
     print("number of qubits is $num_qubits, $num_comm_qubits_per_register")
     #mapping = [(7,2),(6,2),(5,2),(4,3),(3,2)]  #this mapping is an update of the oroginal transpoitions, taking into account that we inserted comm qubits
     # Make array of data qubits
@@ -100,25 +100,28 @@ function run_genetic_search()
     println("Data qubits: $data_qubits")
     
     circuit_tensor = build_start_circuit(num_qubits)                  # build initial circuit
-    target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI"
+    #target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
     # convert tensor of DATA QUBITS to QS circuit
-    circuit = tensor_to_circuit(circuit_tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, target_state)
+    circuit = tensor_to_circuit(circuit_tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits)
     
-    @btime tensor_to_circuit($circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $target_state)
+    #@btime tensor_to_circuit($circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $target_state)
 
     
     
     #circuit = add_verification(circuit, target_state, data_qubits)
     
-    savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
+    #savecircuit(circuit, "src/plots/circuit_sim/circuit_noise.png") # plotting is performed by enabling the reset function
 
 
 
     #TODO: block all communication qubit layers! Can be done via row check != comm_qubits,
     #TODO: Include check for no overlaps within one layer
-    circuit_result = execute_circuit(circuit, num_qubits) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
-    
-    @btime execute_circuit($circuit, $num_qubits)
+
+    # Pauli measuremnt with project!
+    num_traj = 50
+    circuit_result = execute_circuit(circuit, num_qubits; num_traj = num_traj) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
+    # for perturbative expansion, only the leading order is kept, so probabilies can be smaller than 1
+    #@btime execute_circuit($circuit, $num_qubits, num_traj = $num_traj)
 
 
     print("\nFinal Steane-7 fidelity: $(circuit_result) \n")

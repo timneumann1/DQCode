@@ -2,9 +2,19 @@
 
 module Types
 
-# types for simulation
+using QuantumClifford
 
-export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate
+# types for simulation
+using QuantumClifford: AbstractOperation
+
+export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate
+
+
+struct ConditionalGate <: AbstractOperation
+    truegate::AbstractOperation
+    falsegate::AbstractOperation
+    controlbit::Int
+end
 
 struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
