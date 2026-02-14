@@ -7,7 +7,7 @@ using ..LogicalEnc
 
 using Quantikz: savecircuit
 using QECCore: Steane7
-using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat
 using BenchmarkTools
 
 
@@ -118,13 +118,20 @@ function run_genetic_search()
     #TODO: Include check for no overlaps within one layer
 
     # Pauli measuremnt with project!
-    num_traj = 50
-    circuit_result = execute_circuit(circuit, num_qubits; num_traj = num_traj) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
+    num_traj = 50000
+    mc_result = execute_circuit(circuit, num_qubits; num_traj = num_traj) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
     # for perturbative expansion, only the leading order is kept, so probabilies can be smaller than 1
-    #@btime execute_circuit($circuit, $num_qubits, num_traj = $num_traj)
+    println()
+    @btime execute_circuit($circuit, $num_qubits, num_traj = $num_traj)
 
 
-    print("\nFinal Steane-7 fidelity: $(circuit_result) \n")
+    println("\nFinal Steane-7 dict: $(mc_result) \n")
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != num_traj
+        throw(ErrorException("Some runs were invalid"))
+    end
+
+    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=3))
+    println("This is a fidelity of $fidelity")
 end
 
 end
