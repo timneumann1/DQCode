@@ -2,13 +2,16 @@
 
 module LogicalEnc
 
+using ..Helper
+
 using QuantumClifford
 using QECCore
 using Quantikz: savecircuit
 using QuantumSavory: H, CNOT, X, Y, Z, stateof
+using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat
 
-export naive_encoding_circuit
-export golay_encoding_circuit
+#export naive_encoding_circuit
+#export golay_encoding_circuit
 export run_tests
 
 """
@@ -107,20 +110,6 @@ function naive_encoding_circuit(code; undoperm=true)
         end
     end
     code_original_with_logicals, circ
-end
-
-function perm_to_transpositions(perm)
-    n = length(perm)
-    transpositions = Tuple{Int, Int}[]
-    for i in n:-1:1
-        if perm[i]!=i
-            j = findfirst(==(i), perm)
-            @assert !isnothing(j)
-            push!(transpositions, (i, j))
-            perm[j] = perm[i]
-        end
-    end
-    return transpositions
 end
 
 #####################################################################################
@@ -225,23 +214,23 @@ function run_tests()
 
     println()
     print("Naive Encoding Test\n")
-
-    print("Test 1 successful: $( test1[ collect(keys(test1))[1] ]  )\n") # prints the result of true_success (verification was successful)
-    print("Test 2 successful: $( test2[ collect(keys(test2))[1] ]  )\n") 
-    print("Test 3 successful: $( test3[ collect(keys(test3))[1] ]  )\n") 
-    print("Test 4 successful: $( test4[ collect(keys(test4))[1] ]  )\n") 
-    print("Test 5 successful: $( test5[ collect(keys(test5))[1] ]  )\n") 
+        
+    print("Test 1 successful: $( test1[ true_success_stat ]  )\n") # prints the result of true_success (verification was successful)
+    print("Test 2 successful: $( test2[ true_success_stat]  )\n") 
+    print("Test 3 successful: $( test3[ true_success_stat ]  )\n") 
+    print("Test 4 successful: $( test4[ true_success_stat ]  )\n") 
+    print("Test 5 successful: $( test5[ true_success_stat]  )\n") 
 
 
     println()
     print("Golay Encoding Test\n")
 
 
-    print("Test 6 successful: $( test6[ collect(keys(test6))[1] ]  )\n") # prints the result of true_success (verification was successful)
-    print("Test 7 successful: $( test7[ collect(keys(test7))[1] ]  )\n") 
-    print("Test 8 successful: $( test8[ collect(keys(test8))[1] ]  )\n") 
-    print("Test 9 successful: $( test9[ collect(keys(test9))[1] ]  )\n") 
-    print("Test 10 successful: $( test10[ collect(keys(test10))[1] ] )\n") 
+    print("Test 6 successful: $( test6[ true_success_stat ]  )\n") # prints the result of true_success (verification was successful)
+    print("Test 7 successful: $( test7[ true_success_stat ]  )\n") 
+    print("Test 8 successful: $( test8[ true_success_stat ]  )\n") 
+    print("Test 9 successful: $( test9[ true_success_stat ]  )\n") 
+    print("Test 10 successful: $( test10[ true_success_stat ] )\n") 
 
 
     # The compressed circuit in [Fault-tolerant ancilla preparation and noise threshold lower bounds  for the 23-qubit Golay code] is specific to the initial all-zero
@@ -250,7 +239,7 @@ function run_tests()
     println()
     print("Superposition Encoding Test\n")
 
-    print("Test successful: $( test_superposition[ collect(keys(test_superposition))[1] ]  )\n")
+    print("Test successful: $( test_superposition[ true_success_stat ]  )\n")
 end
 
 end
