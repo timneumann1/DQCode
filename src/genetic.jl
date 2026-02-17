@@ -2,13 +2,14 @@ module Genetic
 
 using ..Types
 using ..CircuitSimulator
-#using ..Helper
+using ..Helper
 using ..LogicalEnc
 
 using Quantikz: savecircuit
 using QECCore: Steane7
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat
 using BenchmarkTools
+
 
 
 export run_genetic_search
@@ -37,11 +38,11 @@ function define_parameters()
 end
 
 
-function build_start_circuit(num_qubits)
+function build_start_circuit(num_data_qubits)
     #_, circuit = naive_encoding_circuit(Steane7())
 
 
-    circuit = Circuit(num_qubits, 12)   # params.register_sizes rows (qubits) and 8 columns (time steps)
+    circuit = Circuit(num_data_qubits, 12)   # params.register_sizes rows (qubits) and 8 columns (time steps)
     
     circuit.gates[1,1] = HadamardGate()
     circuit.gates[2,1] = HadamardGate()
@@ -90,19 +91,23 @@ function run_genetic_search()
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: this does in-place substitution of permutation
     # as extracted from Hypergraph Partitoning DO I WANT TO DO THIS HERE ONCE AND ALWAYS JSUT PASS IT?
 
-    register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(params.register_sizes)      # create lookup array
-    num_comm_qubits_per_register = length(params.register_sizes)-1
-    num_qubits = num_data_qubits + num_comm_qubits_per_register*(length(params.register_sizes)) +1 # one verification qubit
+    # When gerneating the infromation for hypergraph part., we need to consult the naive encoding function in the logical encoding script to obtain the logical oeprators.
+    # For the inversion of the circuit, we have a custoim function in circsim.jl since this requries applicaiton of correct indices, accounting for communication qubits.
+    data_qubit_capacities = params.register_sizes
+    register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(data_qubit_capacities)      # create lookup array
+    num_comm_qubits_per_register = length(data_qubit_capacities)-1
+    num_qubits = num_data_qubits + num_comm_qubits_per_register*(length(data_qubit_capacities)) # one verification qubit
     print("number of qubits is $num_qubits, $num_comm_qubits_per_register")
     #mapping = [(7,2),(6,2),(5,2),(4,3),(3,2)]  #this mapping is an update of the oroginal transpoitions, taking into account that we inserted comm qubits
     # Make array of data qubits
     println("Lookup Array: $register_lookup_array")
     println("Data qubits: $data_qubits")
     
-    circuit_tensor = build_start_circuit(num_qubits)                  # build initial circuit
-    #target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
+    circuit_tensor = build_start_circuit(num_data_qubits)                  # build initial circuit
+    target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
     # convert tensor of DATA QUBITS to QS circuit
-    circuit = tensor_to_circuit(circuit_tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits)
+    code = Steane7()
+    circuit = tensor_to_circuit(code, circuit_tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
     
     #@btime tensor_to_circuit($circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $target_state)
 
@@ -110,7 +115,7 @@ function run_genetic_search()
     
     #circuit = add_verification(circuit, target_state, data_qubits)
     
-    #savecircuit(circuit, "src/plots/circuit_sim/circuit_noise.png") # plotting is performed by enabling the reset function
+    savecircuit(circuit, "src/plots/circuit_sim/circuit_noise.png") # plotting is performed by enabling the reset function
 
 
 
@@ -118,11 +123,11 @@ function run_genetic_search()
     #TODO: Include check for no overlaps within one layer
 
     # Pauli measuremnt with project!
-    num_traj = 50000
+    num_traj = 500
     mc_result = execute_circuit(circuit, num_qubits; num_traj = num_traj) # if specificg num_traj = 100000, we use mc sampling, otherwise pert.
     # for perturbative expansion, only the leading order is kept, so probabilies can be smaller than 1
     println()
-    @btime execute_circuit($circuit, $num_qubits, num_traj = $num_traj)
+    #@btime execute_circuit($circuit, $num_qubits, num_traj = $num_traj)
 
 
     println("\nFinal Steane-7 dict: $(mc_result) \n")

@@ -1,6 +1,6 @@
 module Helper
 
-export create_lookup_array, comm_qubits_array
+export create_lookup_array, comm_qubits_array, perm_to_transpositions
 
 # lookup arrays needs to be created only once before executing the genetic search
 #TODO: replace with cleaner version
@@ -38,6 +38,21 @@ function comm_qubits_array(params)
     end
     return comm_qubits_array
 end
+
+function perm_to_transpositions(perm)
+    n = length(perm)
+    transpositions = Tuple{Int, Int}[]
+    for i in n:-1:1
+        if perm[i]!=i
+            j = findfirst(==(i), perm)
+            @assert !isnothing(j)
+            push!(transpositions, (i, j))
+            perm[j] = perm[i]
+        end
+    end
+    return transpositions
+end
+
 
 
 end
