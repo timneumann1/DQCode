@@ -7,13 +7,38 @@ using QuantumClifford
 # types for simulation
 using QuantumClifford: AbstractOperation
 
-export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate
+import Quantikz: QuantikzOp, ClassicalDecision
+
+export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters
 
 
 struct ConditionalGate <: AbstractOperation
     truegate::AbstractOperation
     falsegate::AbstractOperation
     controlbit::Int
+end
+
+# For Quantikz
+function _conditional_gate_label(g::AbstractOperation)
+    repr_g = string(g)
+    if occursin("sX", repr_g)
+        return "X"
+    elseif occursin("sY", repr_g)
+        return "Y"
+    elseif occursin("sZ", repr_g)
+        return "Z"
+    elseif occursin("sHadamard", repr_g)
+        return "H"
+    elseif occursin("sId1", repr_g)
+        return "I"
+    end
+    return "U"
+end
+
+function QuantikzOp(op::ConditionalGate)
+    targets = collect(affectedqubits(op.truegate))
+    label = _conditional_gate_label(op.truegate)
+    return ClassicalDecision(label, targets, op.controlbit)
 end
 
 struct SimulationParameters
@@ -28,6 +53,13 @@ struct SimulationParameters
     success_prob::Float64
     attempt_time::Float64
     #TODO: Add measurement fidelity
+end
+
+struct GeneticParameters
+    register_sizes::Vector{Int}        # Number of qubits in each register
+    depolarising_noise::Float64        # Circuit Noise probability
+    gate_noise::Float64                 # Gate Noise probability
+
 end
 
 struct SimulationFidelity
