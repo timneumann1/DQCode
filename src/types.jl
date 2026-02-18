@@ -9,7 +9,7 @@ using QuantumClifford: AbstractOperation
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters
+export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters, NetworkingParameters
 
 
 struct ConditionalGate <: AbstractOperation
@@ -55,11 +55,19 @@ struct SimulationParameters
     #TODO: Add measurement fidelity
 end
 
-struct GeneticParameters
+struct NetworkingParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
     depolarising_noise::Float64        # Circuit Noise probability
     gate_noise::Float64                 # Gate Noise probability
+end
 
+struct GeneticParameters
+    num_individuals::Int
+    num_generations::Int
+    num_shots::Int
+    mutation_rate::Float64
+    tournament_size::Int
+    selection_ratio::Float64
 end
 
 struct SimulationFidelity
@@ -88,7 +96,7 @@ struct SWAP_Gate <: Gate
     qubit_2::Int
 end
 
-struct Circuit
+mutable struct Circuit
     gates::Matrix{Gate}
 end
 
