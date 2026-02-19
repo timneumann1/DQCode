@@ -6,7 +6,7 @@ using ..Types
 using ..Helper
 
 using QuantumClifford
-using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register#, sX, SY, SZ
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, continue_stat#, sX, SY, SZ
 using QECCore
 
 import QuantumClifford: apply!, affectedqubits # we want to extend this with ConditionalGate
@@ -80,7 +80,7 @@ function affectedqubits(op::ConditionalGate)
 end
 
 
-function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
+function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, telegate_noise, tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
     
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
 
@@ -98,7 +98,7 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, tensor, map
     end
     
     # Add depolarising noise to all qubits
-    circuit = add_noise(circuit, depolarising_prob)
+    
     
     for col in axes(tensor, 2) # each column corresponds to one layer
     
@@ -108,11 +108,11 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, tensor, map
 
             if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} #  Gate && !(gate isa CNOT) 
                 
-                if qubit ==1 && gate != IdentityGate
-                    # Apply unfiform noise!
-                    # circuit = add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(qubit), Main.DQCircuitSearch.Types.PauliZGate())
-                    # ^ Z error is harmless to the state, whereas an X error is destructive
-                end
+                # if qubit ==1 && gate != IdentityGate
+                #     # Apply unfiform noise!
+                #     # circuit = add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(qubit), Main.DQCircuitSearch.Types.PauliZGate())
+                #     # ^ Z error is harmless to the state, whereas an X error is destructive
+                # end
              
                 push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
             
@@ -133,7 +133,7 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, tensor, map
                     # Perform telegate between control and target qubit in different registers, 
                     # i.e., push!(circuit, sCNOT(comm_inv_perm_idx(control),comm_inv_perm_idx(target)) ) remotely
                     # println("Performing a telegated between (unmapped) qubits $control and $target")
-                    circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array)
+                    circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
                 end
             
             elseif gate isa SWAP_Gate
@@ -151,12 +151,19 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, tensor, map
     for (i,j) in mapping # reverse reverse  -> we do the reverse of the orginial permutation (the reverse transposition)
         push!(circuit, sSWAP(comm_idx(i),comm_idx(j))) # We could also use comm_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
     end
-     
+    #circuit = add_noise(circuit, depolarising_prob, )
+    # for data_qubit in collect(1:length(data_qubits))
+    #     circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    # end
+    #add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(2), Main.DQCircuitSearch.Types.PauliZGate() )
+    #add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(4), Main.DQCircuitSearch.Types.PauliZGate() )
+    #add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(6), Main.DQCircuitSearch.Types.PauliZGate() )
+
     return circuit
 end
 
 
-function add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array )
+function add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise )
 
     if control_register == target_register
         throw("Ooops, this is not a telegate.")
@@ -198,6 +205,10 @@ function add_telegate(circuit, control, target, control_register, target_registe
     push!(circuit, ConditionalGate(sZ(comm_inv_perm_idx(control)),sId1(comm_inv_perm_idx(control)), meas_target.bit))
     push!(circuit, ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_target.bit))  # restore the |0> state in the target comm qubit
 
+    # Introduce noise
+    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
+    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
+
     return circuit
 
 end
@@ -209,13 +220,25 @@ function add_noise(circuit, prob::Float64)
     return circuit
 end
 
+function add_noise(circuit, prob::Float64, qubit) 
+    """Circuit noise on single qubit"""
+    circuit_noise = NoiseOp(UnbiasedUncorrelatedNoise(prob),[qubit]);
+    push!(circuit, circuit_noise)
+    return circuit
+end
+
 function add_noise(circuit, prob::Float64, qubit::Int, gate::Gate)
-    #Determine the corresponding noise
+    # Special noise
     gate_noise_channel = Pauli_gate_noise(typeof(gate), prob)
     gate_noise = NoiseOp(gate_noise_channel, [qubit])
     push!(circuit, gate_noise)
     return circuit
 end
+
+
+
+    
+
 
 
 function build_pauli_string_measurement(num_qubits::Int, qubits::Vector{Int})
@@ -355,17 +378,44 @@ end
 
 =#
 
-function execute_circuit(circuit, num_qubits, num_registers; num_traj)#, mode = "mc")
+
+
+function mctrajectories_states(initialstate, circuit; trajectories::Int=500)
+    #counts = Dict{Tuple{typeof(initialstate), QuantumClifford.CircuitStatus}, Int}()
+    stabilisers = Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }()
+    for i in 1:trajectories
+        st, stat = QuantumClifford.mctrajectory!(copy(initialstate), circuit)
+        #println("Type: $(typeof(st)), $(typeof(st.stab))")
+        #println("$(fieldnames(typeof(st)))")
+        if (stat==continue_stat)
+            push!(stabilisers, st.stab)
+            #print(typeof(st.stab))
+        else
+            throw("There were faulty circuit executions")
+        end
+        # println("Trajectory $i: status $stat")
+        # println("Correct status?: $(stat==continue_stat)")
+        # #counts[key] = get(counts, key, 0) + 1
+        # #push!(stabilisers, st)
+        # println("Current array of tableaus: $stabilisers")
+    end
+    return stabilisers
+end
+
+
+function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500, keepstates::Bool=false)#, mode = "mc")
     initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
-    return mctrajectories(initial_state, circuit, trajectories=num_traj)
+    #print(fieldnames(typeof(Register(one(MixedDestabilizer, 1), 1))))
+    #println(typeof(mctrajectories(initial_state, circuit, trajectories=num_traj)))
+    #println("No. of trajectories:$(num_traj)")
+    #print(circuit)
+    return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
 end
 
 function execute_circuit(circuit, num_qubits)#, mode = "pert")
     initial_state = one(MixedDestabilizer,num_qubits)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state
     return petrajectories(initial_state, circuit)
 end
-
-
 
 
 end

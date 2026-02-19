@@ -59,6 +59,7 @@ struct NetworkingParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
     depolarising_noise::Float64        # Circuit Noise probability
     gate_noise::Float64                 # Gate Noise probability
+    telegate_noise::Float64
 end
 
 struct GeneticParameters

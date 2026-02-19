@@ -8,6 +8,7 @@ using ..LogicalEnc
 using Random
 using Quantikz: savecircuit, @with, classicalbitslayout
 using QECCore: Steane7
+using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
 
@@ -19,21 +20,21 @@ function define_parameters()
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
         [3,4], #register sizes
-        0.05, # depolarising_prob 
-        0.01, # gate_noise_prob 
+        0.0, # depolarising_prob 
+        0.0, # gate_noise_prob 
+        0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        100, # individuals
-        100, # generations
-        25000, # shots
-        0.1,  # mutation rate
+        10, # individuals
+        10, # generations
+        10, # shots
+        0.25,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
         )
     return networking_params, genetic_params
 end
-
 
 function steane_encoding_circuit(circuit)
 
@@ -77,37 +78,126 @@ function initialise_population(num_individuals, num_data_qubits)
     population = Vector{Circuit}(undef, num_individuals)
     for i in eachindex(population)
         circ = Circuit(num_data_qubits, 12)         
-        circ.gates = steane_encoding_circuit(circ)
+        circ.gates = steane_encoding_circuit(circ) # warm start
         population[i] = circ
     end
     return population
 end
 
-function evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
+
+
+
+function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{UInt8}, <:AbstractMatrix{<:Unsigned}})
+    #t = QuantumClifford.tab(stab)
+    rows, cols = size(tableau)
+    bits = Matrix{Int}(undef, rows, cols+1)#  falses(rows, cols)
+    @inbounds for r in 1:rows
+        for c in 1:cols
+            x, z = tableau[r, c]      # every entry of the Tableau contains a tuple (x,z): (0,0) is I, (1,0) is X, (0,1) is Z, (1,1) is Y
+            bits[r, c] = x + 2*z # we map I, X, Z, Y to 0, 1, 2 and 3 to later determine the Hamming distance (in how many entries they disagree)
+        end
+        # phases
+        if (tableau.phases[r] ∉ (0, 2))
+            throw("Phase of the tableau is imaginary. Please investigate this case.")
+        end
+        bits[r, cols + 1] = 1/2*tableau.phases[r]  # phase +1 is represented as 0, phase -1 is represented as 2
+        # -> positive phase is represented as 0, negative phase as 1
+    end
+    return bits
+end
+
+function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits)
+    #check that both marices have same dimensions
+   
+    # we want to compare the data qubits, so we only keep the columns (qubits) corresponding to data qubits AND the phase column
+    cols_keep = vcat(data_qubits, size(matrix, 2))
+    matrix = matrix[:, cols_keep] 
+    # we also want to eliminate the first #comm_qubits rows, which contain the stabilisers of the communication qubits 
+    # the assumption is that the tableau is always in a product state of dataqubits and comm qubits, which is valid 
+    # since the comm qubits get measured and then reset to zero
+    matrix = matrix[(length(comm_qubits)+1):end,:]
+    
+    # the target matrix already has the lexicographical ordering of data qubits, so no need to filter or change here
+    @assert size(matrix) == size(target_matrix)
+    # hamming count = 0
+    # for rows
+    #     for columns
+    #         if numbers at repective positions different
+    #             increae hamming count by one
+    # return hammingcount/(rows*cols)
+    #println("Final matrix: $matrix")
+    #println("Final target: $target_matrix")
+
+    return count(!iszero, matrix .!= target_matrix) / length(matrix)
+
+end
+
+function evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
     fitness_scores = Vector{Float64}(undef, length(population))
     for (idx, ind_tensor) in enumerate(population)
-        quantum_clifford_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
-        push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
-
-        mc_result = execute_circuit(quantum_clifford_circuit, num_qubits, num_registers; num_traj=genetic_params.num_shots) # if specifying num_traj, we use MC sampling, otherwise perturbation.
+        quantum_clifford_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
+        #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
+        
+        
+        # @with classicalbitslayout => :expanded begin
+        #     savecircuit(quantum_clifford_circuit, "src/plots/circuit_sim/circuit_noise_GA.png")
+        # end
+        
+        
         # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
         # also, PauliMeasurement don't work with pert. expansion currently
+        mc_result = execute_circuit(quantum_clifford_circuit, num_qubits, num_registers; num_traj=genetic_params.num_shots, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.
+        #print("MC Result:$mc_result")
+        
 
-        #println("\nFinal Steane-7 dict: $(mc_result) \n")
-        if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != genetic_params.num_shots
-            throw(ErrorException("Some runs were invalid"))
+        # We want to compare tableaus, so we canonicalize
+        target_canon = canonicalize_rref!(target_state)
+        #println("target canon: $target_canon")
+        #println(typeof(target_canon))
+        target_tableau = tab(target_canon[1])
+        target_bit_matrix = tableau_to_bitmatrix(target_tableau)
+        #println()
+        #println("Target tableau: $target_tableau")
+        #println("Bit Matrix: $target_bit_matrix")
+        hamming_distances = Float64[]
+        
+        for stab in collect(mc_result)
+
+            stab_view = stabilizerview(stab)
+            #println("$comm_qubits")
+            #println("Stab view: $stab_view")
+            #println(typeof(stab_view))
+            stab_view = traceout!(copy(stab_view), comm_qubits)
+            #println("Stab view traceout: $stab_view")
+            stab_canon = canonicalize_rref!( stab_view )
+            tableau = tab(stab_canon[1])
+            #println("tableau:$tableau")
+            # convert to stabiliser
+            #println("current Tableau after canon:$tableau")
+            current_bit_matrix = tableau_to_bitmatrix(tableau) # extract the stabiliser tableau from MixedDestabilizer object
+            push!(hamming_distances, hamming_distance(current_bit_matrix, target_bit_matrix, data_qubits, comm_qubits))
+            
+            #println(stab_bit_matrix)
+            #Determine tableau distance with target_state
         end
+        println("Hamming distances for individual $idx is $hamming_distances")
+        #println("\nFinal Steane-7 dict: $(mc_result) \n")
+        # if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != genetic_params.num_shots
+        #     throw(ErrorException("Some runs were invalid"))
+        # end
 
-        fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=3))
-        fitness_scores[idx] = fidelity
+        #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+        fitness_scores[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
     end
     return fitness_scores
 end
 
 function selection(generation, fitness_scores; tournament_size::Int=5, selection_ratio::Float64=1.0)
-   length_generation = length(generation) 
+    length_generation = length(generation) 
     @assert length_generation == length(fitness_scores)
     num_selected = Int(floor(length_generation * selection_ratio))
+    
+    println("$length_generation, $selection_ratio cNum selected: $num_selected")
     best_individuals = Vector{eltype(generation)}()
     remaining = collect(eachindex(generation))
 
@@ -119,6 +209,7 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
         push!(best_individuals, generation[best_idx])
         deleteat!(remaining, findfirst(==(best_idx), remaining))
     end
+    print(length(best_individuals))
     return best_individuals
 end
 
@@ -128,6 +219,7 @@ function crossover(best_individuals, genetic_params)
     parents = deepcopy(best_individuals)
     # could shuffle parents here
 
+    # ADD CONDITION FOR ODD NUMBER: Keep size of generatios constnat 
     i = 1
     while i < length(parents)
         p1 = parents[i]
@@ -197,8 +289,11 @@ function run_genetic_search()
     data_qubit_capacities = networking_params.register_sizes
     num_registers  = length(data_qubit_capacities)
     register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(data_qubit_capacities)      # create lookup array
+
     num_comm_qubits_per_register = num_registers-1
     num_qubits = num_data_qubits + num_comm_qubits_per_register*(num_registers) # one verification qubit
+    all_qubits = collect(1:num_qubits)
+    comm_qubits = setdiff(all_qubits, data_qubits)
     println("number of qubits is $num_qubits, number of comm. qubits per register is $num_comm_qubits_per_register")
     println("Lookup Array: $register_lookup_array")
     println("Data qubits: $data_qubits")
@@ -212,7 +307,7 @@ function run_genetic_search()
     gen = 0
     while gen<genetic_params.num_generations
         # evaluate population
-        fitness_scores = evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
+        fitness_scores = evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
         # perform selection
 
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio)
