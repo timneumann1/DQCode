@@ -80,7 +80,7 @@ function affectedqubits(op::ConditionalGate)
 end
 
 
-function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, telegate_noise, tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
+function tensor_to_circuit(depolarising_prob, gate_noise_prob, telegate_noise, tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
 
@@ -388,7 +388,7 @@ end
 
 
 
-function mctrajectories_states(initialstate, circuit; trajectories::Int=500)
+function mctrajectories_states(initialstate, circuit; trajectories::Int=500) # returns Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }
     #counts = Dict{Tuple{typeof(initialstate), QuantumClifford.CircuitStatus}, Int}()
     stabilisers = Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }()
     for i in 1:trajectories
@@ -411,7 +411,7 @@ function mctrajectories_states(initialstate, circuit; trajectories::Int=500)
 end
 
 
-function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500, keepstates::Bool=false)#, mode = "mc")
+function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
     initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
     #print(fieldnames(typeof(Register(one(MixedDestabilizer, 1), 1))))
     #println(typeof(mctrajectories(initial_state, circuit, trajectories=num_traj)))

@@ -11,6 +11,7 @@ using QECCore: Steane7
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
+using CairoMakie
 
 export run_genetic_search
 
@@ -27,11 +28,12 @@ function define_parameters()
 
     genetic_params = GeneticParameters(
         250, # individuals
-        101, # generations
-        3000, # shots
-        0.9,  # mutation rate
+        151, # generations
+        1, # shots
+        0.5,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
+        9, #depth
         )
     return networking_params, genetic_params
 end
@@ -74,10 +76,10 @@ function steane_encoding_circuit(circuit)
 end
 
 
-function initialise_population(num_individuals, num_data_qubits)
+function initialise_population(num_individuals, num_data_qubits, depth)
     population = Vector{Circuit}(undef, num_individuals)
     for i in eachindex(population)
-        circ = Circuit(num_data_qubits, 12)         
+        circ = Circuit(num_data_qubits, depth)         
         #circ.gates = steane_encoding_circuit(circ) # warm start
         population[i] = circ
     end
@@ -132,34 +134,22 @@ function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
 
 end
 
-function evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
+function evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
     fitness_scores = Vector{Float64}(undef, length(population))
     for (idx, ind_tensor) in enumerate(population)
-        quantum_clifford_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
+        quantum_clifford_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
         #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
         
-        
-        
-        
-        
+
         # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
         # also, PauliMeasurement don't work with pert. expansion currently
-        mc_result = execute_circuit(quantum_clifford_circuit, num_qubits, num_registers; num_traj=genetic_params.num_shots, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.
+        mc_result = execute_circuit(quantum_clifford_circuit, num_qubits, num_registers; num_traj=genetic_params.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.
         #print("MC Result:$mc_result")
-        
-
-        # We want to compare tableaus, so we canonicalize
-        target_canon = canonicalize_rref!(target_state)
-        #println("target canon: $target_canon")
-        #println(typeof(target_canon))
-        target_tableau = tab(target_canon[1])
-        target_bit_matrix = tableau_to_bitmatrix(target_tableau)
-        #println()
-        #println("Target tableau: $target_tableau")
-        #println("Bit Matrix: $target_bit_matrix")
+        # is of type Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }
+                
         hamming_distances = Float64[]
         
-        for stab in collect(mc_result)
+        for stab in collect(mc_result) # each component here is a MixedDestabilizer
 
             stab_view = stabilizerview(stab)
             #println("$comm_qubits")
@@ -233,7 +223,8 @@ function crossover(best_individuals, genetic_params)
         child1.gates = hcat(p1.gates[:, 1:cp], p2.gates[:, cp+1:end])
         child2.gates = hcat(p2.gates[:, 1:cp], p1.gates[:, cp+1:end])
 
-        push!(new_generation, child1, child2)
+        
+        push!(new_generation, mutation(child1, genetic_params), mutation(child2, genetic_params))
 
         i += 2
     end
@@ -247,7 +238,7 @@ function crossover(best_individuals, genetic_params)
         
         child1 = Circuit(nrows, ncols)
         child1.gates = hcat(p1.gates[:, 1:cp], p2.gates[:, cp+1:end])
-        push!(new_generation, child1)
+        push!(new_generation, mutation(child1, genetic_params))
     end
 
     return new_generation
@@ -259,48 +250,45 @@ function _random_single_qubit_gate()
     return gates[rand(1:length(gates))]()
 end
 
-function mutations(new_generation, genetic_params)
-    mutated = deepcopy(new_generation)
+function mutation(ind, genetic_params)
     rate = genetic_params.mutation_rate
 
-    for ind in mutated
-        if rand() < rate
-            # Pick one matrix elemenet randomly
-            nrows, ncols = size(ind.gates)
-            r, c = rand(1:nrows), rand(1:ncols)
+    if rand() < rate
+        # Pick one matrix elemenet randomly
+        nrows, ncols = size(ind.gates)
+        r, c = rand(1:nrows), rand(1:ncols)
 
-            if ind.gates[r,c] isa CNOT_Gate
-                control = ind.gates[r,c].control
-                target = ind.gates[r,c].target
-                if rand() > 0.5 # SWAP control and target
-                    ind.gates[control, c] = CNOT_Gate(target, control)
-                    ind.gates[target, c] = CNOT_Gate(target, control)
-                else
-                    ind.gates[control, c] = IdentityGate()
-                    ind.gates[target, c] = IdentityGate()
-                end
-            else  # If it is a single qubit gate, randomly mutate
-                
-                if rand()>0.5
-                    ind.gates[r, c] = _random_single_qubit_gate()
-                else 
+        if ind.gates[r,c] isa CNOT_Gate # mutate existing CNOT gates
+            control = ind.gates[r,c].control
+            target = ind.gates[r,c].target
+            if rand() > 0.5 # SWAP control and target
+                ind.gates[control, c] = CNOT_Gate(target, control)
+                ind.gates[target, c] = CNOT_Gate(target, control)
+            else
+                ind.gates[control, c] = IdentityGate()
+                ind.gates[target, c] = IdentityGate()
+            end
+        else  
+            
+            if rand()>0.5 # mutate single qubit gates into single-qubit gates...
+                ind.gates[r, c] = _random_single_qubit_gate()
+            else  # ... or multi-qubit gates
+                target_index = rand(1:nrows)
+                tries = 0
+                while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
                     target_index = rand(1:nrows)
-                    tries = 0
-                    while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
-                        target_index = rand(1:nrows)
-                        tries +=1
-                    end
-                    if tries >= 10
-                        continue
-                    end    
-                    ind.gates[r, c] = CNOT_Gate(r, target_index)
-                    ind.gates[target_index,c ] = CNOT_Gate(r, target_index)
+                    tries +=1
                 end
+                if tries >= 10
+                    return ind
+                end    
+                ind.gates[r, c] = CNOT_Gate(r, target_index)
+                ind.gates[target_index,c ] = CNOT_Gate(r, target_index)
             end
         end
     end
 
-    return mutated
+    return ind
 end
 
 function run_genetic_search()
@@ -330,10 +318,20 @@ function run_genetic_search()
     println("Data qubits: $data_qubits")
 
     target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
-    code = Steane7()
+    # instead, can also do MixedDestabiliser(Steane7()) and then extract the stabiliser tableau
+
+    # We want to compare tableaus, so we canonicalize
+    target_canon = canonicalize_rref!(target_state)
+        #println("target canon: $target_canon")
+        #println(typeof(target_canon))
+    target_tableau = tab(target_canon[1])
+    target_bit_matrix = tableau_to_bitmatrix(target_tableau)
+        #println()
+        #println("Target tableau: $target_tableau")
+        #println("Bit Matrix: $target_bit_matrix")
     
     ########## Initialise population and run Genetic Algorithm #################
-    population = initialise_population(genetic_params.num_individuals, num_data_qubits)
+    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth)
     fitness_evolution = Float64[]
     winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
@@ -345,17 +343,17 @@ function run_genetic_search()
         println("")
 
         # evaluate population
-        fitness_scores = evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
+        fitness_scores = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         #@btime evaluate_population($population, $networking_params, $genetic_params, $code, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_state, $data_qubit_capacities, $num_registers)
 
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio)
-        # perform crossover
+        # perform crossover (incl. mutations)
         new_generation = crossover(best_individuals, genetic_params)
         # apply mutations
-        mutated = mutations(new_generation, genetic_params)
+        #mutated = mutations(new_generation, genetic_params)
         println("\n Generation $gen: Best fidelity is $(maximum(fitness_scores))\n")
-        population = mutated
+        population = new_generation
         push!(fitness_evolution, maximum(fitness_scores))
         gen += 1
         if gen == genetic_params.num_generations
@@ -364,17 +362,25 @@ function run_genetic_search()
         
     end
 
-    println("Evolution of fitness values: $fitness_evolution")
     # Extract best-performing individual
-    #winner_winner_chicken_dinner_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
 
+    print_gate_matrix(winner_winner_chicken_dinner)
+
+    winner_winner_chicken_dinner_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+     
+    verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
+    println("\nVerification successful (target state fidelity): $verification_logical_state")
+    verification_logical_state = verification_logical_state == 1.0 ? true : false
     # @with classicalbitslayout => :expanded begin
     #    savecircuit(winner_winner_chicken_dinner_circuit, "src/plots/circuit_sim/circuit_noise_GA_winner.png")
     # end
 
-    print_gate_matrix(winner_winner_chicken_dinner)
 
-    # TODO: Determine true fidelity?
+    # Plot the evolution of fitness values
+    #println("\n\nEvolution of fitness values: $fitness_evolution")
+    plot_fitness_evol(fitness_evolution, genetic_params, verification_logical_state)
+
+    
     
     
     #=
@@ -418,6 +424,28 @@ function run_genetic_search()
     #@btime tensor_to_circuit($code, $params.depolarising_noise, $params.gate_noise, $circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $num_qubits, $target_state, $data_qubit_capacities)
     #@btime execute_circuit($circuit, $num_qubits, $num_registers, num_traj = $num_traj)
 
+end
+
+function verify_success(circuit, target_state, num_qubits, data_qubits, num_registers)
+    push!(circuit, VerifyOp(target_state, data_qubits))
+    
+    initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))
+    #print(mctrajectories(initial_state, circuit, trajectories=10000))
+    mc_result = mctrajectories(initial_state, circuit, trajectories=10000)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
+            throw(ErrorException("Some runs were invalid"))
+    end
+    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    return fidelity
+end
+
+
+function plot_fitness_evol(fitness_evolution, genetic_params, success)
+    title_str = "Fitness Evolution : $(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"     
+    fig = Figure()
+    ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str)
+    lines!(ax, 1:length(fitness_evolution), fitness_evolution)
+    save("src/plots/GA/fitness_evolution_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$success.png", fig)
 end
 
 function print_gate_matrix(circ::Circuit)

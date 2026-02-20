@@ -69,6 +69,7 @@ struct GeneticParameters
     mutation_rate::Float64
     tournament_size::Int
     selection_ratio::Float64
+    depth::Int
 end
 
 struct SimulationFidelity
