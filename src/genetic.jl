@@ -20,15 +20,15 @@ function define_parameters()
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
         [3,4], #register sizes
-        0.0, # depolarising_prob 
+        0, # depolarising_prob 
         0.0, # gate_noise_prob 
-        0.0, # Telegate noise (depolarising channel)
+        0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        150, # individuals
-        200, # generations
-        1500, # shots
+        250, # individuals
+        101, # generations
+        3000, # shots
         0.9,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
@@ -188,7 +188,7 @@ function evaluate_population(population, networking_params, genetic_params, code
         fitness_scores[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
         #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
         #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
-        println()
+        #println()
     end
     return fitness_scores
 end
@@ -265,18 +265,38 @@ function mutations(new_generation, genetic_params)
 
     for ind in mutated
         if rand() < rate
+            # Pick one matrix elemenet randomly
             nrows, ncols = size(ind.gates)
-
-            # pick a location that is NOT a 2‑qubit gate
             r, c = rand(1:nrows), rand(1:ncols)
-            tries = 0
-            while ind.gates[r, c] isa Union{CNOT_Gate, SWAP_Gate} && tries < 50
-                r, c = rand(1:nrows), rand(1:ncols)
-                tries += 1
-            end
 
-            # replace with a random 1‑qubit gate
-            ind.gates[r, c] = _random_single_qubit_gate()
+            if ind.gates[r,c] isa CNOT_Gate
+                control = ind.gates[r,c].control
+                target = ind.gates[r,c].target
+                if rand() > 0.5 # SWAP control and target
+                    ind.gates[control, c] = CNOT_Gate(target, control)
+                    ind.gates[target, c] = CNOT_Gate(target, control)
+                else
+                    ind.gates[control, c] = IdentityGate()
+                    ind.gates[target, c] = IdentityGate()
+                end
+            else  # If it is a single qubit gate, randomly mutate
+                
+                if rand()>0.5
+                    ind.gates[r, c] = _random_single_qubit_gate()
+                else 
+                    target_index = rand(1:nrows)
+                    tries = 0
+                    while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
+                        target_index = rand(1:nrows)
+                        tries +=1
+                    end
+                    if tries >= 10
+                        continue
+                    end    
+                    ind.gates[r, c] = CNOT_Gate(r, target_index)
+                    ind.gates[target_index,c ] = CNOT_Gate(r, target_index)
+                end
+            end
         end
     end
 
@@ -348,9 +368,11 @@ function run_genetic_search()
     # Extract best-performing individual
     #winner_winner_chicken_dinner_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
 
-    #@with classicalbitslayout => :expanded begin
+    # @with classicalbitslayout => :expanded begin
     #    savecircuit(winner_winner_chicken_dinner_circuit, "src/plots/circuit_sim/circuit_noise_GA_winner.png")
-    #end
+    # end
+
+    print_gate_matrix(winner_winner_chicken_dinner)
 
     # TODO: Determine true fidelity?
     
@@ -396,6 +418,11 @@ function run_genetic_search()
     #@btime tensor_to_circuit($code, $params.depolarising_noise, $params.gate_noise, $circuit_tensor, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $num_comm_qubits_per_register, $num_qubits, $target_state, $data_qubit_capacities)
     #@btime execute_circuit($circuit, $num_qubits, $num_registers, num_traj = $num_traj)
 
+end
+
+function print_gate_matrix(circ::Circuit)
+    show(stdout, "text/plain", circ.gates)
+    println()
 end
 
 end

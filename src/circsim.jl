@@ -99,12 +99,15 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, telegate_no
     
     # Add depolarising noise to all qubits
     
-    for data_qubit in collect(1:length(data_qubits))
-        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
-    end
-    
+    # for data_qubit in collect(1:length(data_qubits))
+    #     circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    # end
+
     for col in axes(tensor, 2) # each column corresponds to one layer
-    
+    # Add depolarising noise to all qubits
+        for data_qubit in collect(1:length(data_qubits))
+        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+        end
         for qubit in axes(tensor, 1) # each row corresponds to one qubit
             
             gate = tensor[qubit,col]
@@ -179,6 +182,8 @@ function add_telegate(circuit, control, target, control_register, target_registe
     
     ### EJPP Protocol
     
+    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
+    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
     # Bell state entanglement
     push!(circuit, sHadamard(control_comm_index))
     push!(circuit, sCNOT(control_comm_index, target_comm_index))
