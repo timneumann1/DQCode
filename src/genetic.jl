@@ -20,19 +20,19 @@ function define_parameters()
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
         [3,4], #register sizes
-        0, # depolarising_prob 
+        0.9, # depolarising_prob 
         0.0, # gate_noise_prob 
-        0, # Telegate noise (depolarising channel)
+        0.9, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        250, # individuals
-        250, # generations
-        1, # shots
+        200, # individuals
+        200, # generations
+        100, # shots
         0.5,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        5, #depth
+        6, #depth
         1, # num_elite
         )
     return networking_params, genetic_params
@@ -154,7 +154,7 @@ function evaluate_population(population, networking_params, genetic_params, mapp
             #println("$comm_qubits")
             #println("Stab view: $stab_view")
             #println(typeof(stab_view))
-            stab_view = traceout!(copy(stab_view), comm_qubits)
+            stab_view = traceout!(copy(stab_view), comm_qubits) # TODO: This can be refactored to ptrace upon stable QS release
             #println("Stab view traceout: $stab_view")
             stab_canon = canonicalize_rref!( stab_view )
             tableau = tab(stab_canon[1])
@@ -374,7 +374,7 @@ function run_genetic_search()
     winner_winner_chicken_dinner_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
      
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
-    println("\nVerification successful (target state fidelity): $verification_logical_state")
+    println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
     # @with classicalbitslayout => :expanded begin
     #    savecircuit(winner_winner_chicken_dinner_circuit, "src/plots/circuit_sim/circuit_noise_GA_winner.png")
@@ -383,7 +383,7 @@ function run_genetic_search()
 
     # Plot the evolution of fitness values
     #println("\n\nEvolution of fitness values: $fitness_evolution")
-    plot_fitness_evol(fitness_evolution, genetic_params, verification_logical_state)
+    plot_fitness_evol(fitness_evolution, networking_params, genetic_params, verification_logical_state)
 
     
     
@@ -445,12 +445,12 @@ function verify_success(circuit, target_state, num_qubits, data_qubits, num_regi
 end
 
 
-function plot_fitness_evol(fitness_evolution, genetic_params, success)
+function plot_fitness_evol(fitness_evolution, networking_params, genetic_params, success)
     title_str = "Fitness Evolution : $(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"     
     fig = Figure()
     ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str)
     lines!(ax, 1:length(fitness_evolution), fitness_evolution)
-    save("src/plots/GA/fitness_evolution_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$success.png", fig)
+    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$success.png", fig)
 end
 
 function print_gate_matrix(circ::Circuit)
