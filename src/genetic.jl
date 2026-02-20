@@ -26,10 +26,10 @@ function define_parameters()
     )
 
     genetic_params = GeneticParameters(
-        10, # individuals
-        10, # generations
-        10, # shots
-        0.25,  # mutation rate
+        150, # individuals
+        200, # generations
+        1500, # shots
+        0.9,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
         )
@@ -78,7 +78,7 @@ function initialise_population(num_individuals, num_data_qubits)
     population = Vector{Circuit}(undef, num_individuals)
     for i in eachindex(population)
         circ = Circuit(num_data_qubits, 12)         
-        circ.gates = steane_encoding_circuit(circ) # warm start
+        #circ.gates = steane_encoding_circuit(circ) # warm start
         population[i] = circ
     end
     return population
@@ -139,9 +139,7 @@ function evaluate_population(population, networking_params, genetic_params, code
         #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
         
         
-        # @with classicalbitslayout => :expanded begin
-        #     savecircuit(quantum_clifford_circuit, "src/plots/circuit_sim/circuit_noise_GA.png")
-        # end
+        
         
         
         # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
@@ -180,7 +178,7 @@ function evaluate_population(population, networking_params, genetic_params, code
             #println(stab_bit_matrix)
             #Determine tableau distance with target_state
         end
-        println("Hamming distances for individual $idx is $hamming_distances")
+        
         #println("\nFinal Steane-7 dict: $(mc_result) \n")
         # if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != genetic_params.num_shots
         #     throw(ErrorException("Some runs were invalid"))
@@ -188,6 +186,9 @@ function evaluate_population(population, networking_params, genetic_params, code
 
         #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
         fitness_scores[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
+        #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
+        #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
+        println()
     end
     return fitness_scores
 end
@@ -197,7 +198,6 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
     @assert length_generation == length(fitness_scores)
     num_selected = Int(floor(length_generation * selection_ratio))
     
-    println("$length_generation, $selection_ratio cNum selected: $num_selected")
     best_individuals = Vector{eltype(generation)}()
     remaining = collect(eachindex(generation))
 
@@ -209,7 +209,6 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
         push!(best_individuals, generation[best_idx])
         deleteat!(remaining, findfirst(==(best_idx), remaining))
     end
-    print(length(best_individuals))
     return best_individuals
 end
 
@@ -237,6 +236,18 @@ function crossover(best_individuals, genetic_params)
         push!(new_generation, child1, child2)
 
         i += 2
+    end
+
+    if length(best_individuals)%2 != 0
+        p1 = parents[1]
+        p2 = parents[length(parents)]
+
+        nrows, ncols = size(p1.gates)
+        cp = rand(1:ncols-1)  # crossover point (between columns)
+        
+        child1 = Circuit(nrows, ncols)
+        child1.gates = hcat(p1.gates[:, 1:cp], p2.gates[:, cp+1:end])
+        push!(new_generation, child1)
     end
 
     return new_generation
@@ -303,13 +314,21 @@ function run_genetic_search()
     
     ########## Initialise population and run Genetic Algorithm #################
     population = initialise_population(genetic_params.num_individuals, num_data_qubits)
+    fitness_evolution = Float64[]
+    winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
     gen = 0
+    
     while gen<genetic_params.num_generations
+
+        println("############ Generation #$gen ##########: Generation size: $(length(population))")
+        println("")
+
         # evaluate population
         fitness_scores = evaluate_population(population, networking_params, genetic_params, code, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities, num_registers)
-        # perform selection
+        #@btime evaluate_population($population, $networking_params, $genetic_params, $code, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_state, $data_qubit_capacities, $num_registers)
 
+        # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio)
         # perform crossover
         new_generation = crossover(best_individuals, genetic_params)
@@ -317,12 +336,25 @@ function run_genetic_search()
         mutated = mutations(new_generation, genetic_params)
         println("\n Generation $gen: Best fidelity is $(maximum(fitness_scores))\n")
         population = mutated
-
+        push!(fitness_evolution, maximum(fitness_scores))
         gen += 1
+        if gen == genetic_params.num_generations
+            winner_winner_chicken_dinner = population[argmax(fitness_scores)]
+        end
+        
     end
-    
-    # Extract best-performing individual
 
+    println("Evolution of fitness values: $fitness_evolution")
+    # Extract best-performing individual
+    #winner_winner_chicken_dinner_circuit = tensor_to_circuit(code, networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, target_state, data_qubit_capacities)
+
+    #@with classicalbitslayout => :expanded begin
+    #    savecircuit(winner_winner_chicken_dinner_circuit, "src/plots/circuit_sim/circuit_noise_GA_winner.png")
+    #end
+
+    # TODO: Determine true fidelity?
+    
+    
     #=
      # Two methods of verifying the creation of the encoded state (Method 1 is preferable since simpler)
 

@@ -99,6 +99,9 @@ function tensor_to_circuit(code, depolarising_prob, gate_noise_prob, telegate_no
     
     # Add depolarising noise to all qubits
     
+    for data_qubit in collect(1:length(data_qubits))
+        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    end
     
     for col in axes(tensor, 2) # each column corresponds to one layer
     
