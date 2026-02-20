@@ -15,7 +15,6 @@ using CairoMakie
 
 export run_genetic_search
 
-
 function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
@@ -28,12 +27,13 @@ function define_parameters()
 
     genetic_params = GeneticParameters(
         250, # individuals
-        151, # generations
+        250, # generations
         1, # shots
         0.5,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        9, #depth
+        5, #depth
+        1, # num_elite
         )
     return networking_params, genetic_params
 end
@@ -85,7 +85,6 @@ function initialise_population(num_individuals, num_data_qubits, depth)
     end
     return population
 end
-
 
 
 
@@ -183,15 +182,21 @@ function evaluate_population(population, networking_params, genetic_params, mapp
     return fitness_scores
 end
 
-function selection(generation, fitness_scores; tournament_size::Int=5, selection_ratio::Float64=1.0)
+function selection(generation, fitness_scores; tournament_size::Int=5, selection_ratio::Float64=1.0, num_elite = 1)
     length_generation = length(generation) 
     @assert length_generation == length(fitness_scores)
     num_selected = Int(floor(length_generation * selection_ratio))
-    
-    best_individuals = Vector{eltype(generation)}()
-    remaining = collect(eachindex(generation))
 
-    for _ in 1:num_selected
+    #num_elite = max(1, Int(round(num_selected * elite_fraction)))
+
+    #elite_idx = sortperm(fitness_scores, rev=true)[1:num_elite]
+    elite_idx = argmax(fitness_scores)
+    best_individuals = [generation[elite_idx]]
+    
+#    best_individuals = Vector{eltype(generation)}()
+    remaining = setdiff(collect(eachindex(generation)), elite_idx)
+
+    for _ in 1:(num_selected-num_elite)
         tsize = min(tournament_size, length(remaining))
         tournament = remaining[randperm(length(remaining))[1:tsize]]
         # pick best fitness (max)
@@ -344,10 +349,10 @@ function run_genetic_search()
 
         # evaluate population
         fitness_scores = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
-        #@btime evaluate_population($population, $networking_params, $genetic_params, $code, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_state, $data_qubit_capacities, $num_registers)
+        #@btime evaluate_population($population, $networking_params, $genetic_params, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_bit_matrix, $data_qubit_capacities, $num_registers)
 
         # perform selection
-        best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio)
+        best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
         # perform crossover (incl. mutations)
         new_generation = crossover(best_individuals, genetic_params)
         # apply mutations

@@ -70,6 +70,7 @@ struct GeneticParameters
     tournament_size::Int
     selection_ratio::Float64
     depth::Int
+    num_elite::Int
 end
 
 struct SimulationFidelity
