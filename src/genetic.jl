@@ -20,20 +20,21 @@ function define_parameters()
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
         [3,4], #register sizes
-        0.9, # depolarising_prob 
+        0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
-        0.9, # Telegate noise (depolarising channel)
+        0.75, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        200, # individuals
-        200, # generations
-        100, # shots
+        250, # individuals
+        100, # generations
+        300, # shots
         0.5,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        6, #depth
+        12, #depth
         1, # num_elite
+        true, # warm_start
         )
     return networking_params, genetic_params
 end
@@ -76,11 +77,13 @@ function steane_encoding_circuit(circuit)
 end
 
 
-function initialise_population(num_individuals, num_data_qubits, depth)
+function initialise_population(num_individuals, num_data_qubits, depth; warm_start = False)
     population = Vector{Circuit}(undef, num_individuals)
     for i in eachindex(population)
-        circ = Circuit(num_data_qubits, depth)         
-        #circ.gates = steane_encoding_circuit(circ) # warm start
+        circ = Circuit(num_data_qubits, depth)  
+        if warm_start       
+            circ.gates = steane_encoding_circuit(circ) # warm start
+        end
         population[i] = circ
     end
     return population
@@ -336,7 +339,7 @@ function run_genetic_search()
         #println("Bit Matrix: $target_bit_matrix")
     
     ########## Initialise population and run Genetic Algorithm #################
-    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth)
+    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth, warm_start=genetic_params.warm_start)
     fitness_evolution = Float64[]
     winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
@@ -372,18 +375,31 @@ function run_genetic_search()
     print_gate_matrix(winner_winner_chicken_dinner)
 
     winner_winner_chicken_dinner_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
-     
+    #println(winner_winner_chicken_dinner_circuit)
+
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
-    # @with classicalbitslayout => :expanded begin
-    #    savecircuit(winner_winner_chicken_dinner_circuit, "src/plots/circuit_sim/circuit_noise_GA_winner.png")
-    # end
-
 
     # Plot the evolution of fitness values
     #println("\n\nEvolution of fitness values: $fitness_evolution")
     plot_fitness_evol(fitness_evolution, networking_params, genetic_params, verification_logical_state)
+
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            winner_winner_chicken_dinner_circuit,
+            "src/plots/GA/circuit_noise_GA_winner_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth).png";
+            scale = 1
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+
+
+
+    
 
     
     
@@ -447,10 +463,11 @@ end
 
 function plot_fitness_evol(fitness_evolution, networking_params, genetic_params, success)
     title_str = "Fitness Evolution : $(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"     
+    subtitle_str = "fitness_evolution_telenoise_$(networking_params.telegate_noise)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start)"
     fig = Figure()
-    ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str)
+    ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str, subtitle = subtitle_str)
     lines!(ax, 1:length(fitness_evolution), fitness_evolution)
-    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$success.png", fig)
+    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start).png", fig)
 end
 
 function print_gate_matrix(circ::Circuit)

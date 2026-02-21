@@ -97,17 +97,16 @@ function tensor_to_circuit(depolarising_prob, gate_noise_prob, telegate_noise, t
         push!(circuit, sSWAP(comm_idx(i),comm_idx(j)))  # We could also use comm_perm_idx or comm_inv_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
     end
     
-    # Add depolarising noise to all qubits
-    
-    # for data_qubit in collect(1:length(data_qubits))
-    #     circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
-    # end
+    # Add depolarising noise to all qubits at the beginning of the circuit
+    for data_qubit in collect(1:length(data_qubits))
+        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    end
 
     for col in axes(tensor, 2) # each column corresponds to one layer
     # Add depolarising noise to all qubits
-        for data_qubit in collect(1:length(data_qubits))
-        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
-        end
+        # for data_qubit in collect(1:length(data_qubits))
+        # circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+        # end
         for qubit in axes(tensor, 1) # each row corresponds to one qubit
             
             gate = tensor[qubit,col]
@@ -142,13 +141,13 @@ function tensor_to_circuit(depolarising_prob, gate_noise_prob, telegate_noise, t
                     circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
                 end
             
-            elseif gate isa SWAP_Gate
+            # elseif gate isa SWAP_Gate
 
-                if qubit == gate.qubit_2
-                    continue
-                else
-                    push!(circuit, sSWAP(comm_inv_perm_idx(gate.qubit_1), comm_inv_perm_idx(gate.qubit_2)))
-                end
+            #     if qubit == gate.qubit_2
+            #         continue
+            #     else
+            #         push!(circuit, sSWAP(comm_inv_perm_idx(gate.qubit_1), comm_inv_perm_idx(gate.qubit_2)))
+            #     end
             end
         end
     end
@@ -182,11 +181,18 @@ function add_telegate(circuit, control, target, control_register, target_registe
     
     ### EJPP Protocol
     
-    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
-    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
+    #circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
+    #circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
     # Bell state entanglement
+    # println("Telegate between qubits mapped_comm qubits $(comm_inv_perm_idx(control)) and $(comm_inv_perm_idx(target)).")
+    
+    
     push!(circuit, sHadamard(control_comm_index))
     push!(circuit, sCNOT(control_comm_index, target_comm_index))
+
+    # println("Adding noise to comm qubit $control_comm_index and $target_comm_index")
+    circuit = add_noise(circuit, telegate_noise, control_comm_index)
+    circuit = add_noise(circuit, telegate_noise, target_comm_index)
 
     push!(circuit, sCNOT(comm_inv_perm_idx(control), control_comm_index))
 
@@ -213,7 +219,7 @@ function add_telegate(circuit, control, target, control_register, target_registe
     push!(circuit, ConditionalGate(sZ(comm_inv_perm_idx(control)),sId1(comm_inv_perm_idx(control)), meas_target.bit))
     push!(circuit, ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_target.bit))  # restore the |0> state in the target comm qubit
 
-    # Introduce noise
+    # Introduce noise to data qubits
     circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
     circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
 
@@ -223,6 +229,9 @@ end
 
 function add_noise(circuit, prob::Float64) 
     """Circuit noise"""
+    if prob<0 || prob > 1
+        throw("Please provide a valid noise probabilty in [0,1]")
+    end
     circuit_noise = NoiseOpAll(UnbiasedUncorrelatedNoise(prob));
     push!(circuit, circuit_noise)
     return circuit
@@ -230,6 +239,9 @@ end
 
 function add_noise(circuit, prob::Float64, qubit) 
     """Circuit noise on single qubit"""
+    if prob<0 || prob > 1
+        throw("Please provide a valid noise probabilty in [0,1]")
+    end
     circuit_noise = NoiseOp(UnbiasedUncorrelatedNoise(prob),[qubit]);
     push!(circuit, circuit_noise)
     return circuit
@@ -237,6 +249,9 @@ end
 
 function add_noise(circuit, prob::Float64, qubit::Int, gate::Gate)
     # Special noise
+    if prob<0 || prob > 1
+        throw("Please provide a valid noise probabilty in [0,1]")
+    end
     gate_noise_channel = Pauli_gate_noise(typeof(gate), prob)
     gate_noise = NoiseOp(gate_noise_channel, [qubit])
     push!(circuit, gate_noise)

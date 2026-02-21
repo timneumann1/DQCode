@@ -71,6 +71,7 @@ struct GeneticParameters
     selection_ratio::Float64
     depth::Int
     num_elite::Int
+    warm_start::Bool
 end
 
 struct SimulationFidelity
