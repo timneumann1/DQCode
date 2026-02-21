@@ -19,22 +19,22 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [3,4], #register sizes
+        [7], #register sizes
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
-        0.75, # Telegate noise (depolarising channel)
+        0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        250, # individuals
-        100, # generations
-        300, # shots
+        2500, # individuals
+        500, # generations
+        1, # shots
         0.5,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        12, #depth
+        6, #depth
         1, # num_elite
-        true, # warm_start
+        false, # warm_start
         )
     return networking_params, genetic_params
 end
@@ -137,11 +137,13 @@ function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
 end
 
 function evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
-    fitness_scores = Vector{Float64}(undef, length(population))
+    fidelities = Vector{Float64}(undef, length(population))
+    circuit_sizes = Vector{Float64}(undef, length(population))
     for (idx, ind_tensor) in enumerate(population)
         quantum_clifford_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
         #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
-        
+        #print(quantum_clifford_circuit)
+        #println("Size of circuit:$(length(quantum_clifford_circuit))")
 
         # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
         # also, PauliMeasurement don't work with pert. expansion currently
@@ -177,12 +179,15 @@ function evaluate_population(population, networking_params, genetic_params, mapp
         # end
 
         #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
-        fitness_scores[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
+        fidelities[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
+        circuit_sizes[idx] = length(quantum_clifford_circuit)
         #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
         #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
         #println()
+
     end
-    return fitness_scores
+    
+    return fidelities, circuit_sizes
 end
 
 function selection(generation, fitness_scores; tournament_size::Int=5, selection_ratio::Float64=1.0, num_elite = 1)
@@ -349,20 +354,21 @@ function run_genetic_search()
 
         println("############ Generation #$gen ##########: Generation size: $(length(population))")
         println("")
-
+        
         # evaluate population
-        fitness_scores = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
+        fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
+        fitness_scores = 250*fidelities - circuit_sizes # TODO: Need to find a fair weighting here
         #@btime evaluate_population($population, $networking_params, $genetic_params, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_bit_matrix, $data_qubit_capacities, $num_registers)
-
+        
+        println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+        push!(fitness_evolution, maximum(fitness_scores))
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
         # perform crossover (incl. mutations)
         new_generation = crossover(best_individuals, genetic_params)
         # apply mutations
         #mutated = mutations(new_generation, genetic_params)
-        println("\n Generation $gen: Best fidelity is $(maximum(fitness_scores))\n")
         population = new_generation
-        push!(fitness_evolution, maximum(fitness_scores))
         gen += 1
         if gen == genetic_params.num_generations
             winner_winner_chicken_dinner = population[argmax(fitness_scores)]
@@ -397,11 +403,6 @@ function run_genetic_search()
         end
     end
 
-
-
-    
-
-    
     
     
     #=
