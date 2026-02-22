@@ -19,22 +19,22 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [7], #register sizes
+        [3,4], #register sizes
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        2500, # individuals
-        500, # generations
+        1, # individuals
+        0, # generations
         1, # shots
-        0.5,  # mutation rate
+        1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        6, #depth
+        11, #depth
         1, # num_elite
-        false, # warm_start
+        true, # warm_start
         )
     return networking_params, genetic_params
 end
@@ -42,35 +42,35 @@ end
 function steane_encoding_circuit(circuit)
 
     # could start with circuit from logical_encoding.jl here
-    # (need to be recast from Vector{AbstractOperation} to tensor)
+    # (need to be recast from Vector{AbstractOperation} to tensor), and need to get rid of the SWAP gates
     
     circuit.gates[1,1] = HadamardGate()
     circuit.gates[2,1] = HadamardGate()
-    circuit.gates[3,1] = HadamardGate()
+    circuit.gates[4,1] = HadamardGate()
 
-    circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
+    #circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
 
-    circuit.gates[1,3] = circuit.gates[4,3] = CNOT_Gate(1,4)
-    circuit.gates[7,3] = circuit.gates[5,3] = CNOT_Gate(7,5)
+    circuit.gates[1,3] = circuit.gates[3,3] = CNOT_Gate(1,3)
+    #circuit.gates[7,3] = circuit.gates[5,3] = CNOT_Gate(7,5)
 
     circuit.gates[1,4] = circuit.gates[5,4] = CNOT_Gate(1,5)
 
-    circuit.gates[1,5] = circuit.gates[6,5] = CNOT_Gate(1,6)
+    circuit.gates[1,5] = circuit.gates[7,5] = CNOT_Gate(1,7)
 
-    circuit.gates[2,6] = circuit.gates[4,6] = CNOT_Gate(2,4)
+    circuit.gates[2,6] = circuit.gates[3,6] = CNOT_Gate(2,3)
 
-    circuit.gates[2,7] = circuit.gates[6,7] = CNOT_Gate(2,6)
+    circuit.gates[2,7] = circuit.gates[7,7] = CNOT_Gate(2,7)
 
-    circuit.gates[2,8] = circuit.gates[7,8] = CNOT_Gate(2,7)
+    circuit.gates[2,8] = circuit.gates[6,8] = CNOT_Gate(2,6)
 
-    circuit.gates[3,9] = circuit.gates[5,9] = CNOT_Gate(3,5)
+    circuit.gates[4,9] = circuit.gates[5,9] = CNOT_Gate(4,5)
 
-    circuit.gates[3,10] = circuit.gates[6,10] = CNOT_Gate(3,6)
+    circuit.gates[4,10] = circuit.gates[7,10] = CNOT_Gate(4,7)
 
-    circuit.gates[3,11] = circuit.gates[7,11] = CNOT_Gate(3,7)
+    circuit.gates[4,11] = circuit.gates[6,11] = CNOT_Gate(4,6)
 
-    circuit.gates[3,12] = circuit.gates[4,12] = SWAP_Gate(3,4)
-    circuit.gates[6,12] = circuit.gates[7,12] = SWAP_Gate(6,7)
+    #circuit.gates[3,12] = circuit.gates[4,12] = SWAP_Gate(3,4)
+    #circuit.gates[6,12] = circuit.gates[7,12] = SWAP_Gate(6,7)
 
     #savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
     return circuit.gates
@@ -86,6 +86,7 @@ function initialise_population(num_individuals, num_data_qubits, depth; warm_sta
         end
         population[i] = circ
     end
+    
     return population
 end
 
@@ -136,13 +137,23 @@ function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
 
 end
 
+function circuit_size(circuit)
+    
+    return count(op ->
+        !(op isa QuantumClifford.NoiseOp) &&
+        !(op isa QuantumClifford.sSWAP),
+        circuit
+    )
+end
+
 function evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
     fidelities = Vector{Float64}(undef, length(population))
     circuit_sizes = Vector{Float64}(undef, length(population))
     for (idx, ind_tensor) in enumerate(population)
+        #print(ind_tensor)
         quantum_clifford_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
         #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
-        #print(quantum_clifford_circuit)
+       # println(quantum_clifford_circuit)
         #println("Size of circuit:$(length(quantum_clifford_circuit))")
 
         # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
@@ -180,7 +191,8 @@ function evaluate_population(population, networking_params, genetic_params, mapp
 
         #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
         fidelities[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
-        circuit_sizes[idx] = length(quantum_clifford_circuit)
+        #print(quantum_clifford_circuit)
+        circuit_sizes[idx] = circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
         #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
         #println()
@@ -304,6 +316,10 @@ function mutation(ind, genetic_params)
     return ind
 end
 
+function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
+    return 200*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+end
+
 function run_genetic_search()
 
     ############## Define environment for GA ##########################
@@ -344,24 +360,26 @@ function run_genetic_search()
         #println("Bit Matrix: $target_bit_matrix")
     
     ########## Initialise population and run Genetic Algorithm #################
-    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth, warm_start=genetic_params.warm_start)
+    
     fitness_evolution = Float64[]
-    winner_winner_chicken_dinner = 0 # Place holder for best circuit
+    #winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
     gen = 0
+    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth, warm_start=genetic_params.warm_start)
+    println("############ Generation #$gen ##########: Generation size: $(length(population))")
+    println("")
+
+    # evaluate population
+    fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
+    #print("fidelity is $fidelities")
+    fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params) # TODO: Need to find a fair weighting here
+    println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+    push!(fitness_evolution, maximum(fitness_scores))
     
     while gen<genetic_params.num_generations
 
-        println("############ Generation #$gen ##########: Generation size: $(length(population))")
-        println("")
         
-        # evaluate population
-        fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
-        fitness_scores = 250*fidelities - circuit_sizes # TODO: Need to find a fair weighting here
         #@btime evaluate_population($population, $networking_params, $genetic_params, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_bit_matrix, $data_qubit_capacities, $num_registers)
-        
-        println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
-        push!(fitness_evolution, maximum(fitness_scores))
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
         # perform crossover (incl. mutations)
@@ -369,15 +387,17 @@ function run_genetic_search()
         # apply mutations
         #mutated = mutations(new_generation, genetic_params)
         population = new_generation
+        # evaluate population
+        fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
+        fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
+        println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+        push!(fitness_evolution, maximum(fitness_scores))
         gen += 1
-        if gen == genetic_params.num_generations
-            winner_winner_chicken_dinner = population[argmax(fitness_scores)]
-        end
-        
     end
 
     # Extract best-performing individual
-
+    winner_winner_chicken_dinner = population[argmax(fitness_scores)]
+    winner_winner_chicken_dinner_size = circuit_sizes[argmax(fitness_scores)]
     print_gate_matrix(winner_winner_chicken_dinner)
 
     winner_winner_chicken_dinner_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
@@ -395,14 +415,14 @@ function run_genetic_search()
         try
         savecircuit(
             winner_winner_chicken_dinner_circuit,
-            "src/plots/GA/circuit_noise_GA_winner_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth).png";
+            "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start).png";
             scale = 1
+            
         )
         catch err
             @warn "savecircuit failed (circuit likely too large)" err
         end
     end
-
     
     
     #=
