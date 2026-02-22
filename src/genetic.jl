@@ -26,15 +26,15 @@ function define_parameters()
     )
 
     genetic_params = GeneticParameters(
-        1, # individuals
-        0, # generations
+        2500, # individuals
+        200, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        11, #depth
+        6, #depth
         1, # num_elite
-        true, # warm_start
+        false, # warm_start
         )
     return networking_params, genetic_params
 end
@@ -317,7 +317,7 @@ function mutation(ind, genetic_params)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 200*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+    return 250*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -415,7 +415,7 @@ function run_genetic_search()
         try
         savecircuit(
             winner_winner_chicken_dinner_circuit,
-            "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start).png";
+            "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(verification_logical_state)_warmstart_$(genetic_params.warm_start).png";
             scale = 1
             
         )
