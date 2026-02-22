@@ -27,12 +27,12 @@ function define_parameters()
 
     genetic_params = GeneticParameters(
         2500, # individuals
-        200, # generations
+        250, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        6, #depth
+        8, #depth
         1, # num_elite
         false, # warm_start
         )
