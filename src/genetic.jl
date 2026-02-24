@@ -27,17 +27,56 @@ function define_parameters()
     )
 
     genetic_params = GeneticParameters(
-        4000, # individuals
-        350, # generations
+        1, # individuals
+        0, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        4, #depth
+        10, #depth
         1, # num_elite
-        false, # warm_start
+        true, # warm_start
         )
     return networking_params, genetic_params
+end
+
+
+function cyclic_tanner_encoding_1(circuit)
+
+    # could start with circuit from logical_encoding.jl here
+    # (need to be recast from Vector{AbstractOperation} to tensor), and need to get rid of the SWAP gates
+    
+    # circuit.gates[1,1] = HadamardGate()
+    # circuit.gates[2,1] = HadamardGate()
+    # circuit.gates[4,1] = HadamardGate()
+
+    #circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
+
+    #circuit.gates[3,1] = circuit.gates[4,1] = CNOT_Gate(4,3)
+    #circuit.gates[6,1] = circuit.gates[8,1] = CNOT_Gate(8,6)
+    circuit.gates[1,1] = HadamardGate()
+
+    circuit.gates[3,2] = circuit.gates[1,2] = CNOT_Gate(1,3)
+
+    circuit.gates[7,3] = circuit.gates[1,3] = CNOT_Gate(1,7)
+
+    circuit.gates[8,4] = circuit.gates[1,4] = CNOT_Gate(1,8)
+    circuit.gates[2,4] = HadamardGate()
+
+    circuit.gates[7,5] = circuit.gates[2,5] = CNOT_Gate(2,7)
+
+    circuit.gates[4,6] = circuit.gates[2,6] = CNOT_Gate(2,4)
+
+    circuit.gates[8,7] = circuit.gates[2,7] = CNOT_Gate(2,8)
+    circuit.gates[5,7] = HadamardGate()
+
+    circuit.gates[5,8] = circuit.gates[6,8] = CNOT_Gate(5,6)
+
+    circuit.gates[5,9] = circuit.gates[7,9] = CNOT_Gate(5,7)
+
+    circuit.gates[5,10] = circuit.gates[8,10] = CNOT_Gate(5,8)
+    #savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
+    return circuit.gates
 end
 
 function steane_encoding_circuit(circuit)
@@ -83,7 +122,7 @@ function initialise_population(num_individuals, num_data_qubits, depth; warm_sta
     for i in eachindex(population)
         circ = Circuit(num_data_qubits, depth)  
         if warm_start       
-            circ.gates = steane_encoding_circuit(circ) # warm start
+            circ.gates = cyclic_tanner_encoding_1(circ)#steane_encoding_circuit(circ) # warm start
         end
         population[i] = circ
     end
@@ -355,7 +394,7 @@ function run_genetic_search()
     m = 1
     #qec_code =  QuantumTannerGraphProduct(H1, H2)#Steane7()
     qec_code = CyclicQuantumTannerGraphProduct(m)
-    println("Naive encoding circuit: $( naive_encoding_circuit(qec_code))) of size $(length(naive_encoding_circuit(qec_code)[2]))")
+    println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
     code = MixedDestabilizer(qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
     code_stabilizer = stabilizerview(code)
     logical_z = logicalzview(code)

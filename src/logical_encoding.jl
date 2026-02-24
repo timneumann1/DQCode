@@ -10,7 +10,7 @@ using Quantikz: savecircuit
 using QuantumSavory: H, CNOT, X, Y, Z, stateof
 using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat
 
-export naive_encoding_circuit
+export standard_logical_zero_encoding_circuit
 #export golay_encoding_circuit
 export run_tests
 
@@ -33,8 +33,7 @@ The implementation is based on [cleve1997efficient](@cite) and [gottesman1997sta
     (see https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html), [grassl2002algorithmic](@cite) and [grassl2011variations](@cite) )
 """
 
-
-function naive_encoding_circuit(code; undoperm=true)
+function naiv_encoding_circuit(code; undoperm=true)
 
     # Creatung the canonical tableau (without re-permuting the columns)
     n = code_n(code)
@@ -68,6 +67,87 @@ function naive_encoding_circuit(code; undoperm=true)
             end
         end
     end
+
+    # projection on codespace
+    for i in 1:r
+        push!(circ, sHadamard(i))
+        if S[i,i][2] == true
+            push!(circ, sPhase(i))
+        end
+        for t in 1:n
+            if i!=t
+                xz = S[i,t]
+                g = if xz == (true, true)  # Y
+                    sZCY
+                elseif xz == (true, false) # X
+                    sZCX
+                elseif xz == (false, true) && !(i<t<n-k+1) # Z
+                    sZCZ
+                end
+                isnothing(g) || push!(circ, g(i,t))
+            end
+        end
+    end
+
+    # correct for negative phases in the tableau
+    for i in 1:n-k 
+        if phases(S)[i]!=0
+            if i<=r
+                push!(circ, sZ(i))
+            else
+                push!(circ, sX(i))
+            end
+        end
+    end
+
+    # undoing the permutations to have the correct circuit for the final (re-permuted) tableau
+    if undoperm
+        perm = permx[permz]
+        transpositions = perm_to_transpositions(perm)
+        for (i,j) in transpositions
+            push!(circ, sSWAP(i,j))
+        end
+    end
+    code_original_with_logicals, circ
+end
+
+
+function standard_logical_zero_encoding_circuit(code; undoperm=true)
+     
+    # Differs from the above by removing the logical X operator CNOTs
+
+    # Creatung the canonical tableau (without re-permuting the columns)
+    n = code_n(code)
+    k = code_k(code)
+    #println("\nFor the given code, we have n=$n, k=$k. \n")
+    
+    code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true); # undoperm without returns gives the orignal stabiliser tableau
+    #println("Standard form of code is \n$code_standard_form")
+    X = logicalxview(code_standard_form)
+    Z = logicalzview(code_standard_form)
+    
+    # Creating te canonical tableau (with re-permuting the columns) for final state specification
+    code_original_with_logicals = MixedDestabilizer(code, undoperm=true);
+    # X_cleaned = logicalxview(md_cleaned)
+    # println("X is $X_cleaned")
+    # Z_cleaned = logicalzview(md_cleaned)
+    # println("Z is $Z_cleaned")
+
+    circ = QuantumClifford.AbstractOperation[]
+    #push!(circ, Reset(initial_state, [1,2,3,4,5,6,7]))
+    
+    # Constructing the encoding circuit
+
+    S = stabilizerview(code_standard_form)
+
+    # # logical Xs
+    # for i in 1:k
+    #     for t in 1:n-k
+    #         if X[i,t][1] == true
+    #             push!(circ, sCNOT(n-k+i, t))
+    #         end
+    #     end
+    # end
 
     # projection on codespace
     for i in 1:r
