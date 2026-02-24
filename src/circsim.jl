@@ -260,10 +260,6 @@ end
 
 
 
-    
-
-
-
 function build_pauli_string_measurement(num_qubits::Int, qubits::Vector{Int})
     pauli = I # we can always assume that the first qubit is a data qubit, since this is only false whenever there are zero qubits
     @inbounds for i in 2:(num_qubits) # traverses all data and comm qubits 

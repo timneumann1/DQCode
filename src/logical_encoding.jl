@@ -10,7 +10,7 @@ using Quantikz: savecircuit
 using QuantumSavory: H, CNOT, X, Y, Z, stateof
 using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat
 
-#export naive_encoding_circuit
+export naive_encoding_circuit
 #export golay_encoding_circuit
 export run_tests
 

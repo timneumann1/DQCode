@@ -7,7 +7,8 @@ using ..LogicalEnc
 
 using Random
 using Quantikz: savecircuit, @with, classicalbitslayout
-using QECCore: Steane7
+using QECCore
+using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
@@ -19,20 +20,20 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [3,4], #register sizes
+        [8], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        2500, # individuals
-        250, # generations
+        4000, # individuals
+        350, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        8, #depth
+        4, #depth
         1, # num_elite
         false, # warm_start
         )
@@ -308,7 +309,7 @@ function mutation(ind, genetic_params)
                     return ind
                 end    
                 ind.gates[r, c] = CNOT_Gate(r, target_index)
-                ind.gates[target_index,c ] = CNOT_Gate(r, target_index)
+                ind.gates[target_index,c] = CNOT_Gate(r, target_index)
             end
         end
     end
@@ -317,7 +318,7 @@ function mutation(ind, genetic_params)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 250*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+    return 1000*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -329,7 +330,8 @@ function run_genetic_search()
     networking_params, genetic_params = define_parameters()                             # retrieve parameters
     # TODO: Mapping stage -> use dictionary to map indices to one another
     # As extracted from Hypergraph Partitoning
-    permutation = [1,7,4,2,3,5,6]
+    #permutation = [1,7,4,2,3,5,6]
+    permutation = collect(1:8)#[1,2,3,4,5,6,7]
     inv_perm = invperm(permutation)
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: without deepcopy, this does in-place substitution of permutation    
     # NOTE: When generating the infromation for hypergraph part., we need to consult the naive encoding function in the logical encoding script to obtain the logical oeprators.
@@ -346,7 +348,22 @@ function run_genetic_search()
     println("Lookup Array: $register_lookup_array")
     println("Data qubits: $data_qubits")
 
-    target_state = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
+    # from QS source code: https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/lib/QECCore/src/codes/quantum/quantumtannergraphproduct.jl
+    #H1 = Bool[1 0 1 0; 0 1 0 1; 1 1 0 0]
+    #H2 = Bool[1 1 0; 0 1 1]
+    H1 = H2 = parity_matrix(RepCode(3))
+    m = 1
+    #qec_code =  QuantumTannerGraphProduct(H1, H2)#Steane7()
+    qec_code = CyclicQuantumTannerGraphProduct(m)
+    println("Naive encoding circuit: $( naive_encoding_circuit(qec_code))) of size $(length(naive_encoding_circuit(qec_code)[2]))")
+    code = MixedDestabilizer(qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
+    code_stabilizer = stabilizerview(code)
+    logical_z = logicalzview(code)
+    println("Logical operators are $(logical_z)")
+    target_state = vcat(code_stabilizer, logical_z)
+    println("\nTarget state:$target_state and qubit size: $(code_n(qec_code)) as well as logical qubit size: $(code_k(qec_code)))")
+
+    
     # instead, can also do MixedDestabiliser(Steane7()) and then extract the stabiliser tableau
 
     # We want to compare tableaus, so we canonicalize
@@ -373,12 +390,14 @@ function run_genetic_search()
     fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
     #print("fidelity is $fidelities")
     fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params) # TODO: Need to find a fair weighting here
-    println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+    
+    println("\n Generation $gen calculated of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+    
     push!(fitness_evolution, maximum(fitness_scores))
     
     while gen<genetic_params.num_generations
 
-        
+        gen += 1
         #@btime evaluate_population($population, $networking_params, $genetic_params, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_bit_matrix, $data_qubit_capacities, $num_registers)
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
@@ -390,9 +409,11 @@ function run_genetic_search()
         # evaluate population
         fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        println("\n Generation $gen: Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+        if gen % 5== 0
+        println("\n Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+        end
         push!(fitness_evolution, maximum(fitness_scores))
-        gen += 1
+        
     end
 
     # Extract best-performing individual
