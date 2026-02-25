@@ -9,6 +9,8 @@ using Random
 using Quantikz: savecircuit, @with, classicalbitslayout
 using QECCore
 using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct
+using QuantumClifford.ECC: DistanceMIPAlgorithm
+using HiGHS
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
@@ -20,22 +22,22 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [8], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [32], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        1, # individuals
-        0, # generations
+        5000, # individuals
+        1250, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        10, #depth
+        5, #depth
         1, # num_elite
-        true, # warm_start
+        false, # warm_start
         )
     return networking_params, genetic_params
 end
@@ -357,7 +359,7 @@ function mutation(ind, genetic_params)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 1000*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+    return 5000*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -370,7 +372,7 @@ function run_genetic_search()
     # TODO: Mapping stage -> use dictionary to map indices to one another
     # As extracted from Hypergraph Partitoning
     #permutation = [1,7,4,2,3,5,6]
-    permutation = collect(1:8)#[1,2,3,4,5,6,7]
+    permutation = collect(1:32)#[1,2,3,4,5,6,7]
     inv_perm = invperm(permutation)
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: without deepcopy, this does in-place substitution of permutation    
     # NOTE: When generating the infromation for hypergraph part., we need to consult the naive encoding function in the logical encoding script to obtain the logical oeprators.
@@ -388,11 +390,11 @@ function run_genetic_search()
     println("Data qubits: $data_qubits")
 
     # from QS source code: https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/lib/QECCore/src/codes/quantum/quantumtannergraphproduct.jl
-    #H1 = Bool[1 0 1 0; 0 1 0 1; 1 1 0 0]
-    #H2 = Bool[1 1 0; 0 1 1]
+    H1 = Bool[1 0 1 0; 0 1 0 1; 1 1 0 0]
+    H2 = Bool[1 1 0; 0 1 1]
     H1 = H2 = parity_matrix(RepCode(3))
-    m = 1
-    #qec_code =  QuantumTannerGraphProduct(H1, H2)#Steane7()
+    m = 2
+    #qec_code = QuantumTannerGraphProduct(H1, H2)# Steane7()
     qec_code = CyclicQuantumTannerGraphProduct(m)
     println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
     code = MixedDestabilizer(qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
@@ -400,8 +402,9 @@ function run_genetic_search()
     logical_z = logicalzview(code)
     println("Logical operators are $(logical_z)")
     target_state = vcat(code_stabilizer, logical_z)
-    println("\nTarget state:$target_state and qubit size: $(code_n(qec_code)) as well as logical qubit size: $(code_k(qec_code)))")
-
+    println("\nTarget state:$target_state and qubit size: $(code_n(qec_code)) as well as logical qubit size: $(code_k(qec_code))")
+    code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
+    println("Code distance is $code_distance.\n\n")
     
     # instead, can also do MixedDestabiliser(Steane7()) and then extract the stabiliser tableau
 
