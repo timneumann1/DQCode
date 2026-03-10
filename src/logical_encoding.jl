@@ -180,7 +180,7 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true)
             end
         end
     end
-
+    transpositions = nothing
     # undoing the permutations to have the correct circuit for the final (re-permuted) tableau
     if undoperm
         perm = permx[permz]
@@ -189,7 +189,7 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true)
             push!(circ, sSWAP(i,j))
         end
     end
-    code_original_with_logicals, circ
+    code_original_with_logicals, circ, transpositions
 end
 
 #####################################################################################

@@ -10,7 +10,7 @@ using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, co
 using QECCore
 
 import QuantumClifford: apply!, affectedqubits # we want to extend this with ConditionalGate
-export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, tensor_to_circuit
+export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, construct_executable_circuit
 
 function create_lookup_array_cliff(num_data_qubits_per_register)
     
@@ -80,7 +80,7 @@ function affectedqubits(op::ConditionalGate)
 end
 
 
-function tensor_to_circuit(depolarising_prob, gate_noise_prob, telegate_noise, tensor, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+function construct_executable_circuit(depolarising_prob, gate_noise_prob, telegate_noise, circuit_individual, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
 
@@ -102,55 +102,80 @@ function tensor_to_circuit(depolarising_prob, gate_noise_prob, telegate_noise, t
         circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
     end
 
-    for col in axes(tensor, 2) # each column corresponds to one layer
-    # Add depolarising noise to all qubits
-        # for data_qubit in collect(1:length(data_qubits))
-        # circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
-        # end
-        for qubit in axes(tensor, 1) # each row corresponds to one qubit
-            
-            gate = tensor[qubit,col]
+    for gate in circuit_individual
 
-            if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} #  Gate && !(gate isa CNOT) 
-                
-                # if qubit ==1 && gate != IdentityGate
-                #     # Apply unfiform noise!
-                #     # circuit = add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(qubit), Main.DQCircuitSearch.Types.PauliZGate())
-                #     # ^ Z error is harmless to the state, whereas an X error is destructive
-                # end
-             
-                push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
+        if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} 
+            qubit = gate.index
+            push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
             
-            elseif gate isa CNOT_Gate  
-                control = gate.control
-                target = gate.target
-                control_register = register_lookup_array[inv_perm[control]] 
-                target_register = register_lookup_array[inv_perm[target]] 
-             
-                if qubit == target
-                    continue # only process the CNOTs via the control (all CNOTs and comm qubits are mutually exclusive)
-                end
+        elseif gate isa CNOT_Gate  
+            control = gate.control
+            target = gate.target
+            control_register = register_lookup_array[inv_perm[control]] 
+            target_register = register_lookup_array[inv_perm[target]] 
+            
 
-                if control_register == target_register # the lookup array does not account for the communication qubits
-                    push!(circuit, sCNOT(comm_inv_perm_idx(control), comm_inv_perm_idx(target) ))
-                else
+            if control_register == target_register # the lookup array does not account for the communication qubits
+                push!(circuit, sCNOT(comm_inv_perm_idx(control), comm_inv_perm_idx(target) ))
+            else
 
                     # Perform telegate between control and target qubit in different registers, 
                     # i.e., push!(circuit, sCNOT(comm_inv_perm_idx(control),comm_inv_perm_idx(target)) ) remotely
                     # println("Performing a telegated between (unmapped) qubits $control and $target")
-                    circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
-                end
-            
-            # elseif gate isa SWAP_Gate
-
-            #     if qubit == gate.qubit_2
-            #         continue
-            #     else
-            #         push!(circuit, sSWAP(comm_inv_perm_idx(gate.qubit_1), comm_inv_perm_idx(gate.qubit_2)))
-            #     end
+                circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
             end
         end
     end
+
+    # for col in axes(tensor, 2) # each column corresponds to one layer
+    # # Add depolarising noise to all qubits
+    #     # for data_qubit in collect(1:length(data_qubits))
+    #     # circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    #     # end
+    #     for qubit in axes(tensor, 1) # each row corresponds to one qubit
+            
+    #         gate = tensor[qubit,col]
+
+    #         if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} #  Gate && !(gate isa CNOT) 
+                
+    #             # if qubit ==1 && gate != IdentityGate
+    #             #     # Apply unfiform noise!
+    #             #     # circuit = add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(qubit), Main.DQCircuitSearch.Types.PauliZGate())
+    #             #     # ^ Z error is harmless to the state, whereas an X error is destructive
+    #             # end
+             
+    #             push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
+            
+    #         elseif gate isa CNOT_Gate  
+    #             control = gate.control
+    #             target = gate.target
+    #             control_register = register_lookup_array[inv_perm[control]] 
+    #             target_register = register_lookup_array[inv_perm[target]] 
+             
+    #             if qubit == target
+    #                 continue # only process the CNOTs via the control (all CNOTs and comm qubits are mutually exclusive)
+    #             end
+
+    #             if control_register == target_register # the lookup array does not account for the communication qubits
+    #                 push!(circuit, sCNOT(comm_inv_perm_idx(control), comm_inv_perm_idx(target) ))
+    #             else
+
+    #                 # Perform telegate between control and target qubit in different registers, 
+    #                 # i.e., push!(circuit, sCNOT(comm_inv_perm_idx(control),comm_inv_perm_idx(target)) ) remotely
+    #                 # println("Performing a telegated between (unmapped) qubits $control and $target")
+    #                 circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
+    #             end
+            
+    #         # elseif gate isa SWAP_Gate
+
+    #         #     if qubit == gate.qubit_2
+    #         #         continue
+    #         #     else
+    #         #         push!(circuit, sSWAP(comm_inv_perm_idx(gate.qubit_1), comm_inv_perm_idx(gate.qubit_2)))
+    #         #     end
+    #         end
+    #     end
+    # end
 
     # Revert swapping for measurement of target state
     for (i,j) in mapping # reverse reverse  -> we do the reverse of the orginial permutation (the reverse transposition)

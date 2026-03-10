@@ -6,11 +6,11 @@ using QuantumClifford
 
 # types for simulation
 using QuantumClifford: AbstractOperation
+using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export SimulationParameters, SimulationFidelity, Circuit, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters, NetworkingParameters
-
+export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters, NetworkingParameters
 
 struct ConditionalGate <: AbstractOperation
     truegate::AbstractOperation
@@ -69,9 +69,9 @@ struct GeneticParameters
     mutation_rate::Float64
     tournament_size::Int
     selection_ratio::Float64
-    depth::Int
     num_elite::Int
     warm_start::Bool
+    qec_code::AbstractCSSCode
 end
 
 struct SimulationFidelity
@@ -83,11 +83,25 @@ end
 abstract type Gate end
 
 # single-qubit gates
-struct IdentityGate <: Gate end
-struct PauliXGate <: Gate end
-struct PauliYGate <: Gate end
-struct PauliZGate <: Gate end
-struct HadamardGate <: Gate end
+struct IdentityGate <: Gate 
+    index::Int
+end
+
+struct PauliXGate <: Gate
+    index::Int
+end
+
+struct PauliYGate <: Gate
+    index::Int
+end
+
+struct PauliZGate <: Gate 
+    index::Int
+end
+
+struct HadamardGate <: Gate 
+    index::Int
+end
 
 # two-qubit gates (store the counterpart of the operation)
 struct CNOT_Gate <: Gate
@@ -99,6 +113,11 @@ struct SWAP_Gate <: Gate
     qubit_1::Int
     qubit_2::Int
 end
+
+struct CircuitIndividual
+    gates::Vector{Gate}   
+end
+
 
 mutable struct Circuit
     gates::Matrix{Gate}

@@ -22,22 +22,22 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [32], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [18], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        5000, # individuals
-        1250, # generations
+        1, # individuals
+        0, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        5, #depth
         1, # num_elite
-        false, # warm_start
+        true, # warm_start
+        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]) # qec code
         )
     return networking_params, genetic_params
 end
@@ -119,16 +119,55 @@ function steane_encoding_circuit(circuit)
 end
 
 
-function initialise_population(num_individuals, num_data_qubits, depth; warm_start = False)
-    population = Vector{Circuit}(undef, num_individuals)
+function initialise_population(num_individuals, num_data_qubits; warm_start = false, qec_code = nothing)
+    population = Vector{CircuitIndividual}(undef, num_individuals) # Vector{Circuit}(undef, num_individuals)
+    
+    #println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
+
     for i in eachindex(population)
-        circ = Circuit(num_data_qubits, depth)  
-        if warm_start       
-            circ.gates = cyclic_tanner_encoding_1(circ)#steane_encoding_circuit(circ) # warm start
+        
+        gates = Gate[]#Circuit(num_data_qubits, depth)  
+        if warm_start 
+            @assert qec_code !== nothing  
+            # TODO: convert to my own type but add indices there!
+            
+            print(standard_logical_zero_encoding_circuit(qec_code)[3])
+            permutation = transpositions_to_perm(reverse(standard_logical_zero_encoding_circuit(qec_code)[3]), num_data_qubits)
+            println(permutation)
+            #circ.gates = cyclic_tanner_encoding_1(circ)#steane_encoding_circuit(circ) # warm start
+            println(standard_logical_zero_encoding_circuit(qec_code)[2])
+            println()
+            for op in standard_logical_zero_encoding_circuit(qec_code)[2]
+                if op isa QuantumClifford.sHadamard
+                    push!(gates, HadamardGate(permutation[op.q]))
+                    print(gates)
+                elseif op isa QuantumClifford.sX
+                    push!(gates, PauliXGate(permutation[op.q]))
+                elseif op isa QuantumClifford.sZ
+                    push!(gates, PauliZGate(permutation[op.q]))
+                elseif op isa QuantumClifford.sZCX
+                    control, target = Tuple(affectedqubits(op))
+                    push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+                # elseif op isa QuantumClifford.sZCY
+                #     control, target = Tuple(affectedqubits(op))
+                #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+                # elseif op isa QuantumClifford.sZCZ
+                #     control, target = Tuple(affectedqubits(op))
+                #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+                elseif op isa QuantumClifford.sSWAP
+                    continue
+                else
+                    error("Unsupported warm-start gate type: $(typeof(op))")
+                end  
+               
+            end
         end
-        population[i] = circ
+        println("\n\n\n\n\n\n")
+        print(gates)
+        population[i] = CircuitIndividual(gates)
     end
     
+    println("Indiviudal: $(population[1])")
     return population
 end
 
@@ -136,6 +175,7 @@ end
 
 function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{UInt8}, <:AbstractMatrix{<:Unsigned}})
     #t = QuantumClifford.tab(stab)
+    #println(tableau)
     rows, cols = size(tableau)
     bits = Matrix{Int}(undef, rows, cols+1)#  falses(rows, cols)
     @inbounds for r in 1:rows
@@ -149,8 +189,11 @@ function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{
         end
         bits[r, cols + 1] = 1/2*tableau.phases[r]  # phase +1 is represented as 0, phase -1 is represented as 2
         # -> positive phase is represented as 0, negative phase as 1
+        #println(bits[r,:])
     end
+    #println(bits)
     return bits
+    
 end
 
 function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits)
@@ -191,9 +234,9 @@ end
 function evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
     fidelities = Vector{Float64}(undef, length(population))
     circuit_sizes = Vector{Float64}(undef, length(population))
-    for (idx, ind_tensor) in enumerate(population)
+    for (idx, circ_individual) in enumerate(population)
         #print(ind_tensor)
-        quantum_clifford_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, ind_tensor.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+        quantum_clifford_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, circ_individual.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
         #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
        # println(quantum_clifford_circuit)
         #println("Size of circuit:$(length(quantum_clifford_circuit))")
@@ -359,7 +402,7 @@ function mutation(ind, genetic_params)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 5000*fidelities - (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+    return 5000*fidelities #- (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -372,12 +415,14 @@ function run_genetic_search()
     # TODO: Mapping stage -> use dictionary to map indices to one another
     # As extracted from Hypergraph Partitoning
     #permutation = [1,7,4,2,3,5,6]
-    permutation = collect(1:32)#[1,2,3,4,5,6,7]
+    qec_code_required_qubits = code_n(genetic_params.qec_code)
+    permutation = collect(1:qec_code_required_qubits)#[1,2,3,4,5,6,7]
     inv_perm = invperm(permutation)
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: without deepcopy, this does in-place substitution of permutation    
     # NOTE: When generating the infromation for hypergraph part., we need to consult the naive encoding function in the logical encoding script to obtain the logical oeprators.
     # For the inversion of the circuit, we have a custoim function in circsim.jl since this requries applicaiton of correct indices, accounting for communication qubits.
     data_qubit_capacities = networking_params.register_sizes
+    @assert sum(data_qubit_capacities) === qec_code_required_qubits
     num_registers  = length(data_qubit_capacities)
     register_lookup_array, data_qubits, num_data_qubits = create_lookup_array_cliff(data_qubit_capacities)      # create lookup array
 
@@ -389,21 +434,28 @@ function run_genetic_search()
     println("Lookup Array: $register_lookup_array")
     println("Data qubits: $data_qubits")
 
-    # from QS source code: https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/lib/QECCore/src/codes/quantum/quantumtannergraphproduct.jl
-    H1 = Bool[1 0 1 0; 0 1 0 1; 1 1 0 0]
-    H2 = Bool[1 1 0; 0 1 1]
-    H1 = H2 = parity_matrix(RepCode(3))
-    m = 2
-    #qec_code = QuantumTannerGraphProduct(H1, H2)# Steane7()
-    qec_code = CyclicQuantumTannerGraphProduct(m)
-    println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
-    code = MixedDestabilizer(qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
+    ### Product codes
+    # H1 = Bool[1 1 1] #Bool[1 0 1 0; 0 1 0 1; 1 1 0 0]
+    # H2 = Bool[1 0 0; 1 1 1] #Bool[1 1 0; 0 1 1]
+    # #H1 = H2 = parity_matrix(RepCode(3))
+    
+    # ### (Cyclic) Tanner,  from QS source code: https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/lib/QECCore/src/codes/quantum/quantumtannergraphproduct.jl
+    # m = 1
+    # #qec_code = QuantumTannerGraphProduct(H1, H2)# Steane7()
+    # qec_code = CyclicQuantumTannerGraphProduct(m)
+
+    # Bivariate Bicycle codes, from QS source code: https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/lib/QECCore/src/codes/quantum/generalized_circulant_bivariate_bicycle.jl
+
+    # l, m = 3, 3;
+    # A = [(:x, 0), (:x, 1), (:y, 1)];
+    # B = [(:y, 0), (:x, 2), (:y, 2)];
+    code = MixedDestabilizer(genetic_params.qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
     code_stabilizer = stabilizerview(code)
     logical_z = logicalzview(code)
     println("Logical operators are $(logical_z)")
     target_state = vcat(code_stabilizer, logical_z)
-    println("\nTarget state:$target_state and qubit size: $(code_n(qec_code)) as well as logical qubit size: $(code_k(qec_code))")
-    code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
+    println("\nTarget state:$target_state and qubit size: $(qec_code_required_qubits) as well as logical qubit size: $(code_k(genetic_params.qec_code))")
+    code_distance = distance(genetic_params.qec_code, DistanceMIPAlgorithm(solver=HiGHS))
     println("Code distance is $code_distance.\n\n")
     
     # instead, can also do MixedDestabiliser(Steane7()) and then extract the stabiliser tableau
@@ -424,7 +476,9 @@ function run_genetic_search()
     #winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
     gen = 0
-    population = initialise_population(genetic_params.num_individuals, num_data_qubits, genetic_params.depth, warm_start=genetic_params.warm_start)
+    population = initialise_population(genetic_params.num_individuals, num_data_qubits, warm_start=genetic_params.warm_start, qec_code = genetic_params.qec_code)
+    
+    # TODO: Add verification that warm start indeed yields a fidelity of 1!
     println("############ Generation #$gen ##########: Generation size: $(length(population))")
     println("")
 
@@ -451,7 +505,7 @@ function run_genetic_search()
         # evaluate population
         fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 5== 0
+        if gen % 50== 0
         println("\n Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
         end
         push!(fitness_evolution, maximum(fitness_scores))
@@ -461,9 +515,9 @@ function run_genetic_search()
     # Extract best-performing individual
     winner_winner_chicken_dinner = population[argmax(fitness_scores)]
     winner_winner_chicken_dinner_size = circuit_sizes[argmax(fitness_scores)]
-    print_gate_matrix(winner_winner_chicken_dinner)
+    #print_gate_matrix(winner_winner_chicken_dinner)
 
-    winner_winner_chicken_dinner_circuit = tensor_to_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+    winner_winner_chicken_dinner_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     #println(winner_winner_chicken_dinner_circuit)
 
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
@@ -474,19 +528,19 @@ function run_genetic_search()
     #println("\n\nEvolution of fitness values: $fitness_evolution")
     plot_fitness_evol(fitness_evolution, networking_params, genetic_params, verification_logical_state)
 
-    @with classicalbitslayout => :expanded begin
-        try
-        savecircuit(
-            winner_winner_chicken_dinner_circuit,
-            "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(verification_logical_state)_warmstart_$(genetic_params.warm_start).png";
-            scale = 1
+    # @with classicalbitslayout => :expanded begin
+    #     try
+    #     savecircuit(
+    #         winner_winner_chicken_dinner_circuit,
+    #         "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(verification_logical_state)_warmstart_$(genetic_params.warm_start).png";
+    #         scale = 1
             
-        )
-        catch err
-            @warn "savecircuit failed (circuit likely too large)" err
-        end
-    end
-    
+    #     )
+    #     catch err
+    #         @warn "savecircuit failed (circuit likely too large)" err
+    #     end
+    # end
+    #^GOOD CODE
     
     #=
      # Two methods of verifying the creation of the encoded state (Method 1 is preferable since simpler)
@@ -547,11 +601,11 @@ end
 
 function plot_fitness_evol(fitness_evolution, networking_params, genetic_params, success)
     title_str = "Fitness Evolution : $(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"     
-    subtitle_str = "fitness_evolution_telenoise_$(networking_params.telegate_noise)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start)"
+    subtitle_str = "fitness_evolution_telenoise_$(networking_params.telegate_noise)_success_$(success)_warmstart_$(genetic_params.warm_start)"
     fig = Figure()
     ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str, subtitle = subtitle_str)
     lines!(ax, 1:length(fitness_evolution), fitness_evolution)
-    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(success)_warmstart_$(genetic_params.warm_start).png", fig)
+    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_success_$(success)_warmstart_$(genetic_params.warm_start).png", fig)
 end
 
 function print_gate_matrix(circ::Circuit)
