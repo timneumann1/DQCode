@@ -29,93 +29,17 @@ function define_parameters()
     )
 
     genetic_params = GeneticParameters(
-        1, # individuals
-        0, # generations
+        500, # individuals
+        1000, # generations
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        1, # num_elite
+        2, # num_elite
         true, # warm_start
         BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]) # qec code
         )
     return networking_params, genetic_params
-end
-
-
-function cyclic_tanner_encoding_1(circuit)
-
-    # could start with circuit from logical_encoding.jl here
-    # (need to be recast from Vector{AbstractOperation} to tensor), and need to get rid of the SWAP gates
-    
-    # circuit.gates[1,1] = HadamardGate()
-    # circuit.gates[2,1] = HadamardGate()
-    # circuit.gates[4,1] = HadamardGate()
-
-    #circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
-
-    #circuit.gates[3,1] = circuit.gates[4,1] = CNOT_Gate(4,3)
-    #circuit.gates[6,1] = circuit.gates[8,1] = CNOT_Gate(8,6)
-    circuit.gates[1,1] = HadamardGate()
-
-    circuit.gates[3,2] = circuit.gates[1,2] = CNOT_Gate(1,3)
-
-    circuit.gates[7,3] = circuit.gates[1,3] = CNOT_Gate(1,7)
-
-    circuit.gates[8,4] = circuit.gates[1,4] = CNOT_Gate(1,8)
-    circuit.gates[2,4] = HadamardGate()
-
-    circuit.gates[7,5] = circuit.gates[2,5] = CNOT_Gate(2,7)
-
-    circuit.gates[4,6] = circuit.gates[2,6] = CNOT_Gate(2,4)
-
-    circuit.gates[8,7] = circuit.gates[2,7] = CNOT_Gate(2,8)
-    circuit.gates[5,7] = HadamardGate()
-
-    circuit.gates[5,8] = circuit.gates[6,8] = CNOT_Gate(5,6)
-
-    circuit.gates[5,9] = circuit.gates[7,9] = CNOT_Gate(5,7)
-
-    circuit.gates[5,10] = circuit.gates[8,10] = CNOT_Gate(5,8)
-    #savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
-    return circuit.gates
-end
-
-function steane_encoding_circuit(circuit)
-
-    # could start with circuit from logical_encoding.jl here
-    # (need to be recast from Vector{AbstractOperation} to tensor), and need to get rid of the SWAP gates
-    
-    circuit.gates[1,1] = HadamardGate()
-    circuit.gates[2,1] = HadamardGate()
-    circuit.gates[4,1] = HadamardGate()
-
-    #circuit.gates[7,2] = circuit.gates[4,2] = CNOT_Gate(7,4)
-
-    circuit.gates[1,3] = circuit.gates[3,3] = CNOT_Gate(1,3)
-    #circuit.gates[7,3] = circuit.gates[5,3] = CNOT_Gate(7,5)
-
-    circuit.gates[1,4] = circuit.gates[5,4] = CNOT_Gate(1,5)
-
-    circuit.gates[1,5] = circuit.gates[7,5] = CNOT_Gate(1,7)
-
-    circuit.gates[2,6] = circuit.gates[3,6] = CNOT_Gate(2,3)
-
-    circuit.gates[2,7] = circuit.gates[7,7] = CNOT_Gate(2,7)
-
-    circuit.gates[2,8] = circuit.gates[6,8] = CNOT_Gate(2,6)
-
-    circuit.gates[4,9] = circuit.gates[5,9] = CNOT_Gate(4,5)
-
-    circuit.gates[4,10] = circuit.gates[7,10] = CNOT_Gate(4,7)
-
-    circuit.gates[4,11] = circuit.gates[6,11] = CNOT_Gate(4,6)
-
-    #circuit.gates[3,12] = circuit.gates[4,12] = SWAP_Gate(3,4)
-    #circuit.gates[6,12] = circuit.gates[7,12] = SWAP_Gate(6,7)
-
-    #savecircuit(circuit, "src/plots/circuit_sim/circuit.png") # plotting is performed by enabling the reset function
-    return circuit.gates
 end
 
 
@@ -131,16 +55,11 @@ function initialise_population(num_individuals, num_data_qubits; warm_start = fa
             @assert qec_code !== nothing  
             # TODO: convert to my own type but add indices there!
             
-            print(standard_logical_zero_encoding_circuit(qec_code)[3])
             permutation = transpositions_to_perm(reverse(standard_logical_zero_encoding_circuit(qec_code)[3]), num_data_qubits)
-            println(permutation)
             #circ.gates = cyclic_tanner_encoding_1(circ)#steane_encoding_circuit(circ) # warm start
-            println(standard_logical_zero_encoding_circuit(qec_code)[2])
-            println()
             for op in standard_logical_zero_encoding_circuit(qec_code)[2]
                 if op isa QuantumClifford.sHadamard
                     push!(gates, HadamardGate(permutation[op.q]))
-                    print(gates)
                 elseif op isa QuantumClifford.sX
                     push!(gates, PauliXGate(permutation[op.q]))
                 elseif op isa QuantumClifford.sZ
@@ -162,8 +81,8 @@ function initialise_population(num_individuals, num_data_qubits; warm_start = fa
                
             end
         end
-        println("\n\n\n\n\n\n")
-        print(gates)
+        #println("\n\n\n\n\n\n")
+        #print(gates)
         population[i] = CircuitIndividual(gates)
     end
     
@@ -171,11 +90,7 @@ function initialise_population(num_individuals, num_data_qubits; warm_start = fa
     return population
 end
 
-
-
 function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{UInt8}, <:AbstractMatrix{<:Unsigned}})
-    #t = QuantumClifford.tab(stab)
-    #println(tableau)
     rows, cols = size(tableau)
     bits = Matrix{Int}(undef, rows, cols+1)#  falses(rows, cols)
     @inbounds for r in 1:rows
@@ -191,7 +106,6 @@ function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{
         # -> positive phase is represented as 0, negative phase as 1
         #println(bits[r,:])
     end
-    #println(bits)
     return bits
     
 end
@@ -223,10 +137,10 @@ function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
 end
 
 function circuit_size(circuit)
-    
     return count(op ->
         !(op isa QuantumClifford.NoiseOp) &&
-        !(op isa QuantumClifford.sSWAP),
+        !(op isa QuantumClifford.sSWAP) &&
+        !(op isa QuantumClifford.sId1),
         circuit
     )
 end
@@ -280,7 +194,6 @@ function evaluate_population(population, networking_params, genetic_params, mapp
         circuit_sizes[idx] = circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
         #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
-        #println()
 
     end
     
@@ -293,10 +206,10 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
     num_selected = Int(floor(length_generation * selection_ratio))
 
     #num_elite = max(1, Int(round(num_selected * elite_fraction)))
-
-    #elite_idx = sortperm(fitness_scores, rev=true)[1:num_elite]
-    elite_idx = argmax(fitness_scores)
-    best_individuals = [generation[elite_idx]]
+    elite_idx = sortperm(fitness_scores, rev=true)[1:num_elite]
+    
+    #elite_idx = argmax(fitness_scores)
+    best_individuals = generation[elite_idx]
     
 #    best_individuals = Vector{eltype(generation)}()
     remaining = setdiff(collect(eachindex(generation)), elite_idx)
@@ -312,7 +225,7 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
     return best_individuals
 end
 
-function crossover(best_individuals, genetic_params)
+function crossover(best_individuals, genetic_params, num_data_qubits)
     new_generation = deepcopy(best_individuals)
 
     parents = deepcopy(best_individuals)
@@ -324,17 +237,23 @@ function crossover(best_individuals, genetic_params)
         p1 = parents[i]
         p2 = parents[i+1]
 
-        nrows, ncols = size(p1.gates)
-        cp = rand(1:ncols-1)  # crossover point (between columns)
+        p1_size = length(p1.gates)
+        p2_size = length(p2.gates)
 
-        child1 = Circuit(nrows, ncols)
-        child2 = Circuit(nrows, ncols)
+        cp_1 = rand(1:p1_size-1)  # crossover point (in vector)
+        cp_2 = rand(1:p2_size-1)  
 
-        child1.gates = hcat(p1.gates[:, 1:cp], p2.gates[:, cp+1:end])
-        child2.gates = hcat(p2.gates[:, 1:cp], p1.gates[:, cp+1:end])
+        child1 = CircuitIndividual(cp_1 + p2_size-cp_2)
+        child2 = CircuitIndividual(cp_2 + p1_size-cp_1)
+
+        child1.gates[1:cp_1] = deepcopy(p1.gates[1:cp_1])
+        child1.gates[cp_1+1:end] = deepcopy(p2.gates[cp_2+1:end])
+
+        child2.gates[1:cp_2] = deepcopy(p2.gates[1:cp_2])
+        child2.gates[cp_2+1:end] = deepcopy(p1.gates[cp_1+1:end])
 
         
-        push!(new_generation, mutation(child1, genetic_params), mutation(child2, genetic_params))
+        push!(new_generation, mutation(child1, genetic_params, num_data_qubits), mutation(child2, genetic_params, num_data_qubits))
 
         i += 2
     end
@@ -343,66 +262,69 @@ function crossover(best_individuals, genetic_params)
         p1 = parents[1]
         p2 = parents[length(parents)]
 
-        nrows, ncols = size(p1.gates)
-        cp = rand(1:ncols-1)  # crossover point (between columns)
-        
-        child1 = Circuit(nrows, ncols)
-        child1.gates = hcat(p1.gates[:, 1:cp], p2.gates[:, cp+1:end])
-        push!(new_generation, mutation(child1, genetic_params))
+        p1_size = length(p1.gates)
+        p2_size = length(p2.gates)
+
+        cp_1 = rand(1:p1_size-1)  
+        cp_2 = rand(1:p2_size-1)  
+
+        child1 = CircuitIndividual(cp_1 + p2_size-cp_2)#Circuit(nrows, ncols)
+        child1.gates[1:cp_1] = deepcopy(p1.gates[1:cp_1])
+        child1.gates[cp_2+1:end] = deepcopy(p2.gates[cp_2+1:end])
+
+        push!(new_generation, mutation(child1, genetic_params, num_data_qubits))
     end
 
     return new_generation
 end
 
-function _random_single_qubit_gate()
+function _random_single_qubit_gate(index)
     # choose from 1‑qubit gates you already define
     gates = (HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate)
-    return gates[rand(1:length(gates))]()
+    return gates[rand(1:length(gates))](index)
 end
 
-function mutation(ind, genetic_params)
+function mutation(individual, genetic_params, num_data_qubits)
     rate = genetic_params.mutation_rate
 
     if rand() < rate
         # Pick one matrix elemenet randomly
-        nrows, ncols = size(ind.gates)
-        r, c = rand(1:nrows), rand(1:ncols)
+        circuit_length = length(individual.gates)
+        index = rand(1:circuit_length)
 
-        if ind.gates[r,c] isa CNOT_Gate # mutate existing CNOT gates
-            control = ind.gates[r,c].control
-            target = ind.gates[r,c].target
+        if individual.gates[index] isa CNOT_Gate # mutate existing CNOT gates
+            control = individual.gates[index].control
+            target = individual.gates[index].target
             if rand() > 0.5 # SWAP control and target
-                ind.gates[control, c] = CNOT_Gate(target, control)
-                ind.gates[target, c] = CNOT_Gate(target, control)
+                individual.gates[index] = CNOT_Gate(target, control)
             else
-                ind.gates[control, c] = IdentityGate()
-                ind.gates[target, c] = IdentityGate()
+                individual.gates[index] = _random_single_qubit_gate(rand(1:num_data_qubits))
             end
         else  
-            
-            if rand()>0.5 # mutate single qubit gates into single-qubit gates...
-                ind.gates[r, c] = _random_single_qubit_gate()
+            if rand()>0.5 # mutate single qubit gates into single-qubit gates on random qubit
+                individual.gates[index] = _random_single_qubit_gate(rand(1:num_data_qubits))
             else  # ... or multi-qubit gates
-                target_index = rand(1:nrows)
+                control_index = rand(1:num_data_qubits)
+                target_index = rand(1:num_data_qubits)
                 tries = 0
-                while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
-                    target_index = rand(1:nrows)
+                #while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
+                while target_index == control_index
+                    target_index = rand(1:num_data_qubits)
                     tries +=1
                 end
                 if tries >= 10
-                    return ind
+                    return individual
                 end    
-                ind.gates[r, c] = CNOT_Gate(r, target_index)
-                ind.gates[target_index,c] = CNOT_Gate(r, target_index)
+                individual.gates[index] = CNOT_Gate(control_index, target_index)
             end
         end
     end
 
-    return ind
+    return individual
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 5000*fidelities #- (gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+    return 1000*fidelities - circuit_sizes #(gen/genetic_params.num_generations)*  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -487,7 +409,7 @@ function run_genetic_search()
     #print("fidelity is $fidelities")
     fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params) # TODO: Need to find a fair weighting here
     
-    println("\n Generation $gen calculated of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+    println("\n Generation $gen of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
     
     push!(fitness_evolution, maximum(fitness_scores))
     
@@ -498,14 +420,14 @@ function run_genetic_search()
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
         # perform crossover (incl. mutations)
-        new_generation = crossover(best_individuals, genetic_params)
+        new_generation = crossover(best_individuals, genetic_params, num_data_qubits)
         # apply mutations
         #mutated = mutations(new_generation, genetic_params)
         population = new_generation
         # evaluate population
         fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 50== 0
+        if gen % 25== 0
         println("\n Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
         end
         push!(fitness_evolution, maximum(fitness_scores))

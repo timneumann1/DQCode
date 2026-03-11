@@ -118,6 +118,12 @@ struct CircuitIndividual
     gates::Vector{Gate}   
 end
 
+function CircuitIndividual(num_gates::Int)
+    @assert num_gates > 0
+    gates = Gate[IdentityGate(1) for _ in 1:num_gates]
+    return CircuitIndividual(gates)
+end
+
 
 mutable struct Circuit
     gates::Matrix{Gate}
@@ -126,7 +132,7 @@ end
 function Circuit(num_qubits::Int, num_layers::Int)
     @assert num_qubits > 0
     @assert num_layers > 0
-    Circuit(fill(IdentityGate(), num_qubits, num_layers))
+    Circuit(fill(IdentityGate(1), num_qubits, num_layers))
 end
 
 end
