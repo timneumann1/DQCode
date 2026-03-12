@@ -22,7 +22,7 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [3,4], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [6,6,6], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
@@ -30,7 +30,7 @@ function define_parameters()
 
     genetic_params = GeneticParameters(
         1000, # individuals
-        1000, # generations
+        100, # generations
         550, # max length of individual
         1, # shots
         0.75,  # mutation rate
@@ -38,13 +38,15 @@ function define_parameters()
         0.5, # selection_ratio
         1, # num_elite
         false, # warm_start
-        Steane7()# qec code
+        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)])# qec code
         )
     return networking_params, genetic_params
 end
-# BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)])
+
 
 function initialise_population(num_individuals, num_data_qubits; standard_encoding = false, warm_start = false, qec_code = nothing, min_len=10)
+    
+    println("Initialising Population... \n")
     population = Vector{CircuitIndividual}(undef, num_individuals) # Vector{Circuit}(undef, num_individuals)
     
     #println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
@@ -88,8 +90,9 @@ function initialise_population(num_individuals, num_data_qubits; standard_encodi
             end
         else
             if warm_start
+                @assert standard_circuit_length > 10
                 start_idx = rand(1:(standard_circuit_length ÷ 3))
-                end_idx = rand(start_idx:min(standard_circuit_length, start_idx + 8))
+                end_idx = rand(start_idx+3:min(standard_circuit_length, start_idx + 3))
                 random_initialisation = standard_circuit[2][start_idx:end_idx]
             
                 for op in random_initialisation
@@ -122,12 +125,12 @@ function initialise_population(num_individuals, num_data_qubits; standard_encodi
                 end
             end
         end
-        population[i] = CircuitIndividual(gates)
+        population[i] = CircuitIndividual(gates)  # Default constructor of CircuitIndividual
 
-        #print(gates)
+        #println("\n$gates")
     end
     
-    println("Individual: $(population[1])")
+    #println("Individual: $(population[1])")
     return population
 end
 
@@ -266,6 +269,13 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
     return best_individuals
 end
 
+function _ensure_min_size!(ind::CircuitIndividual, min_len::Int, num_data_qubits::Int)
+    while length(ind.gates) < min_len
+        push!(ind.gates, _random_gate(num_data_qubits))
+    end
+    return ind
+end
+
 function _cap_individual_size(ind::CircuitIndividual, max_len::Int)
     if length(ind.gates) > max_len
         ind.gates = ind.gates[1:max_len]
@@ -274,14 +284,14 @@ function _cap_individual_size(ind::CircuitIndividual, max_len::Int)
 end
 
 function crossover(best_individuals, genetic_params, num_data_qubits, max_len)
-    new_generation = deepcopy(best_individuals)
+    new_generation = copy(best_individuals) # TODO: verify there is no shadowing
 
-    parents = deepcopy(best_individuals)
+    parents = copy(best_individuals)
     # could shuffle parents here
 
     # ADD CONDITION FOR ODD NUMBER: Keep size of generatios constnat 
     i = 1
-    while i <= length(parents)
+    while i < length(parents)
         # first parts of respective partens are intentionally maintained in order to preserve H-CNOT structure
         p1 = parents[i]
         p2 = parents[i+1]
@@ -289,8 +299,8 @@ function crossover(best_individuals, genetic_params, num_data_qubits, max_len)
         p1_size = length(p1.gates)
         p2_size = length(p2.gates)
 
-        cp_1 = p1_size > 1 ? rand(1:p1_size-1) : 1  # crossover point (in vector)
-        cp_2 = p2_size > 1 ? rand(1:p2_size-1) : 1
+        cp_1 = rand(1:p1_size-1)  # crossover point (in vector)
+        cp_2 = rand(1:p2_size-1) 
 
         ##
         #child = CircuitIndividual(length(parents[i].gates))
@@ -300,36 +310,32 @@ function crossover(best_individuals, genetic_params, num_data_qubits, max_len)
         child1 = CircuitIndividual(cp_1 + p2_size-cp_2)
         child2 = CircuitIndividual(cp_2 + p1_size-cp_1)
 
-        child1.gates[1:cp_1] = deepcopy(p1.gates[1:cp_1])
-        child1.gates[cp_1+1:end] = deepcopy(p2.gates[cp_2+1:end])
+        child1.gates[1:cp_1] = p1.gates[1:cp_1]
+        child1.gates[cp_1+1:end] = p2.gates[cp_2+1:end]
 
-        child2.gates[1:cp_2] = deepcopy(p2.gates[1:cp_2])
-        child2.gates[cp_2+1:end] = deepcopy(p1.gates[cp_1+1:end])
+        child2.gates[1:cp_2] = p2.gates[1:cp_2]
+        child2.gates[cp_2+1:end] = p1.gates[cp_1+1:end]
 
-        #child = _cap_individual_size(child, max_len)
+        child1 = mutation(child1, genetic_params, num_data_qubits)
+        child2 = mutation(child2, genetic_params, num_data_qubits)
         
-        push!(new_generation, mutation(child1, genetic_params, num_data_qubits), mutation(child2, genetic_params, num_data_qubits))
+        _ensure_min_size!(child1, 3, num_data_qubits)
+        _ensure_min_size!(child2, 3, num_data_qubits)
+
+        _cap_individual_size(child1, max_len)
+        _cap_individual_size(child2, max_len)
+
+        push!(new_generation, child1, child2)
 
         i += 2
     end
 
     if length(best_individuals)%2 != 0
-        p1 = parents[1]
-        p2 = parents[length(parents)]
-
-        p1_size = length(p1.gates)
-        p2_size = length(p2.gates)
-
-        cp_1 = rand(1:p1_size-1)  
-        cp_2 = rand(1:p2_size-1)  
-
-        child1 = CircuitIndividual(cp_1 + p2_size-cp_2)#Circuit(nrows, ncols)
-        child1.gates[1:cp_1] = deepcopy(p1.gates[1:cp_1])
-        child1.gates[cp_1+1:end] = deepcopy(p2.gates[cp_2+1:end])
-
-        child1 = _cap_individual_size(child1, max_len)
-
-        push!(new_generation, mutation(child1, genetic_params, num_data_qubits))
+        child = CircuitIndividual(copy(parents[end].gates))
+        child = mutation(child, genetic_params, num_data_qubits)
+        _ensure_min_size!(child, 3, num_data_qubits)
+        _cap_individual_size(child, max_len)
+        push!(new_generation, child)
     end
 
     return new_generation
@@ -406,7 +412,48 @@ function mutation(individual, genetic_params, num_data_qubits)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 10000*fidelities-circuit_sizes #(gen/genetic_params.num_generations)*  # fitness can decrease over time since weighting is time-dependent
+    return 10000*fidelities-circuit_sizes -(gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+end
+
+function baseline_comparison(qec_code, num_data_qubits, networking_params, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+
+    ### Baseline comparison of standard encoding in DQC setting
+    @assert qec_code !== nothing 
+    standard_circuit = standard_logical_zero_encoding_circuit(qec_code)
+    standard_circuit_length = length(standard_circuit[2])
+    permutation = transpositions_to_perm(reverse(standard_circuit[3]), num_data_qubits)
+
+    baseline_gates = Gate[]
+    for op in standard_circuit[2]
+        if op isa QuantumClifford.sHadamard
+            push!(baseline_gates, HadamardGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sX
+            push!(baseline_gates, PauliXGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sZ
+            push!(baseline_gates, PauliZGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sZCX
+            control, target = Tuple(affectedqubits(op))
+            push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
+        # elseif op isa QuantumClifford.sZCY
+        #     control, target = Tuple(affectedqubits(op))
+        #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+        # elseif op isa QuantumClifford.sZCZ
+        #     control, target = Tuple(affectedqubits(op))
+        #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+        elseif op isa QuantumClifford.sSWAP
+            continue
+        else
+            error("Unsupported warm-start gate type: $(typeof(op))")
+        end  
+        
+    end
+
+    baseline_circuit = CircuitIndividual(baseline_gates)
+
+    exec_circ = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, baseline_circuit.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+    
+    println("\n Size of baseline circuit: $(length(exec_circ))\n")
+    return length(exec_circ)
 end
 
 function run_genetic_search()
@@ -475,7 +522,8 @@ function run_genetic_search()
         #println("Bit Matrix: $target_bit_matrix")
     
     println("Standard encoding circuit: $( standard_logical_zero_encoding_circuit(genetic_params.qec_code))) of size $(length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))")
-    
+    baseline_num_gates = baseline_comparison(genetic_params.qec_code, num_data_qubits, networking_params, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+
     ########## Initialise population and run Genetic Algorithm #################
     
     fitness_evolution = Float64[]
@@ -529,6 +577,7 @@ function run_genetic_search()
 
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
+    println("\nRequired circuit length: $(length(winner_winner_chicken_dinner_circuit))  vs. $baseline_num_gates in baseline")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
 
     # Plot the evolution of fitness values
