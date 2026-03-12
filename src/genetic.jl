@@ -22,28 +22,29 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [18], #register sizes of Type-I architecture (here: only memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [3,4], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        500, # individuals
+        1000, # individuals
         1000, # generations
+        1000, # max length of individual
         1, # shots
         1,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
-        2, # num_elite
+        1, # num_elite
         true, # warm_start
-        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]) # qec code
+        Steane7()# qec code
         )
     return networking_params, genetic_params
 end
+# BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)])
 
-
-function initialise_population(num_individuals, num_data_qubits; warm_start = false, qec_code = nothing)
+function initialise_population(num_individuals, num_data_qubits; warm_start = false, qec_code = nothing, min_len=10)
     population = Vector{CircuitIndividual}(undef, num_individuals) # Vector{Circuit}(undef, num_individuals)
     
     #println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
@@ -80,10 +81,15 @@ function initialise_population(num_individuals, num_data_qubits; warm_start = fa
                 end  
                
             end
+        else
+            ind_length = rand(min_len:2*min_len)
+            for _ in 1:ind_length
+                push!(gates,_random_gate(num_data_qubits))
+            end
         end
-        #println("\n\n\n\n\n\n")
-        #print(gates)
         population[i] = CircuitIndividual(gates)
+
+        #print(gates)
     end
     
     println("Indiviudal: $(population[1])")
@@ -225,7 +231,14 @@ function selection(generation, fitness_scores; tournament_size::Int=5, selection
     return best_individuals
 end
 
-function crossover(best_individuals, genetic_params, num_data_qubits)
+function _cap_individual_size(ind::CircuitIndividual, max_len::Int)
+    if length(ind.gates) > max_len
+        ind.gates = ind.gates[1:max_len]
+    end
+    return ind
+end
+
+function crossover(best_individuals, genetic_params, num_data_qubits, max_len)
     new_generation = deepcopy(best_individuals)
 
     parents = deepcopy(best_individuals)
@@ -243,6 +256,10 @@ function crossover(best_individuals, genetic_params, num_data_qubits)
         cp_1 = rand(1:p1_size-1)  # crossover point (in vector)
         cp_2 = rand(1:p2_size-1)  
 
+        ##
+        #child1 = CircuitIndividual(p1_size)
+        ##
+
         child1 = CircuitIndividual(cp_1 + p2_size-cp_2)
         child2 = CircuitIndividual(cp_2 + p1_size-cp_1)
 
@@ -252,7 +269,9 @@ function crossover(best_individuals, genetic_params, num_data_qubits)
         child2.gates[1:cp_2] = deepcopy(p2.gates[1:cp_2])
         child2.gates[cp_2+1:end] = deepcopy(p1.gates[cp_1+1:end])
 
-        
+        child1 = _cap_individual_size(child1, max_len)
+        child2 = _cap_individual_size(child2, max_len)
+
         push!(new_generation, mutation(child1, genetic_params, num_data_qubits), mutation(child2, genetic_params, num_data_qubits))
 
         i += 2
@@ -270,7 +289,9 @@ function crossover(best_individuals, genetic_params, num_data_qubits)
 
         child1 = CircuitIndividual(cp_1 + p2_size-cp_2)#Circuit(nrows, ncols)
         child1.gates[1:cp_1] = deepcopy(p1.gates[1:cp_1])
-        child1.gates[cp_2+1:end] = deepcopy(p2.gates[cp_2+1:end])
+        child1.gates[cp_1+1:end] = deepcopy(p2.gates[cp_2+1:end])
+
+        child1 = _cap_individual_size(child1, max_len)
 
         push!(new_generation, mutation(child1, genetic_params, num_data_qubits))
     end
@@ -280,8 +301,25 @@ end
 
 function _random_single_qubit_gate(index)
     # choose from 1‑qubit gates you already define
-    gates = (HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate)
+    gates = (HadamardGate, PauliXGate, PauliYGate, PauliZGate)
     return gates[rand(1:length(gates))](index)
+end
+
+function _random_two_qubit_gate(num_data_qubits)
+    control = rand(1:num_data_qubits)
+    target = rand(1:num_data_qubits)
+    while target == control
+        target = rand(1:num_data_qubits)
+    end
+    return CNOT_Gate(control, target)
+end
+
+function _random_gate(num_data_qubits; p_two_qubit=0.7)
+    if rand() < p_two_qubit
+        return _random_two_qubit_gate(num_data_qubits)
+    else
+        return _random_single_qubit_gate(rand(1:num_data_qubits))
+    end
 end
 
 function mutation(individual, genetic_params, num_data_qubits)
@@ -324,7 +362,7 @@ function mutation(individual, genetic_params, num_data_qubits)
 end
 
 function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 1000*fidelities - circuit_sizes #(gen/genetic_params.num_generations)*  # fitness can decrease over time since weighting is time-dependent
+    return 10000*fidelities - (gen/genetic_params.num_generations)*circuit_sizes #  # fitness can decrease over time since weighting is time-dependent
 end
 
 function run_genetic_search()
@@ -392,13 +430,15 @@ function run_genetic_search()
         #println("Target tableau: $target_tableau")
         #println("Bit Matrix: $target_bit_matrix")
     
+    println("Standard encoding circuit: $( standard_logical_zero_encoding_circuit(genetic_params.qec_code))) of size $(length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))")
+    
     ########## Initialise population and run Genetic Algorithm #################
     
     fitness_evolution = Float64[]
     #winner_winner_chicken_dinner = 0 # Place holder for best circuit
     
     gen = 0
-    population = initialise_population(genetic_params.num_individuals, num_data_qubits, warm_start=genetic_params.warm_start, qec_code = genetic_params.qec_code)
+    population = initialise_population(genetic_params.num_individuals, num_data_qubits, warm_start=genetic_params.warm_start, qec_code = genetic_params.qec_code, min_len = length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))
     
     # TODO: Add verification that warm start indeed yields a fidelity of 1!
     println("############ Generation #$gen ##########: Generation size: $(length(population))")
@@ -420,7 +460,7 @@ function run_genetic_search()
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
         # perform crossover (incl. mutations)
-        new_generation = crossover(best_individuals, genetic_params, num_data_qubits)
+        new_generation = crossover(best_individuals, genetic_params, num_data_qubits, genetic_params.max_len)
         # apply mutations
         #mutated = mutations(new_generation, genetic_params)
         population = new_generation
@@ -437,10 +477,11 @@ function run_genetic_search()
     # Extract best-performing individual
     winner_winner_chicken_dinner = population[argmax(fitness_scores)]
     winner_winner_chicken_dinner_size = circuit_sizes[argmax(fitness_scores)]
-    #print_gate_matrix(winner_winner_chicken_dinner)
 
+    #print_gate_matrix(winner_winner_chicken_dinner)
+    
     winner_winner_chicken_dinner_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
-    #println(winner_winner_chicken_dinner_circuit)
+    println(winner_winner_chicken_dinner_circuit)
 
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")

@@ -33,8 +33,10 @@ The implementation is based on [cleve1997efficient](@cite) and [gottesman1997sta
     (see https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html), [grassl2002algorithmic](@cite) and [grassl2011variations](@cite) )
 """
 
-function naiv_encoding_circuit(code; undoperm=true)
+function naive_encoding_circuit(code; undoperm=true)
 
+    ### Also contains logical X operators for arbitrary initial states
+    
     # Creatung the canonical tableau (without re-permuting the columns)
     n = code_n(code)
     k = code_k(code)
@@ -192,6 +194,41 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true)
     code_original_with_logicals, circ, transpositions
 end
 
+
+
+
+function naive_ancillary_paulimeasurement(p::PauliOperator, ancillary_index=1, bit_index=1)
+    circuit = AbstractOperation[]
+    n = nqubits(p)
+    for qubit in 1:n
+        if p[qubit] == (1,0)
+            push!(circuit, sXCX(qubit, n + ancillary_index))
+        elseif p[qubit] == (0,1)
+            push!(circuit, sCNOT(qubit, n + ancillary_index))
+        elseif p[qubit] == (1,1)
+            push!(circuit, sYCX(qubit, n + ancillary_index))
+        end
+    end
+    p.phase[] == 0 || push!(circuit, sX(n + ancillary_index))
+    mz = sMRZ(n + ancillary_index, bit_index)
+    push!(circuit, mz)
+
+    return circuit
+end
+
+function naive_syndrome_circuit(parity_check_tableau, ancillary_index=1, bit_index=1)
+    naive_sc = AbstractOperation[]
+    ancillaries = 0
+    bits = 0
+    for check in parity_check_tableau
+        append!(naive_sc,naive_ancillary_paulimeasurement(check, ancillary_index+ancillaries, bit_index+bits))
+        ancillaries +=1
+        bits +=1
+    end
+
+    return naive_sc, ancillaries, bit_index:bit_index+bits-1
+end
+
 #####################################################################################
 #####################################################################################
 #####################################################################################
@@ -253,7 +290,7 @@ function run_tests()
 
     encoded_zero = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IZIZIZI" # Z_L = Z_2 Z_4 Z_6, but works with ZZZZZZZ as well 
     encoded_one = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ -IZIZIZI"
-    encoded_plus = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IIXIXXI" # works with XXXXXXX
+    encoded_plus = S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ IIXIXXI" # works with XXXXXXX as logical X as well
 
     test1 = test(initial_state=initial_zero, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero, plotting=true, label="zero_to_logical_zero")
     test2 = test(initial_state=initial_one, circuit_type="naive", hadamards=false, final_state_verify=encoded_zero,  plotting =false, label="")

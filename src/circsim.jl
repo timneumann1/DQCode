@@ -98,9 +98,9 @@ function construct_executable_circuit(depolarising_prob, gate_noise_prob, telega
     end
     
     # Add depolarising noise to all qubits at the beginning of the circuit
-    for data_qubit in collect(1:length(data_qubits))
-        circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
-    end
+    #for data_qubit in collect(1:length(data_qubits))
+    #    circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
+    #end
 
     for gate in circuit_individual
 
@@ -216,8 +216,8 @@ function add_telegate(circuit, control, target, control_register, target_registe
     push!(circuit, sCNOT(control_comm_index, target_comm_index))
 
     # println("Adding noise to comm qubit $control_comm_index and $target_comm_index")
-    circuit = add_noise(circuit, telegate_noise, control_comm_index)
-    circuit = add_noise(circuit, telegate_noise, target_comm_index)
+    #circuit = add_noise(circuit, telegate_noise, control_comm_index)
+    #circuit = add_noise(circuit, telegate_noise, target_comm_index)
 
     push!(circuit, sCNOT(comm_inv_perm_idx(control), control_comm_index))
 
@@ -245,8 +245,8 @@ function add_telegate(circuit, control, target, control_register, target_registe
     push!(circuit, ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_target.bit))  # restore the |0> state in the target comm qubit
 
     # Introduce noise to data qubits
-    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
-    circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
+    #circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
+    #circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(target))
 
     return circuit
 

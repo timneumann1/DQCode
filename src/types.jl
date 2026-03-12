@@ -65,6 +65,7 @@ end
 struct GeneticParameters
     num_individuals::Int
     num_generations::Int
+    max_len::Int
     num_shots::Int
     mutation_rate::Float64
     tournament_size::Int
@@ -114,7 +115,7 @@ struct SWAP_Gate <: Gate
     qubit_2::Int
 end
 
-struct CircuitIndividual
+mutable struct CircuitIndividual
     gates::Vector{Gate}   
 end
 
