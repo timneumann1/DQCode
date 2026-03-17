@@ -4,17 +4,20 @@ using ..Types
 using ..CircuitSimulator
 using ..Helper
 using ..LogicalEnc
+using ..TrivariateBicycleCode
 
 using Random
 using Quantikz: savecircuit, @with, classicalbitslayout
 using QECCore
-using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct
+using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct, Triangular488
 using QuantumClifford.ECC: DistanceMIPAlgorithm
 using HiGHS
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, sSWAP, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
 using CairoMakie
+using KaHyPar
+using SparseArrays
 
 export run_genetic_search
 
@@ -22,29 +25,38 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [6,6,6], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [4,3], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
     )
 
     genetic_params = GeneticParameters(
-        1000, # individuals
-        100, # generations
-        550, # max length of individual
+        3500, # individuals
+        600, # generations
+        100, # max length of individual
         1, # shots
-        0.75,  # mutation rate
+        0.8,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
         1, # num_elite
         false, # warm_start
-        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)])# qec code
+        Steane7(),# qec code
+        "hamming" # tableau distance metric
         )
     return networking_params, genetic_params
 end
 
+#TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)])
+#BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)])
+#Triangular488(5)
+# 144,12 code: BivariateBicycleViaCirculantMat(12, 6, [(:x, 3), (:y, 1), (:y, 2)], [(:y, 3), (:x, 1), (:x, 2)])
 
-function initialise_population(num_individuals, num_data_qubits; standard_encoding = false, warm_start = false, qec_code = nothing, min_len=10)
+function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
+    return 1e5*fidelities-(gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
+end
+
+function initialise_population(num_individuals, num_data_qubits; standard_encoding = true, warm_start = false, qec_code = nothing, min_len=10)
     
     println("Initialising Population... \n")
     population = Vector{CircuitIndividual}(undef, num_individuals) # Vector{Circuit}(undef, num_individuals)
@@ -91,8 +103,8 @@ function initialise_population(num_individuals, num_data_qubits; standard_encodi
         else
             if warm_start
                 @assert standard_circuit_length > 10
-                start_idx = rand(1:(standard_circuit_length ÷ 3))
-                end_idx = rand(start_idx+3:min(standard_circuit_length, start_idx + 3))
+                start_idx = rand(1:(standard_circuit_length ÷ 2))
+                end_idx = start_idx + (standard_circuit_length - (standard_circuit_length ÷ 2))
                 random_initialisation = standard_circuit[2][start_idx:end_idx]
             
                 for op in random_initialisation
@@ -154,7 +166,7 @@ function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{
     
 end
 
-function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits)
+function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits, metric = "jaccard")
     #check that both marices have same dimensions
    
     # we want to compare the data qubits, so we only keep the columns (qubits) corresponding to data qubits AND the phase column
@@ -175,9 +187,14 @@ function hamming_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
     # return hammingcount/(rows*cols)
     #println("Final matrix: $matrix")
     #println("Final target: $target_matrix")
+    difference_mask = matrix .!= target_matrix
 
-    return count(!iszero, matrix .!= target_matrix) / length(matrix)
-
+    if metric == "hamming"
+        return count(difference_mask) / length(matrix)
+    elseif metric == "jaccard"
+        support_mask = (matrix .!= 0) .| (target_matrix .!= 0)
+        return count(difference_mask .& support_mask) / count(support_mask) # edge case of denom == 0 is trivial (n identity operators stabilise the state) and cannot occur for any valid stabilizer code
+    end
 end
 
 function circuit_size(circuit)
@@ -205,7 +222,7 @@ function evaluate_population(population, networking_params, genetic_params, mapp
         #print("MC Result:$mc_result")
         # is of type Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }
                 
-        hamming_distances = Float64[]
+        tableau_distances = Float64[]
         
         for stab in collect(mc_result) # each component here is a MixedDestabilizer
 
@@ -221,7 +238,7 @@ function evaluate_population(population, networking_params, genetic_params, mapp
             # convert to stabiliser
             #println("current Tableau after canon:$tableau")
             current_bit_matrix = tableau_to_bitmatrix(tableau) # extract the stabiliser tableau from MixedDestabilizer object
-            push!(hamming_distances, hamming_distance(current_bit_matrix, target_bit_matrix, data_qubits, comm_qubits))
+            push!(tableau_distances, tableau_distance(current_bit_matrix, target_bit_matrix, data_qubits, comm_qubits, genetic_params.tableau_metric))
             
             #println(stab_bit_matrix)
             #Determine tableau distance with target_state
@@ -233,7 +250,7 @@ function evaluate_population(population, networking_params, genetic_params, mapp
         # end
 
         #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
-        fidelities[idx] = 1 - sum(hamming_distances)/length(hamming_distances) # 1 is perfect alignment
+        fidelities[idx] = 1 - sum(tableau_distances)/length(tableau_distances) # 1 is perfect alignment, average over different executions
         #print(quantum_clifford_circuit)
         circuit_sizes[idx] = circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
@@ -343,8 +360,8 @@ end
 
 function _random_single_qubit_gate(index)
     # choose from 1‑qubit gates you already define
-    #gates = (HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate)
-    return HadamardGate(index)#gates[rand(1:length(gates))](index)
+    gates = (HadamardGate, SGate)# IdentityGate, PauliXGate, PauliYGate, PauliZGate)
+    return gates[rand(1:length(gates))](index)
 end
 
 function _random_two_qubit_gate(num_data_qubits)
@@ -385,11 +402,11 @@ function mutation(individual, genetic_params, num_data_qubits)
             end
         else 
             r = rand() 
-            if r>0.85 # mutate single qubit gates into single-qubit gates on random qubit
+            if r>0.9 # mutate single qubit gates into single-qubit gates on random qubit
                 individual.gates[index] = _random_single_qubit_gate(rand(1:num_data_qubits))
             elseif r>0.5 && index != circuit_length
                 individual.gates[index], individual.gates[index+1] = individual.gates[index+1], individual.gates[index]
-            elseif r>0.1   # ... or multi-qubit gates
+            elseif r>0.25   # ... or multi-qubit gates
                 control_index = rand(1:num_data_qubits)
                 target_index = rand(1:num_data_qubits)
                 tries = 0
@@ -411,9 +428,6 @@ function mutation(individual, genetic_params, num_data_qubits)
     return individual
 end
 
-function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 10000*fidelities-circuit_sizes -(gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
-end
 
 function baseline_comparison(qec_code, num_data_qubits, networking_params, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
 
@@ -456,6 +470,114 @@ function baseline_comparison(qec_code, num_data_qubits, networking_params, mappi
     return length(exec_circ)
 end
 
+function _repair_partition_capacities(assignments::Vector{Int}, capacities::Vector{Int})
+    k = length(capacities)
+    
+    # Count actual block sizes
+    block_sizes = [count(==(b), assignments) for b in 1:k]
+    println("Actual block sizes: $block_sizes")
+    println("Required capacities: $capacities")
+    
+    # Find permutation of block labels that matches capacities
+    # i.e. find which block should be relabelled as which register
+    label_map = zeros(Int, k)
+    remaining_blocks = collect(1:k)
+    
+    for (reg, cap) in enumerate(capacities)
+        # Find a block whose size matches this register's capacity
+        idx = findfirst(b -> block_sizes[b] == cap, remaining_blocks)
+        if isnothing(idx)
+            throw(ArgumentError(
+                "No block with exactly $cap qubits found for register $reg. Please change the register sizes or relax the constraint on equal-weight partitions."))
+            # fallback: assign whatever is left
+            idx = 1
+        end
+        label_map[reg] = remaining_blocks[idx]
+        deleteat!(remaining_blocks, idx)
+    end
+    
+    println("Label map (register => old block): $label_map")
+
+    # Apply relabeling
+    repaired = similar(assignments)
+    for (reg, old_block) in enumerate(label_map)
+        repaired[assignments .== old_block] .= reg
+    end
+    
+    return repaired
+end
+
+
+function data_qubit_partitioning(networking_params, stabilizers)
+    
+    # traverse through rows in stabilisers and build up the connectivity graph
+
+    capacities = networking_params.register_sizes
+    k = length(capacities)
+    nqubits = size(stabilizers, 2)
+    @assert sum(capacities) == nqubits "Register capacities must sum to code length."
+
+    # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
+    I = Int[]
+    J = Int[]
+    e = 0
+    for r in 1:size(stabilizers, 1)
+        support = Int[]
+        for q in 1:nqubits
+            x, z = stabilizers[r, q]
+            if x || z
+                push!(support, q)
+            end
+        end
+        # ignore trivial/singleton rows for communication objective
+        if length(support) >= 2
+            e += 1
+            for q in support
+                push!(I, q)
+                push!(J, e)
+            end
+        end
+        println("Support of stabilizer $r is $support")
+    end
+
+    if e == 0
+        @warn "No multi-qubit stabilizer supports found; returning identity permutation."
+        return collect(1:nqubits)
+    end
+
+    # apply KaHyPa to partition the graph
+    println("I and J \n I:$I \n J:$J")
+    A = sparse(I, J, ones(Int, length(I)), nqubits, e)
+    h = KaHyPar.HyperGraph(A)
+    println("Hypergraph:: $h")
+
+    # exact balance for equal capacities; otherwise allow small imbalance then repair
+    #equal_caps = all(c -> c == capacities[1], capacities)
+    imbalance = 0.0 # equal_caps ? 0.0 : 0.2
+    cfg = joinpath(@__DIR__, "km1_rKaHyPar_sea20.ini")
+    partition = KaHyPar.partition(h, k; configuration=cfg)#  :edge_cut, imbalance=imbalance, seed = 42)
+    #improved_partition = KaHyPar.improve_partition(h, k, partition; num_iterations=10, imbalance=imbalance, seed = 42)
+    # normalize block ids to 1..k 
+    min_id = minimum(partition)
+    assignments = min_id == 0 ? Int.(partition .+ 1) : Int.(partition)
+    println("Partitioning is $assignments")
+    assignments = _repair_partition_capacities(assignments, capacities)
+    #println("Partitioning is $assignments")
+
+    permutation = Int[]
+    for b in 1:k
+        append!(permutation, sort(findall(==(b), assignments)))
+    end
+
+    @assert length(permutation) == nqubits
+    @assert sort(permutation) == collect(1:nqubits)
+
+    println("KaHyPar assignments: $assignments")
+    println("Data-qubit permutation: $permutation")
+    return permutation
+    # extract permutation from partitioning, e.g. [1,7,4,2,3,5,6] would mean that the 7th data qubit is in the first core if we have a [3,4] core assignment
+end
+
 function run_genetic_search()
 
     ############## Define environment for GA ##########################
@@ -465,9 +587,14 @@ function run_genetic_search()
     networking_params, genetic_params = define_parameters()                             # retrieve parameters
     # TODO: Mapping stage -> use dictionary to map indices to one another
     # As extracted from Hypergraph Partitoning
-    #permutation = [1,7,4,2,3,5,6]
+    # For partitioning, we should not be using the target state canonical tableau, but the low-weight(!) stabilisers originally obtained from the tableau
+    print("CODE STABILISERS LOW WEIGHT: $(Stabilizer(genetic_params.qec_code))")
+    permutation = data_qubit_partitioning(networking_params, Stabilizer(genetic_params.qec_code))
+
+     # For optimisation, we can use the canonical form again
+    
     qec_code_required_qubits = code_n(genetic_params.qec_code)
-    permutation = collect(1:qec_code_required_qubits)#[1,2,3,4,5,6,7]
+    #permutation = collect(1:qec_code_required_qubits)#[1,2,3,4,5,6,7]
     inv_perm = invperm(permutation)
     mapping = perm_to_transpositions(deepcopy(permutation)) # careful: without deepcopy, this does in-place substitution of permutation    
     # NOTE: When generating the infromation for hypergraph part., we need to consult the naive encoding function in the logical encoding script to obtain the logical oeprators.
@@ -502,6 +629,7 @@ function run_genetic_search()
     # B = [(:y, 0), (:x, 2), (:y, 2)];
     code = MixedDestabilizer(genetic_params.qec_code)#S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI ZZIIZZI ZZIZIIZ IZIZIZI"
     code_stabilizer = stabilizerview(code)
+    print("CODE STABILISERS LOW WEIGHT: $(Stabilizer(genetic_params.qec_code))")
     logical_z = logicalzview(code)
     println("Logical operators are $(logical_z)")
     target_state = vcat(code_stabilizer, logical_z)
@@ -574,10 +702,10 @@ function run_genetic_search()
     
     winner_winner_chicken_dinner_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     println(winner_winner_chicken_dinner_circuit)
+    println("\n Optimised circuit length: $(circuit_size(winner_winner_chicken_dinner_circuit))  vs. $baseline_num_gates in baseline")
 
     verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
-    println("\nRequired circuit length: $(length(winner_winner_chicken_dinner_circuit))  vs. $baseline_num_gates in baseline")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
 
     # Plot the evolution of fitness values

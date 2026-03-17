@@ -46,6 +46,7 @@ gate_to_apply(::Type{HadamardGate}, i::Int) = sHadamard(i)  # CliffordRepr  #TOD
 gate_to_apply(::Type{PauliXGate}, i::Int) = sX(i)
 gate_to_apply(::Type{PauliYGate}, i::Int) = sY(i)
 gate_to_apply(::Type{PauliZGate}, i::Int) = sZ(i)
+gate_to_apply(::Type{SGate}, i::Int) = sPhase(i)
 
 #We can also use NoisyGate: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/docs/src/noisycircuits_ops.md
 
@@ -104,7 +105,7 @@ function construct_executable_circuit(depolarising_prob, gate_noise_prob, telega
 
     for gate in circuit_individual
 
-        if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate} 
+        if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
             qubit = gate.index
             push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
             

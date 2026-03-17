@@ -2,6 +2,7 @@ module DQCircuitSearch
 
 include("types.jl")
 include("helper.jl")
+include("trivariate_bicycle_code.jl")
 include("logical_encoding.jl")
 include("plots.jl")
 include("dtsimulation.jl")
