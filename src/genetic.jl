@@ -25,7 +25,7 @@ function define_parameters()
 
     #TODO: Rename or introduce a SimulationParameters type for this sim as well (in addition to DTS)
     networking_params = NetworkingParameters(
-        [4,3], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
+        [3,3,3], #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
         0.0, # depolarising_prob 
         0.0, # gate_noise_prob 
         0.0, # Telegate noise (depolarising channel)
@@ -33,7 +33,7 @@ function define_parameters()
 
     genetic_params = GeneticParameters(
         2500, # individuals
-        500, # generations
+        300, # generations
         100, # max length of (raw) circuit individual
         1, # shots
         0.8,  # mutation rate
@@ -41,7 +41,7 @@ function define_parameters()
         0.5, # selection_ratio
         1, # num_elite
         false, # warm_start
-        Steane7(),# qec code
+        Shor9(),# qec code
         "hamming" # tableau distance metric
         )
     return networking_params, genetic_params
@@ -689,7 +689,7 @@ function run_genetic_search()
         # evaluate population
         fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 50== 0
+        if gen % 25== 0
         println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
         end
         push!(fitness_evolution, maximum(fitness_scores))
@@ -711,19 +711,15 @@ function run_genetic_search()
     baseline_exec_circuit_size = circuit_size(baseline_exec_circuit)
 
     println("\n Optimised circuit length (DQC setting): $(GA_result_exec_circuit_size)  vs. $baseline_exec_circuit_size in baseline")
+    
+    results_dir = joinpath(@__DIR__, "plots", "results", string(genetic_params.qec_code))
+    mkpath(results_dir)
+
     verification_logical_state = verify_success(GA_result_exec_circuit, target_state, num_qubits, data_qubits, num_registers)
     # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
-
-    
     # Plot the evolution of fitness values
-    #println("\n\nEvolution of fitness values: $fitness_evolution")
-
-
-    results_dir = joinpath(@__DIR__, "plots", "results", string(genetic_params.qec_code))
-    mkpath(results_dir)
-
     plot_fitness_evol(fitness_evolution, networking_params, genetic_params, verification_logical_state)
 
 
@@ -781,6 +777,8 @@ function run_genetic_search()
 
     #^GOOD CODE
     
+
+
     #=
      # Two methods of verifying the creation of the encoded state (Method 1 is preferable since simpler)
 
@@ -825,11 +823,12 @@ function run_genetic_search()
 end
 
 function verify_success(circuit, target_state, num_qubits, data_qubits, num_registers)
-    push!(circuit, VerifyOp(target_state, data_qubits))
+    verification_circuit = copy(circuit)
+    push!(verification_circuit, VerifyOp(target_state, data_qubits))
     
     initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))
     #print(mctrajectories(initial_state, circuit, trajectories=10000))
-    mc_result = mctrajectories(initial_state, circuit, trajectories=10000)
+    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=10000)
     if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
             throw(ErrorException("Some runs were invalid"))
     end
