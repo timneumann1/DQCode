@@ -32,9 +32,9 @@ function define_parameters()
     )
 
     genetic_params = GeneticParameters(
-        3500, # individuals
-        600, # generations
-        100, # max length of individual
+        2500, # individuals
+        500, # generations
+        100, # max length of (raw) circuit individual
         1, # shots
         0.8,  # mutation rate
         5, # tournament size
@@ -56,15 +56,15 @@ function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
     return 1e5*fidelities-(gen/genetic_params.num_generations)*circuit_sizes  # fitness can decrease over time since weighting is time-dependent
 end
 
-function initialise_population(num_individuals, num_data_qubits; standard_encoding = true, warm_start = false, qec_code = nothing, min_len=10)
+function initialise_population(num_individuals, num_data_qubits; standard_encoding = false, warm_start = false, qec_code = nothing, min_len=10)
     
-    println("Initialising Population... \n")
+    println("\nInitialising Population... \n")
     population = Vector{CircuitIndividual}(undef, num_individuals) # Vector{Circuit}(undef, num_individuals)
     
     #println("Naive encoding circuit: $( standard_logical_zero_encoding_circuit(qec_code))) of size $(length(standard_logical_zero_encoding_circuit(qec_code)[2]))")
     @assert qec_code !== nothing 
     standard_circuit = standard_logical_zero_encoding_circuit(qec_code)
-    standard_circuit_length = length(standard_circuit[2])
+    standard_circuit_length = length(standard_circuit[2]) 
     permutation = transpositions_to_perm(reverse(standard_circuit[3]), num_data_qubits)
 
     for i in eachindex(population)
@@ -462,12 +462,12 @@ function baseline_comparison(qec_code, num_data_qubits, networking_params, mappi
         
     end
 
-    baseline_circuit = CircuitIndividual(baseline_gates)
+    baseline_raw_circuit = CircuitIndividual(baseline_gates)
 
-    exec_circ = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, baseline_circuit.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+    baseline_exec_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, baseline_raw_circuit.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     
-    println("\n Size of baseline circuit: $(length(exec_circ))\n")
-    return length(exec_circ)
+    println("\n Size of baseline circuit: $(circuit_size(baseline_exec_circuit))\n")
+    return baseline_raw_circuit, baseline_exec_circuit
 end
 
 function _repair_partition_capacities(assignments::Vector{Int}, capacities::Vector{Int})
@@ -549,7 +549,7 @@ function data_qubit_partitioning(networking_params, stabilizers)
     println("I and J \n I:$I \n J:$J")
     A = sparse(I, J, ones(Int, length(I)), nqubits, e)
     h = KaHyPar.HyperGraph(A)
-    println("Hypergraph:: $h")
+    #println("Hypergraph:: $h")
 
     # exact balance for equal capacities; otherwise allow small imbalance then repair
     #equal_caps = all(c -> c == capacities[1], capacities)
@@ -560,7 +560,7 @@ function data_qubit_partitioning(networking_params, stabilizers)
     # normalize block ids to 1..k 
     min_id = minimum(partition)
     assignments = min_id == 0 ? Int.(partition .+ 1) : Int.(partition)
-    println("Partitioning is $assignments")
+    #println("Partitioning is $assignments")
     assignments = _repair_partition_capacities(assignments, capacities)
     #println("Partitioning is $assignments")
 
@@ -608,7 +608,7 @@ function run_genetic_search()
     num_qubits = num_data_qubits + num_comm_qubits_per_register*(num_registers) # one verification qubit
     all_qubits = collect(1:num_qubits)
     comm_qubits = setdiff(all_qubits, data_qubits)
-    println("number of qubits is $num_qubits, number of comm. qubits per register is $num_comm_qubits_per_register")
+    println("Number of qubits is $num_qubits, number of comm. qubits per register is $num_comm_qubits_per_register")
     println("Lookup Array: $register_lookup_array")
     println("Data qubits: $data_qubits")
 
@@ -635,7 +635,7 @@ function run_genetic_search()
     target_state = vcat(code_stabilizer, logical_z)
     println("\nTarget state:$target_state and qubit size: $(qec_code_required_qubits) as well as logical qubit size: $(code_k(genetic_params.qec_code))")
     code_distance = distance(genetic_params.qec_code, DistanceMIPAlgorithm(solver=HiGHS))
-    println("Code distance is $code_distance.\n\n")
+    println("\nCode distance is $code_distance.\n\n")
     
     # instead, can also do MixedDestabiliser(Steane7()) and then extract the stabiliser tableau
 
@@ -650,8 +650,10 @@ function run_genetic_search()
         #println("Bit Matrix: $target_bit_matrix")
     
     println("Standard encoding circuit: $( standard_logical_zero_encoding_circuit(genetic_params.qec_code))) of size $(length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))")
-    baseline_num_gates = baseline_comparison(genetic_params.qec_code, num_data_qubits, networking_params, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+    baseline_raw_circuit, baseline_exec_circuit = baseline_comparison(genetic_params.qec_code, num_data_qubits, networking_params, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
 
+    #println("Baseline circuits: $baseline_raw_circuit, \n\n\n $baseline_exec_circuit")
+    
     ########## Initialise population and run Genetic Algorithm #################
     
     fitness_evolution = Float64[]
@@ -687,7 +689,7 @@ function run_genetic_search()
         # evaluate population
         fidelities, circuit_sizes = evaluate_population(population, networking_params, genetic_params, mapping, inv_perm, register_lookup_array, data_qubits, comm_qubits, num_comm_qubits_per_register, num_qubits, target_bit_matrix, data_qubit_capacities, num_registers)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 20== 0
+        if gen % 50== 0
         println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
         end
         push!(fitness_evolution, maximum(fitness_scores))
@@ -695,35 +697,88 @@ function run_genetic_search()
     end
 
     # Extract best-performing individual
-    winner_winner_chicken_dinner = population[argmax(fitness_scores)]
-    winner_winner_chicken_dinner_size = circuit_sizes[argmax(fitness_scores)]
+    GA_result_raw_circuit = population[argmax(fitness_scores)]
 
     #print_gate_matrix(winner_winner_chicken_dinner)
     
-    winner_winner_chicken_dinner_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, winner_winner_chicken_dinner.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
-    println(winner_winner_chicken_dinner_circuit)
-    println("\n Optimised circuit length: $(circuit_size(winner_winner_chicken_dinner_circuit))  vs. $baseline_num_gates in baseline")
+    GA_result_exec_circuit = construct_executable_circuit(networking_params.depolarising_noise, networking_params.gate_noise, networking_params.telegate_noise, GA_result_raw_circuit.gates, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+    #println(winner_winner_chicken_dinner_circuit)
+    #println(GA_result_raw_circuit.gates)
+    #print(baseline_exec_circuit)
+    GA_result_raw_circuit_size = circuit_size(gates_to_circuit(GA_result_raw_circuit.gates))
+    GA_result_exec_circuit_size = circuit_size(GA_result_exec_circuit)
+    baseline_raw_circuit_size = circuit_size(gates_to_circuit(baseline_raw_circuit.gates))
+    baseline_exec_circuit_size = circuit_size(baseline_exec_circuit)
 
-    verification_logical_state = verify_success(winner_winner_chicken_dinner_circuit, target_state, num_qubits, data_qubits, num_registers)
+    println("\n Optimised circuit length (DQC setting): $(GA_result_exec_circuit_size)  vs. $baseline_exec_circuit_size in baseline")
+    verification_logical_state = verify_success(GA_result_exec_circuit, target_state, num_qubits, data_qubits, num_registers)
+    # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
     println("\nVerification successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
     verification_logical_state = verification_logical_state == 1.0 ? true : false
 
+    
     # Plot the evolution of fitness values
     #println("\n\nEvolution of fitness values: $fitness_evolution")
+
+
+    results_dir = joinpath(@__DIR__, "plots", "results", string(genetic_params.qec_code))
+    mkpath(results_dir)
+
     plot_fitness_evol(fitness_evolution, networking_params, genetic_params, verification_logical_state)
 
-    # @with classicalbitslayout => :expanded begin
-    #     try
-    #     savecircuit(
-    #         winner_winner_chicken_dinner_circuit,
-    #         "src/plots/GA/circuit_noise_GA_winner_size_$(winner_winner_chicken_dinner_size)_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_depth$(genetic_params.depth)_success_$(verification_logical_state)_warmstart_$(genetic_params.warm_start).png";
-    #         scale = 1
+
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            gates_to_circuit(GA_result_raw_circuit.gates),
+            joinpath(results_dir, "GA_raw_circuit__size_$(GA_result_raw_circuit_size).png");
+            scale = 1
             
-    #     )
-    #     catch err
-    #         @warn "savecircuit failed (circuit likely too large)" err
-    #     end
-    # end
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            GA_result_exec_circuit,
+            joinpath(results_dir, "GA_exec_circuit__size$(GA_result_exec_circuit_size)__success_$(verification_logical_state).png");
+            scale = 1
+            
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            gates_to_circuit(baseline_raw_circuit.gates),
+            joinpath(results_dir, "baseline_raw_circuit__size_$(baseline_raw_circuit_size).png");
+            scale = 1
+            
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            baseline_exec_circuit,
+            joinpath(results_dir, "baseline_exec_circuit__size_$(baseline_exec_circuit_size)__success_$(verification_logical_state).png");
+            scale = 1
+            
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+
     #^GOOD CODE
     
     #=
@@ -785,11 +840,12 @@ end
 
 function plot_fitness_evol(fitness_evolution, networking_params, genetic_params, success)
     title_str = "Fitness Evolution : $(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"     
-    subtitle_str = "fitness_evolution_telenoise_$(networking_params.telegate_noise)_success_$(success)_warmstart_$(genetic_params.warm_start)"
+    subtitle_str = "fitness_evolution_telenoise_$(networking_params.telegate_noise)__success_$(success)"
     fig = Figure()
     ax = Axis(fig[1, 1]; xlabel="Generation", ylabel="Fitness", title=title_str, subtitle = subtitle_str)
     lines!(ax, 1:length(fitness_evolution), fitness_evolution)
-    save("src/plots/GA/fitness_evolution_telenoise_$(networking_params.telegate_noise)_ind$(genetic_params.num_individuals)_gen$(genetic_params.num_generations)_success_$(success)_warmstart_$(genetic_params.warm_start).png", fig)
+
+    save("src/plots/results/fitness_score_evolution.png", fig)
 end
 
 function print_gate_matrix(circ::Circuit)

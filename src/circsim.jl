@@ -10,7 +10,7 @@ using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, co
 using QECCore
 
 import QuantumClifford: apply!, affectedqubits # we want to extend this with ConditionalGate
-export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, construct_executable_circuit
+export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, construct_executable_circuit, gates_to_circuit
 
 function create_lookup_array_cliff(num_data_qubits_per_register)
     
@@ -80,6 +80,23 @@ function affectedqubits(op::ConditionalGate)
     return unique(qs)
 end
 
+function gates_to_circuit(gates)
+    "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
+
+    circuit = Vector{QuantumClifford.AbstractOperation}()
+
+    for gate in gates
+        if gate isa Union{PauliXGate, HadamardGate, SGate}
+            push!(circuit, gate_to_apply(typeof(gate), gate.index))
+        elseif gate isa CNOT_Gate
+            push!(circuit, sCNOT(gate.control, gate.target))
+        else
+            throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
+        end
+    end
+
+    return circuit
+end
 
 function construct_executable_circuit(depolarising_prob, gate_noise_prob, telegate_noise, circuit_individual, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
     
