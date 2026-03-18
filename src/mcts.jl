@@ -11,6 +11,7 @@ using POMDPs, POMDPTools
 using MCTS
 
 using Random
+#rng = MersenneTwister(42)
 # using Quantikz: savecircuit, @with, classicalbitslayout
 using QECCore
 using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct, Triangular488
@@ -42,7 +43,7 @@ function define_parameters()
         1, #shots
         TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),# qec code
         "hamming", # tableau distance metric
-        5000, #iterations
+        2500, #iterations
         1.5 # exploration constant
         )
     return networking_params, mcts_params
@@ -133,9 +134,10 @@ function POMDPs.gen(mdp::EncodingMDP, s::EncodingState, a::Gate, rng)
     dist = tableau_distance(current_bit_matrix, mdp.target_bit_matrix,
                             mdp.data_qubits, mdp.comm_qubits, mdp.tableau_metric)
     
+    fidelity = 1.0-dist
     # Potential-based shaping: γΦ(s') - Φ(s), where Φ = -distance
     # This preserves the optimal policy while providing dense signal
-    r = 1.0-dist#-0.0001*length(exec_circuit)  # via the discount factor, large depth will be penalised
+    r = 1e6*fidelity+ 1e-6*rand(rng)-length(exec_circuit)  # via the discount factor, large depth will be penalised
     
     return (sp=sp, r=r, fidelity=1.0-dist, gate_count=length(exec_circuit) )
 end
@@ -194,10 +196,13 @@ end
 
 function make_mcts_planner(networking_params, mcts_params)
     mdp = build_encoding_mdp(networking_params, mcts_params)
+    rng = MersenneTwister(rand(UInt))
+
     solver = MCTSSolver(
         n_iterations = mcts_params.n_iterations,
         depth = mcts_params.max_length,
         exploration_constant = mcts_params.exploration_constant,
+        rng = rng,
         reuse_tree = false,
         enable_tree_vis = true,
         estimate_value = 0.0,
@@ -230,8 +235,8 @@ function run_MCTS()
     mdp, planner = make_mcts_planner(networking_params, mcts_params)
     result = run_mcts_search(mdp, planner, mcts_params.max_steps)
     best_circuit = result.final_gates
-    a, info = action_info(planner, EncodingState(Gate[]))
-    inchrome(D3Tree(info[:tree]))
+    #a, info = action_info(planner, EncodingState(Gate[]))
+    #inchrome(D3Tree(info[:tree]))
     print("\n\n\nBest circuit: $best_circuit, \nconsisting of $(result.DQC_gate_count) DQC gates.\n\n\n")
     return best_circuit, mdp, planner
 end
