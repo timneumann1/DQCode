@@ -12,7 +12,7 @@ using MCTS
 
 using Random
 #rng = MersenneTwister(42)
-# using Quantikz: savecircuit, @with, classicalbitslayout
+using Quantikz: savecircuit, @with, classicalbitslayout
 using QECCore
 using QECCore: Steane7, QuantumTannerGraphProduct, CyclicQuantumTannerGraphProduct, Triangular488
 # using QuantumClifford.ECC: DistanceMIPAlgorithm
@@ -216,6 +216,7 @@ end
 function run_mcts_search(mdp, planner, max_steps)
     s = EncodingState(Gate[])
     final_gate_count = typemax(Int)
+    final_fidelity = 0.0
     for _ in 1:max_steps
         POMDPs.isterminal(mdp, s) && break
         a = action(planner, s)
@@ -224,10 +225,11 @@ function run_mcts_search(mdp, planner, max_steps)
         if fidelity >= 1.0
             println("Stopping early: fidelity reached $(fidelity).")
             final_gate_count = gate_count
+            final_fidelity = 1.0
             break
         end
     end
-    return (final_gates=s.gates, DQC_gate_count = final_gate_count)
+    return (final_gates=s.gates, DQC_gate_count = final_gate_count, best_fidelity = final_fidelity )
 end
 
 function run_MCTS()
@@ -238,6 +240,19 @@ function run_MCTS()
     #a, info = action_info(planner, EncodingState(Gate[]))
     #inchrome(D3Tree(info[:tree]))
     print("\n\n\nBest circuit: $best_circuit, \nconsisting of $(result.DQC_gate_count) DQC gates.\n\n\n")
+    results_dir = joinpath(@__DIR__, "plots", "results", string(mcts_params.qec_code), "MCTS")
+    mkpath(results_dir)
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            gates_to_circuit(best_circuit),
+            joinpath(results_dir, "MCTS_raw_circuit__size_$(length(best_circuit))__fidelity_$(result.best_fidelity).png");
+            scale = 1  
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
     return best_circuit, mdp, planner
 end
 
