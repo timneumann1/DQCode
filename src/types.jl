@@ -10,7 +10,8 @@ using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SGate, SWAP_Gate, Gate, ConditionalGate, GeneticParameters, NetworkingParameters
+export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SGate, SWAP_Gate, Gate, ConditionalGate
+export GeneticParameters, NetworkingParameters, MCTSParameters
 
 struct ConditionalGate <: AbstractOperation
     truegate::AbstractOperation
@@ -74,6 +75,16 @@ struct GeneticParameters
     warm_start::Bool
     qec_code::AbstractCSSCode
     tableau_metric::String
+end
+
+struct MCTSParameters
+    max_steps::Int
+    max_length::Int
+    num_shots::Int
+    qec_code::AbstractCSSCode
+    tableau_metric::String
+    n_iterations::Int
+    exploration_constant::Float64
 end
 
 struct SimulationFidelity

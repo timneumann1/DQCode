@@ -9,6 +9,7 @@ include("dtsimulation.jl")
 include("circsim.jl")
 include("genetic.jl")
 include("parameters.jl")
+include("mcts.jl")
 
 using .Genetic: run_genetic_search
 export run_genetic_search
@@ -21,5 +22,8 @@ export plot_gate_teleportation
 
 using .LogicalEnc: run_tests
 export run_tests
+
+using .MonteCarloTreeSearch: run_MCTS
+export run_MCTS
 
 end
