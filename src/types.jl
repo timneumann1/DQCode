@@ -11,36 +11,9 @@ using QECCore: AbstractCSSCode
 import Quantikz: QuantikzOp, ClassicalDecision
 
 export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SGate, SWAP_Gate, Gate, ConditionalGate
-export GeneticParameters, NetworkingParameters, MCTSParameters
+export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
 
-struct ConditionalGate <: AbstractOperation
-    truegate::AbstractOperation
-    falsegate::AbstractOperation
-    controlbit::Int
-end
-
-# For Quantikz
-function _conditional_gate_label(g::AbstractOperation)
-    repr_g = string(g)
-    if occursin("sX", repr_g)
-        return "X"
-    elseif occursin("sY", repr_g)
-        return "Y"
-    elseif occursin("sZ", repr_g)
-        return "Z"
-    elseif occursin("sHadamard", repr_g)
-        return "H"
-    elseif occursin("sId1", repr_g)
-        return "I"
-    end
-    return "U"
-end
-
-function QuantikzOp(op::ConditionalGate)
-    targets = collect(affectedqubits(op.truegate))
-    label = _conditional_gate_label(op.truegate)
-    return ClassicalDecision(label, targets, op.controlbit)
-end
+# Parameter structures
 
 struct SimulationParameters
     register_sizes::Vector{Int}        # Number of qubits in each register
@@ -56,33 +29,53 @@ struct SimulationParameters
     #TODO: Add measurement fidelity
 end
 
-struct NetworkingParameters
+struct CodeParameters
+    qec_code::AbstractCSSCode
+    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    target_bit_matrix::Matrix{Int}
+    distance::Int
+end
+
+struct OptimisationParameters
+    tableau_metric::String
+end
+
+struct NetworkSpecifications
     register_sizes::Vector{Int}        # Number of qubits in each register
+    num_registers::Int
+    permutation::Vector{Int}
+    mapping::Vector{Tuple{Int, Int}}
+    inv_perm::Vector{Int}
+    register_lookup_array::Vector{Int}
+    data_qubits::Vector{Int}
+    comm_qubits::Vector{Int}
+    num_data_qubits::Int
+    num_comm_qubits_per_register::Int
+    num_qubits::Int
+    comm_idx::Vector{Int}
+    comm_inv_perm_idx::Vector{Int}
     depolarising_noise::Float64        # Circuit Noise probability
     gate_noise::Float64                 # Gate Noise probability
     telegate_noise::Float64
+    num_shots::Int
 end
 
 struct GeneticParameters
     num_individuals::Int
     num_generations::Int
     max_len::Int
-    num_shots::Int
     mutation_rate::Float64
     tournament_size::Int
     selection_ratio::Float64
     num_elite::Int
     warm_start::Bool
-    qec_code::AbstractCSSCode
-    tableau_metric::String
+    #qec_code::AbstractCSSCode
+    #tableau_metric::String
 end
 
 struct MCTSParameters
     max_steps::Int
-    max_length::Int
-    num_shots::Int
-    qec_code::AbstractCSSCode
-    tableau_metric::String
     n_iterations::Int
     exploration_constant::Float64
 end
@@ -91,7 +84,8 @@ struct SimulationFidelity
     fidelity::Float64
 end
 
-### types for circuit representation
+
+# Gate Types
 
 abstract type Gate end
 
@@ -132,6 +126,14 @@ struct SWAP_Gate <: Gate
     qubit_2::Int
 end
 
+struct ConditionalGate <: AbstractOperation
+    truegate::AbstractOperation
+    falsegate::AbstractOperation
+    controlbit::Int
+end
+
+# Genetic Algorithm Types
+
 mutable struct CircuitIndividual
     gates::Vector{Gate}   
 end
@@ -142,15 +144,39 @@ function CircuitIndividual(num_gates::Int)
     return CircuitIndividual(gates)
 end
 
+# mutable struct Circuit
+#     gates::Matrix{Gate}
+# end
 
-mutable struct Circuit
-    gates::Matrix{Gate}
+# function Circuit(num_qubits::Int, num_layers::Int)
+#     @assert num_qubits > 0
+#     @assert num_layers > 0
+#     Circuit(fill(IdentityGate(1), num_qubits, num_layers))
+# end
+
+# Plotting 
+
+# For Quantikz
+function _conditional_gate_label(g::AbstractOperation)
+    repr_g = string(g)
+    if occursin("sX", repr_g)
+        return "X"
+    elseif occursin("sY", repr_g)
+        return "Y"
+    elseif occursin("sZ", repr_g)
+        return "Z"
+    elseif occursin("sHadamard", repr_g)
+        return "H"
+    elseif occursin("sId1", repr_g)
+        return "I"
+    end
+    return "U"
 end
 
-function Circuit(num_qubits::Int, num_layers::Int)
-    @assert num_qubits > 0
-    @assert num_layers > 0
-    Circuit(fill(IdentityGate(1), num_qubits, num_layers))
+function QuantikzOp(op::ConditionalGate)
+    targets = collect(affectedqubits(op.truegate))
+    label = _conditional_gate_label(op.truegate)
+    return ClassicalDecision(label, targets, op.controlbit)
 end
 
 end

@@ -2,17 +2,20 @@
 
 module LogicalEnc
 
+using ..Types
 using ..Helper
+using ..CircuitSimulator
+
 
 using QuantumClifford
 using QECCore
 using Quantikz: savecircuit
-using QuantumSavory: H, CNOT, X, Y, Z, stateof
+#using QuantumSavory: H, CNOT, X, Y, Z, stateof
 using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat
 
 export standard_logical_zero_encoding_circuit
 #export golay_encoding_circuit
-export run_tests
+export baseline_encoding, run_tests
 
 """
 This function creates the naive encoding circuit by first obtaining the canonical form of the stabiliser tableau, without re-permuting
@@ -33,88 +36,89 @@ The implementation is based on [cleve1997efficient](@cite) and [gottesman1997sta
     (see https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html), [grassl2002algorithmic](@cite) and [grassl2011variations](@cite) )
 """
 
-function naive_encoding_circuit(code; undoperm=true)
 
-    ### Also contains logical X operators for arbitrary initial states
+# function naive_encoding_circuit(code; undoperm=true)
+
+#     ### Also contains logical X operators for arbitrary initial states
     
-    # Creatung the canonical tableau (without re-permuting the columns)
-    n = code_n(code)
-    k = code_k(code)
-    #println("\nFor the given code, we have n=$n, k=$k. \n")
+#     # Creatung the canonical tableau (without re-permuting the columns)
+#     n = code_n(code)
+#     k = code_k(code)
+#     #println("\nFor the given code, we have n=$n, k=$k. \n")
     
-    code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true); # undoperm without returns gives the orignal stabiliser tableau
-    #println("Standard form of code is \n$code_standard_form")
-    X = logicalxview(code_standard_form)
-    Z = logicalzview(code_standard_form)
+#     code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true); # undoperm without returns gives the orignal stabiliser tableau
+#     #println("Standard form of code is \n$code_standard_form")
+#     X = logicalxview(code_standard_form)
+#     Z = logicalzview(code_standard_form)
     
-    # Creating te canonical tableau (with re-permuting the columns) for final state specification
-    code_original_with_logicals = MixedDestabilizer(code, undoperm=true);
-    # X_cleaned = logicalxview(md_cleaned)
-    # println("X is $X_cleaned")
-    # Z_cleaned = logicalzview(md_cleaned)
-    # println("Z is $Z_cleaned")
+#     # Creating te canonical tableau (with re-permuting the columns) for final state specification
+#     code_original_with_logicals = MixedDestabilizer(code, undoperm=true);
+#     # X_cleaned = logicalxview(md_cleaned)
+#     # println("X is $X_cleaned")
+#     # Z_cleaned = logicalzview(md_cleaned)
+#     # println("Z is $Z_cleaned")
 
-    circ = QuantumClifford.AbstractOperation[]
-    #push!(circ, Reset(initial_state, [1,2,3,4,5,6,7]))
+#     circ = QuantumClifford.AbstractOperation[]
+#     #push!(circ, Reset(initial_state, [1,2,3,4,5,6,7]))
     
-    # Constructing the encoding circuit
+#     # Constructing the encoding circuit
 
-    S = stabilizerview(code_standard_form)
+#     S = stabilizerview(code_standard_form)
 
-    # logical Xs
-    for i in 1:k
-        for t in 1:n-k
-            if X[i,t][1] == true
-                push!(circ, sCNOT(n-k+i, t))
-            end
-        end
-    end
+#     # logical Xs
+#     for i in 1:k
+#         for t in 1:n-k
+#             if X[i,t][1] == true
+#                 push!(circ, sCNOT(n-k+i, t))
+#             end
+#         end
+#     end
 
-    # projection on codespace
-    for i in 1:r
-        push!(circ, sHadamard(i))
-        if S[i,i][2] == true
-            push!(circ, sPhase(i))
-        end
-        for t in 1:n
-            if i!=t
-                xz = S[i,t]
-                g = if xz == (true, true)  # Y
-                    sZCY
-                elseif xz == (true, false) # X
-                    sZCX
-                elseif xz == (false, true) && !(i<t<n-k+1) # Z
-                    sZCZ
-                end
-                isnothing(g) || push!(circ, g(i,t))
-            end
-        end
-    end
+#     # projection on codespace
+#     for i in 1:r
+#         push!(circ, sHadamard(i))
+#         if S[i,i][2] == true
+#             push!(circ, sPhase(i))
+#         end
+#         for t in 1:n
+#             if i!=t
+#                 xz = S[i,t]
+#                 g = if xz == (true, true)  # Y
+#                     sZCY
+#                 elseif xz == (true, false) # X
+#                     sZCX
+#                 elseif xz == (false, true) && !(i<t<n-k+1) # Z
+#                     sZCZ
+#                 end
+#                 isnothing(g) || push!(circ, g(i,t))
+#             end
+#         end
+#     end
 
-    # correct for negative phases in the tableau
-    for i in 1:n-k 
-        if phases(S)[i]!=0
-            if i<=r
-                push!(circ, sZ(i))
-            else
-                push!(circ, sX(i))
-            end
-        end
-    end
+#     # correct for negative phases in the tableau
+#     for i in 1:n-k 
+#         if phases(S)[i]!=0
+#             if i<=r
+#                 push!(circ, sZ(i))
+#             else
+#                 push!(circ, sX(i))
+#             end
+#         end
+#     end
 
-    # undoing the permutations to have the correct circuit for the final (re-permuted) tableau
-    if undoperm
-        perm = permx[permz]
-        transpositions = perm_to_transpositions(perm)
-        for (i,j) in transpositions
-            push!(circ, sSWAP(i,j))
-        end
-    end
-    code_original_with_logicals, circ
-end
+#     # undoing the permutations to have the correct circuit for the final (re-permuted) tableau
+#     if undoperm
+#         perm = permx[permz]
+#         transpositions = perm_to_transpositions(perm)
+#         for (i,j) in transpositions
+#             push!(circ, sSWAP(i,j))
+#         end
+#     end
+#     code_original_with_logicals, circ
+# end
 
 
-function standard_logical_zero_encoding_circuit(code; undoperm=true)
+function standard_logical_zero_encoding_circuit(code; undoperm=true, logical_Xs = false)
      
     # Differs from the above by removing the logical X operator CNOTs
 
@@ -142,15 +146,16 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true)
 
     S = stabilizerview(code_standard_form)
 
-    # # logical Xs
-    # for i in 1:k
-    #     for t in 1:n-k
-    #         if X[i,t][1] == true
-    #             push!(circ, sCNOT(n-k+i, t))
-    #         end
-    #     end
-    # end
-
+    # logical Xs
+    if logical_Xs
+        for i in 1:k
+            for t in 1:n-k
+                if X[i,t][1] == true
+                    push!(circ, sCNOT(n-k+i, t))
+                end
+            end
+        end
+    end
     # projection on codespace
     for i in 1:r
         push!(circ, sHadamard(i))
@@ -195,6 +200,112 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true)
 end
 
 
+
+function baseline_encoding(code_params, network_specs; data_storage = true)
+
+    ### Baseline comparison of standard encoding in DQC setting
+    @assert code_params.qec_code !== nothing 
+    standard_circuit = standard_logical_zero_encoding_circuit(code_params.qec_code)
+    #standard_circuit_length = length(standard_circuit[2])
+    permutation = transpositions_to_perm(reverse(standard_circuit[3]), network_specs.num_data_qubits)
+
+    baseline_gates = Gate[]
+    for op in standard_circuit[2]
+        if op isa QuantumClifford.sHadamard
+            push!(baseline_gates, HadamardGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sPhase
+            push!(baseline_gates, SGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sX
+            push!(baseline_gates, PauliXGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sZ
+            push!(baseline_gates, PauliZGate(permutation[op.q]))
+        elseif op isa QuantumClifford.sZCX
+            control, target = Tuple(affectedqubits(op))
+            push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
+        # elseif op isa QuantumClifford.sZCY
+        #     control, target = Tuple(affectedqubits(op))
+        #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+        # elseif op isa QuantumClifford.sZCZ
+        #     control, target = Tuple(affectedqubits(op))
+        #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
+        elseif op isa QuantumClifford.sSWAP
+            continue
+        else
+            error("Unsupported warm-start gate type: $(typeof(op))")
+        end  
+        
+    end
+
+    #baseline_raw_circuit = CircuitIndividual(baseline_gates)
+    #println(typeof(baseline_raw_circuit))
+    baseline_exec_circuit = construct_executable_circuit(baseline_gates, network_specs)
+    #println(typeof(baseline_exec_circuit))
+    #println(typeof(baseline_raw_circuit.gates))
+    println("\nRaw size of standard encoding circuit: $(length(baseline_gates))\n")
+    println("DQC Size of standard encoding circuit: $(circuit_size(baseline_exec_circuit))\n")
+
+    verification_logical_state = verify_success(baseline_exec_circuit, code_params.target_state, network_specs)
+
+    println("\nVerification of baseline circuit successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state\n")
+
+    if data_storage
+       
+        ###########################################
+        ############# DATA STORAGE ################
+        ###########################################
+
+        dir = joinpath(@__DIR__, "results", string(code_dirname(code_params.qec_code)), "baseline_encoding")
+        mkpath(dir)
+
+        println("Saving results to $(dir)")
+
+        save_circuit_diagram(baseline_gates, dir, "baseline_raw_circuit__size_$(circuit_size(gates_to_circuit(baseline_gates))).png")
+        save_circuit_diagram(baseline_exec_circuit, dir, "baseline_exec_circuit__size_$(circuit_size(baseline_exec_circuit)).png")
+
+        open(joinpath(dir, "network_specs.txt"), "w") do io
+            println(io, "Network Specifications")
+            for fname in fieldnames(Types.NetworkSpecifications)
+                println(io, fname, " = ", repr(getfield(network_specs, fname)))
+            end
+        end
+
+        open(joinpath(dir, "code_params.txt"), "w") do io
+            println(io, "Code parameters")
+            for fname in fieldnames(Types.CodeParameters)
+                println(io, fname, " = ", repr(getfield(code_params, fname)))
+            end
+        end
+
+        open(joinpath(dir, "baseline_raw.txt"), "w") do io
+            println(io, "# Raw gate sequence of size $(length(baseline_gates))")
+            for (i, g) in enumerate(baseline_gates)
+                println(io, i, "\t", repr(g))
+            end
+        end
+
+        open(joinpath(dir, "baseline_exec_circuit.txt"), "w") do io
+            println(io, "# Executable (DQC) circuit operations of size $(circuit_size(baseline_exec_circuit)) (excl. SWAPS)")
+            for (i, op) in enumerate(baseline_exec_circuit)
+                println(io, i, "\t", repr(op))
+            end
+        end
+
+        open(joinpath(dir, "summary.txt"), "w") do io
+            println(io, "# Encoding successful: $verification_logical_state")
+            println(io, "# Raw gate sequence of size $(length(baseline_gates))")
+            println(io, "# Executable (DQC) circuit operations of size $(circuit_size(baseline_exec_circuit)) (excl. SWAPS)")
+        end
+    end
+        ###########################################
+        ###########################################
+        ###########################################
+
+    return baseline_gates
+end
+
+
+
+# Measurement-based initialisation
 
 
 function naive_ancillary_paulimeasurement(p::PauliOperator, ancillary_index=1, bit_index=1)
@@ -258,7 +369,7 @@ function test(;initial_state, circuit_type, hadamards, final_state_verify, plott
     if circuit_type == "naive"
         # N&C version: S"ZIZIZIZ XIXIXIX IZZIIZZ IXXIIXX IIIZZZZ IIIXXXX" 
         # Steane7(): S"XIXIXIX IXXIIXX IIIXXXX ZIZZIZI  ZZIIZZI ZZIZIIZ" 
-        code_original_with_logicals, circuit = naive_encoding_circuit(Steane7())
+        _, circuit, _ = standard_logical_zero_encoding_circuit(Steane7())
         #println("Final state tableau: \n$code_original_with_logicals")
 
     end

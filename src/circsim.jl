@@ -10,46 +10,11 @@ using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, co
 using QECCore
 
 import QuantumClifford: apply!, affectedqubits # we want to extend this with ConditionalGate
-export create_lookup_array_cliff, execute_circuit, add_verification, add_telegate, add_noise, construct_executable_circuit, gates_to_circuit
-
-function create_lookup_array_cliff(num_data_qubits_per_register)
-    
-    # Lookup array is only targeting data qubits (no mapping due to partitioning),
-    # but also keeps track of the indices for the communication assignment mapping later
-    # TODO: Reduce redundancy with genetic.jl file here
-    num_data_qubits = sum(num_data_qubits_per_register)
-    num_registers = length(num_data_qubits_per_register)
-    num_comm_qubits_per_register = num_registers-1
-
-    # Takes in an array containing the number of data qubits per module
-    register_lookup_array = Vector{Int}(undef, num_data_qubits)
-    data_qubits = Vector{Int}(undef, num_data_qubits)
-
-    register = 1
-    register_start_index = 1
-    data_qubit_start_index = 1
-    
-    for j in num_data_qubits_per_register
-        register_lookup_array[register_start_index:register_start_index+j-1] .= register 
-        data_qubits[register_start_index: (register_start_index+j-1)] = data_qubit_start_index: (data_qubit_start_index+j-1)  
-
-        register_start_index+=j
-        register +=1
-        data_qubit_start_index += (j+num_comm_qubits_per_register)
-    end
-
-    return register_lookup_array, data_qubits, num_data_qubits, num_comm_qubits_per_register
-end
+export execute_circuit, add_verification, add_telegate, add_noise, construct_executable_circuit
 
 
-gate_to_apply(::Type{HadamardGate}, i::Int) = sHadamard(i)  # CliffordRepr  #TODO: verify that this is fixed in the next release
-gate_to_apply(::Type{PauliXGate}, i::Int) = sX(i)
-gate_to_apply(::Type{PauliYGate}, i::Int) = sY(i)
-gate_to_apply(::Type{PauliZGate}, i::Int) = sZ(i)
-gate_to_apply(::Type{SGate}, i::Int) = sPhase(i)
 
 #We can also use NoisyGate: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/docs/src/noisycircuits_ops.md
-
 
 Pauli_gate_noise(::Type{PauliXGate}, p::Float64) = PauliNoise(p,0,0)
 Pauli_gate_noise(::Type{PauliYGate}, p::Float64) = PauliNoise(0,p,0)
@@ -57,7 +22,7 @@ Pauli_gate_noise(::Type{PauliZGate}, p::Float64) = PauliNoise(0,0,p)
 Pauli_gate_noise(::Type{HadamardGate}, p::Float64) = PauliNoise(p/2,0,p/2)
 
 
-function apply!(state::Register, op::ConditionalGate)
+function apply!(state::Register, op::Types.ConditionalGate)
     if state.bits[op.controlbit]
         apply!(state, op.truegate)
     else
@@ -66,12 +31,13 @@ function apply!(state::Register, op::ConditionalGate)
     return state
 end
 
+
 #function apply!(state::Register, op::projectZ)
 #function projectZ!(s::AbstractStabilizer,qubit::Int;keep_result::Bool=true,phases::Bool=true)
 #    project!(s, single_z(nqubits(s), qubit) ; keep_result, phases)
 #end
 
-function affectedqubits(op::ConditionalGate)
+function affectedqubits(op::Types.ConditionalGate)
     qs = Int[]
     append!(qs, collect(affectedqubits(op.truegate)))
     if op.falsegate !== nothing
@@ -80,39 +46,23 @@ function affectedqubits(op::ConditionalGate)
     return unique(qs)
 end
 
-function gates_to_circuit(gates)
-    "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
+# comm_idx(index::Int, n::NetworkingSpecifications) = index + n.num_comm_qubits_per_register * (n.register_lookup_array[index]-1)  # applies correct mapping based on communication qubit structure
+#     #comm_perm_idx(index::Int) = permutation[index]+num_comm_qubits_per_register * (register_lookup_array[permutation[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
+# comm_inv_perm_idx(index::Int, n::NetworkingSpecifications) = n.inv_perm[index] + n.num_comm_qubits_per_register * (n.register_lookup_array[n.inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
 
-    circuit = Vector{QuantumClifford.AbstractOperation}()
 
-    for gate in gates
-        if gate isa Union{PauliXGate, HadamardGate, SGate}
-            push!(circuit, gate_to_apply(typeof(gate), gate.index))
-        elseif gate isa CNOT_Gate
-            push!(circuit, sCNOT(gate.control, gate.target))
-        else
-            throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
-        end
-    end
-
-    return circuit
-end
-
-function construct_executable_circuit(depolarising_prob, gate_noise_prob, telegate_noise, circuit_individual, mapping, inv_perm, register_lookup_array, data_qubits, num_comm_qubits_per_register, num_qubits, data_qubit_capacities)
+function construct_executable_circuit(gates, n)
     
+    # n stands for networking specs
+
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
-
-    
-    comm_idx(index::Int) = index + num_comm_qubits_per_register * (register_lookup_array[index]-1)  # applies correct mapping based on communication qubit structure
-    #comm_perm_idx(index::Int) = permutation[index]+num_comm_qubits_per_register * (register_lookup_array[permutation[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
-    comm_inv_perm_idx(index::Int) = inv_perm[index]+num_comm_qubits_per_register * (register_lookup_array[inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
 
     #circuit = []
     circuit = Vector{QuantumClifford.AbstractOperation}()  
    
     # Apply the inverse permutation of the mapping by applying transpoistions of inverse perm in left action <-> transpoistions of perm in right action via reverse(mapping) [the mapping contains transposition derived from the permutation, implementing it in left action]
-    for (i,j) in reverse(mapping)
-        push!(circuit, sSWAP(comm_idx(i),comm_idx(j)))  # We could also use comm_perm_idx or comm_inv_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
+    for (i,j) in reverse(n.mapping)
+        push!(circuit, sSWAP(n.comm_idx[i],n.comm_idx[j]))  # We could also use comm_perm_idx or comm_inv_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
     end
     
     # Add depolarising noise to all qubits at the beginning of the circuit
@@ -120,27 +70,27 @@ function construct_executable_circuit(depolarising_prob, gate_noise_prob, telega
     #    circuit = add_noise(circuit, depolarising_prob, comm_inv_perm_idx(data_qubit) )
     #end
 
-    for gate in circuit_individual
+    for gate in gates
 
         if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
             qubit = gate.index
-            push!(circuit, gate_to_apply(typeof(gate),comm_inv_perm_idx(qubit)) ) 
+            push!(circuit, gate_to_apply(typeof(gate),n.comm_inv_perm_idx[qubit]) ) 
             
         elseif gate isa CNOT_Gate  
             control = gate.control
             target = gate.target
-            control_register = register_lookup_array[inv_perm[control]] 
-            target_register = register_lookup_array[inv_perm[target]] 
+            control_register = n.register_lookup_array[n.inv_perm[control]] 
+            target_register = n.register_lookup_array[n.inv_perm[target]] 
             
 
             if control_register == target_register # the lookup array does not account for the communication qubits
-                push!(circuit, sCNOT(comm_inv_perm_idx(control), comm_inv_perm_idx(target) ))
+                push!(circuit, sCNOT(n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target] ))
             else
 
                     # Perform telegate between control and target qubit in different registers, 
                     # i.e., push!(circuit, sCNOT(comm_inv_perm_idx(control),comm_inv_perm_idx(target)) ) remotely
                     # println("Performing a telegated between (unmapped) qubits $control and $target")
-                circuit = add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise)
+                circuit = add_telegate(circuit, control, target, control_register, target_register, n)
             end
         end
     end
@@ -196,8 +146,8 @@ function construct_executable_circuit(depolarising_prob, gate_noise_prob, telega
     # end
 
     # Revert swapping for measurement of target state
-    for (i,j) in mapping # reverse reverse  -> we do the reverse of the orginial permutation (the reverse transposition)
-        push!(circuit, sSWAP(comm_idx(i),comm_idx(j))) # We could also use comm_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
+    for (i,j) in n.mapping # reverse reverse  -> we do the reverse of the orginial permutation (the reverse transposition)
+        push!(circuit, sSWAP(n.comm_idx[i], n.comm_idx[j])) # We could also use comm_perm_idx, since the relabeling based on the permutation conjugtes and thus fixes the permutation induces by the transposition SWAPS
     end
     #circuit = add_noise(circuit, depolarising_prob, )
     # for data_qubit in collect(1:length(data_qubits))
@@ -211,15 +161,15 @@ function construct_executable_circuit(depolarising_prob, gate_noise_prob, telega
 end
 
 
-function add_telegate(circuit, control, target, control_register, target_register, num_comm_qubits_per_register, num_qubits, data_qubit_capacities, inv_perm, register_lookup_array, telegate_noise )
+function add_telegate(circuit, control, target, control_register, target_register, n)
 
     if control_register == target_register
         throw("Ooops, this is not a telegate.")
     end
     
-    comm_inv_perm_idx(index::Int) = inv_perm[index]+num_comm_qubits_per_register * (register_lookup_array[inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
-    control_comm_index = sum(data_qubit_capacities[1:control_register])+ (num_comm_qubits_per_register * (control_register-1)) + (control_register < target_register ? target_register-1 : target_register ) # start at the first communication qubit, and then see to which target register the control is connected
-    target_comm_index = sum(data_qubit_capacities[1:target_register])+ (num_comm_qubits_per_register * (target_register-1)) + (target_register < control_register ? control_register-1 : control_register )
+    #comm_inv_perm_idx(index::Int) = p.inv_perm[index] + p.num_comm_qubits_per_register * (p.register_lookup_array[p.inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
+    control_comm_index = sum(n.register_sizes[1:control_register])+ (n.num_comm_qubits_per_register * (control_register-1)) + (control_register < target_register ? target_register-1 : target_register ) # start at the first communication qubit, and then see to which target register the control is connected
+    target_comm_index = sum(n.register_sizes[1:target_register])+ (n.num_comm_qubits_per_register * (target_register-1)) + (target_register < control_register ? control_register-1 : control_register )
     #println("Communication qubits are at indices $control_comm_index and $target_comm_index")
     
     ### EJPP Protocol
@@ -237,30 +187,30 @@ function add_telegate(circuit, control, target, control_register, target_registe
     #circuit = add_noise(circuit, telegate_noise, control_comm_index)
     #circuit = add_noise(circuit, telegate_noise, target_comm_index)
 
-    push!(circuit, sCNOT(comm_inv_perm_idx(control), control_comm_index))
+    push!(circuit, sCNOT(n.comm_inv_perm_idx[control], control_comm_index))
 
     # Measurement 
-    pauli_string_control = build_pauli_string_measurement(num_qubits, [control_comm_index])
-    classical_register_index_control = control_comm_index - sum(data_qubit_capacities[1:control_register])
+    pauli_string_control = build_pauli_string_measurement(n.num_qubits, [control_comm_index])
+    classical_register_index_control = control_comm_index - sum(n.register_sizes[1:control_register])
     meas_control = PauliMeasurement(pauli_string_control, classical_register_index_control)
     push!(circuit, meas_control)
 
     # Conditional Operations
-    push!(circuit, ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_control.bit)) # perform the conditional operation
-    push!(circuit, ConditionalGate(sX(control_comm_index),sId1(control_comm_index), meas_control.bit)) # restore the |0> state in the control comm qubit
+    push!(circuit, Types.ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_control.bit)) # perform the conditional operation
+    push!(circuit, Types.ConditionalGate(sX(control_comm_index),sId1(control_comm_index), meas_control.bit)) # restore the |0> state in the control comm qubit
     
-    push!(circuit, sCNOT(target_comm_index,comm_inv_perm_idx(target) ))
+    push!(circuit, sCNOT(target_comm_index,n.comm_inv_perm_idx[target] ))
     push!(circuit, sHadamard(target_comm_index))
     
     # Measurement
-    pauli_string_target = build_pauli_string_measurement(num_qubits, [target_comm_index])
-    classical_register_index_target = target_comm_index - sum(data_qubit_capacities[1:target_register])
+    pauli_string_target = build_pauli_string_measurement(n.num_qubits, [target_comm_index])
+    classical_register_index_target = target_comm_index - sum(n.register_sizes[1:target_register])
     meas_target = PauliMeasurement(pauli_string_target, classical_register_index_target)
     push!(circuit, meas_target)
     
     # Conditional Operations
-    push!(circuit, ConditionalGate(sZ(comm_inv_perm_idx(control)),sId1(comm_inv_perm_idx(control)), meas_target.bit))
-    push!(circuit, ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_target.bit))  # restore the |0> state in the target comm qubit
+    push!(circuit, Types.ConditionalGate(sZ(n.comm_inv_perm_idx[control]),sId1(n.comm_inv_perm_idx[control]), meas_target.bit))
+    push!(circuit, Types.ConditionalGate(sX(target_comm_index),sId1(target_comm_index), meas_target.bit))  # restore the |0> state in the target comm qubit
 
     # Introduce noise to data qubits
     #circuit = add_noise(circuit, telegate_noise, comm_inv_perm_idx(control))
@@ -302,9 +252,8 @@ function add_noise(circuit, prob::Float64, qubit::Int, gate::Gate)
 end
 
 
-
 function build_pauli_string_measurement(num_qubits::Int, qubits::Vector{Int})
-    pauli = I # we can always assume that the first qubit is a data qubit, since this is only false whenever there are zero qubits
+    pauli = I # we can safely assume that the first qubit is a data qubit, since this is only false whenever there are zero qubits
     @inbounds for i in 2:(num_qubits) # traverses all data and comm qubits 
         pauli = (i in qubits) ? pauli⊗Z : pauli⊗I
     end

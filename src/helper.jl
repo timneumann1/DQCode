@@ -1,24 +1,64 @@
 module Helper
 
+using ..Types
+
+using QuantumClifford
+using QuantumClifford: AbstractOperation
+using KaHyPar
+using SparseArrays
+using Quantikz: savecircuit, @with, classicalbitslayout
+
 export create_lookup_array, comm_qubits_array, perm_to_transpositions, transpositions_to_perm
+export data_qubit_partitioning, circuit_size, baseline_comparison, tableau_distance, tableau_to_bitmatrix
+export gate_to_apply, gates_to_circuit, verify_success, save_circuit_diagram
+export next_run_dir, code_dirname
 
 # lookup arrays needs to be created only once before executing the genetic search
 #TODO: replace with cleaner version
-function create_lookup_array(register_sizes)
-    register_lookup_array = Vector{Int}(undef, sum(register_sizes))
-    register_start_indices = Vector{Int}(undef, length(register_sizes))
+# function create_lookup_array(register_sizes)
+#     register_lookup_array = Vector{Int}(undef, sum(register_sizes))
+#     register_start_indices = Vector{Int}(undef, length(register_sizes))
+#     register = 1
+#     register_start_index = 1
+    
+#     for i in eachindex(register_sizes)
+#         j = register_sizes[i]
+#         register_lookup_array[register_start_index:register_start_index+j-1] .= register
+#         register_start_indices[register] = register_start_index
+#         register_start_index+=j
+#         register +=1
+#     end
+#     #print(register_lookup_array, register_start_indices)
+#     return register_lookup_array, register_start_indices
+# end
+
+function create_lookup_array(num_data_qubits_per_register)
+    
+    # Lookup array is only targeting data qubits (no mapping due to partitioning),
+    # but also keeps track of the indices for the communication assignment mapping later
+    # TODO: Reduce redundancy with genetic.jl file here
+    num_data_qubits = sum(num_data_qubits_per_register)
+    num_registers = length(num_data_qubits_per_register)
+    num_comm_qubits_per_register = num_registers-1
+
+    # Takes in an array containing the number of data qubits per module
+    register_lookup_array = Vector{Int}(undef, num_data_qubits)
+    data_qubits = Vector{Int}(undef, num_data_qubits)
+
     register = 1
     register_start_index = 1
+    data_qubit_start_index = 1
     
-    for i in eachindex(register_sizes)
-        j = register_sizes[i]
-        register_lookup_array[register_start_index:register_start_index+j-1] .= register
-        register_start_indices[register] = register_start_index
+    for j in num_data_qubits_per_register
+        register_lookup_array[register_start_index:register_start_index+j-1] .= register 
+        data_qubits[register_start_index: (register_start_index+j-1)] = data_qubit_start_index: (data_qubit_start_index+j-1)  
+
         register_start_index+=j
         register +=1
+        data_qubit_start_index += (j+num_comm_qubits_per_register)
     end
-    #print(register_lookup_array, register_start_indices)
-    return register_lookup_array, register_start_indices
+
+    return register_lookup_array, data_qubits, num_data_qubits, num_comm_qubits_per_register
 end
 
 #function create_lookup_array(params)
@@ -60,6 +100,271 @@ function transpositions_to_perm(transpositions::Vector{Tuple{Int,Int}}, n::Int)
     end
     return perm
 end
+
+function circuit_size(circuit)
+    return count(op ->
+        !(op isa QuantumClifford.NoiseOp) &&
+        !(op isa QuantumClifford.sSWAP) &&
+        !(op isa QuantumClifford.sId1),
+        circuit
+    )
+end
+
+
+function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{UInt8}, <:AbstractMatrix{<:Unsigned}})
+    rows, cols = size(tableau)
+    bits = Matrix{Int}(undef, rows, cols+1)#  falses(rows, cols)
+    @inbounds for r in 1:rows
+        for c in 1:cols
+            x, z = tableau[r, c]      # every entry of the Tableau contains a tuple (x,z): (0,0) is I, (1,0) is X, (0,1) is Z, (1,1) is Y
+            bits[r, c] = x + 2*z # we map I, X, Z, Y to 0, 1, 2 and 3 to later determine the Hamming distance (in how many entries they disagree)
+        end
+        # phases
+        if (tableau.phases[r] ∉ (0, 2))
+            throw("Phase of the tableau is imaginary. Please investigate this case.")
+        end
+        bits[r, cols + 1] = 1/2*tableau.phases[r]  # phase +1 is represented as 0, phase -1 is represented as 2
+        # -> positive phase is represented as 0, negative phase as 1
+        #println(bits[r,:])
+    end
+    return bits
+    
+end
+
+function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits, metric = "jaccard")
+    #check that both marices have same dimensions
+   
+    # we want to compare the data qubits, so we only keep the columns (qubits) corresponding to data qubits AND the phase column
+    cols_keep = vcat(data_qubits, size(matrix, 2))
+    matrix = matrix[:, cols_keep] 
+    # we also want to eliminate the first #comm_qubits rows, which contain the stabilisers of the communication qubits 
+    # the assumption is that the tableau is always in a product state of dataqubits and comm qubits, which is valid 
+    # since the comm qubits get measured and then reset to zero
+    matrix = matrix[(length(comm_qubits)+1):end,:]
+    
+    # the target matrix already has the lexicographical ordering of data qubits, so no need to filter or change here
+    @assert size(matrix) == size(target_matrix) "Check whether tracing out communication qubits (before passing to the tableau_distance() function) added identities or deleted rows"
+    # hamming count = 0
+    # for rows
+    #     for columns
+    #         if numbers at repective positions different
+    #             increae hamming count by one
+    # return hammingcount/(rows*cols)
+    #println("Final matrix: $matrix")
+    #println("Final target: $target_matrix")
+    difference_mask = matrix .!= target_matrix
+
+    if metric == "hamming"
+        return count(difference_mask) / length(matrix)
+    elseif metric == "jaccard"
+        support_mask = (matrix .!= 0) .| (target_matrix .!= 0)
+        return count(difference_mask .& support_mask) / count(support_mask) # edge case of denom == 0 is trivial (n identity operators stabilise the state) and cannot occur for any valid stabilizer code
+    end
+end
+
+function _repair_partition_capacities(assignments::Vector{Int}, capacities::Vector{Int})
+    k = length(capacities)
+    
+    # Count actual block sizes
+    block_sizes = [count(==(b), assignments) for b in 1:k]
+    println("Actual block sizes: $block_sizes")
+    println("Required capacities: $capacities")
+    
+    # Find permutation of block labels that matches capacities
+    # i.e. find which block should be relabelled as which register
+    label_map = zeros(Int, k)
+    remaining_blocks = collect(1:k)
+    
+    for (reg, cap) in enumerate(capacities)
+        # Find a block whose size matches this register's capacity
+        idx = findfirst(b -> block_sizes[b] == cap, remaining_blocks)
+        if isnothing(idx)
+            throw(ArgumentError(
+                "No block with exactly $cap qubits found for register $reg. Please change the register sizes or relax the constraint on equal-weight partitions."))
+            # fallback: assign whatever is left
+            idx = 1
+        end
+        label_map[reg] = remaining_blocks[idx]
+        deleteat!(remaining_blocks, idx)
+    end
+    
+    println("Label map (register => old block): $label_map")
+
+    # Apply relabeling
+    repaired = similar(assignments)
+    for (reg, old_block) in enumerate(label_map)
+        repaired[assignments .== old_block] .= reg
+    end
+    
+    return repaired
+end
+
+
+function data_qubit_partitioning(capacities, stabilizers)
+    
+    # traverse through rows in stabilisers and build up the connectivity graph
+
+    k = length(capacities)
+    nqubits = size(stabilizers, 2)
+    @assert sum(capacities) == nqubits "Register capacities must sum to code length."
+
+    # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
+    I = Int[]
+    J = Int[]
+    e = 0
+    for r in 1:size(stabilizers, 1)
+        support = Int[]
+        for q in 1:nqubits
+            x, z = stabilizers[r, q]
+            if x || z
+                push!(support, q)
+            end
+        end
+        # ignore trivial/singleton rows for communication objective
+        if length(support) >= 2
+            e += 1
+            for q in support
+                push!(I, q)
+                push!(J, e)
+            end
+        end
+        println("Support of stabilizer $r is $support\n")
+    end
+
+    if e == 0
+        @warn "No multi-qubit stabilizer supports found; returning identity permutation."
+        return collect(1:nqubits)
+    end
+
+    # apply KaHyPa to partition the graph
+    println("Hyperedges:\nI:$I \nJ:$J")
+    A = sparse(I, J, ones(Int, length(I)), nqubits, e)
+    h = KaHyPar.HyperGraph(A)
+    #println("Hypergraph:: $h")
+
+    # exact balance for equal capacities; otherwise allow small imbalance then repair
+    #equal_caps = all(c -> c == capacities[1], capacities)
+    imbalance = 0.0 # equal_caps ? 0.0 : 0.2
+    cfg = joinpath(@__DIR__, "km1_rKaHyPar_sea20.ini")
+    partition = KaHyPar.partition(h, k; configuration=cfg)#  :edge_cut, imbalance=imbalance, seed = 42)
+    #improved_partition = KaHyPar.improve_partition(h, k, partition; num_iterations=10, imbalance=imbalance, seed = 42)
+    # normalize block ids to 1..k 
+    min_id = minimum(partition)
+    assignments = min_id == 0 ? Int.(partition .+ 1) : Int.(partition)
+    #println("Partitioning is $assignments")
+    assignments = _repair_partition_capacities(assignments, capacities)
+    #println("Partitioning is $assignments")
+
+    permutation = Int[]
+    for b in 1:k
+        append!(permutation, sort(findall(==(b), assignments)))
+    end
+
+    @assert length(permutation) == nqubits
+    @assert sort(permutation) == collect(1:nqubits)
+
+    println("KaHyPar assignments: $assignments")
+    println("Data-qubit permutation: $permutation")
+    return permutation
+    # extract permutation from partitioning, e.g. [1,7,4,2,3,5,6] would mean that the 7th data qubit is in the first core if we have a [3,4] core assignment
+end
+
+gate_to_apply(::Type{HadamardGate}, i::Int) = sHadamard(i)  # CliffordRepr  #TODO: verify that this is fixed in the next release
+gate_to_apply(::Type{PauliXGate}, i::Int) = sX(i)
+gate_to_apply(::Type{PauliYGate}, i::Int) = sY(i)
+gate_to_apply(::Type{PauliZGate}, i::Int) = sZ(i)
+gate_to_apply(::Type{SGate}, i::Int) = sPhase(i)
+
+function gates_to_circuit(gates)
+    "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
+
+    circuit = Vector{QuantumClifford.AbstractOperation}()
+
+    for gate in gates
+        if gate isa Union{PauliXGate, HadamardGate, SGate}
+            push!(circuit, gate_to_apply(typeof(gate), gate.index))
+        elseif gate isa CNOT_Gate
+            push!(circuit, sCNOT(gate.control, gate.target))
+        else
+            throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
+        end
+    end
+
+    return circuit
+end
+
+
+function save_circuit_diagram(gates::Vector{Gate}, directory, label)
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            gates_to_circuit(gates),
+            joinpath(directory, label);
+            scale = 1
+            
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+end
+
+function save_circuit_diagram(circuit::Vector{AbstractOperation}, directory, label)
+    @with classicalbitslayout => :expanded begin
+        try
+        savecircuit(
+            circuit,
+            joinpath(directory, label);
+            scale = 1
+            
+        )
+        catch err
+            @warn "savecircuit failed (circuit likely too large)" err
+        end
+    end
+end
+
+
+function verify_success(circuit, target_state, n)
+    verification_circuit = copy(circuit)
+    push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
+    
+    initial_state = Register(one(MixedDestabilizer, n.num_qubits),n.num_registers*(n.num_registers-1))
+    #print(mctrajectories(initial_state, circuit, trajectories=10000))
+    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=10000)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
+            throw(ErrorException("Some runs were invalid"))
+    end
+    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    return fidelity
+end
+
+
+function code_dirname(code)
+    s = lowercase(string(typeof(code)))                     # e.g. trivariatebicyclecode.trivariatebicycleviacirculantmat
+    s = replace(s, r"^main\.dqcircuitsearch\." => "")      # drop Main.DQCircuitSearch.
+    s = split(s, '.')[1]                                    # keep only "trivariatebicyclecode"
+    return s
+end
+
+function next_run_dir(base_dir::AbstractString)
+    mkpath(base_dir)
+    runs = Int[]
+    for name in readdir(base_dir)
+        p = joinpath(base_dir, name)
+        if isdir(p)
+            v = tryparse(Int, name)
+            if v !== nothing
+                push!(runs, v)
+            end
+        end
+    end
+    next_id = isempty(runs) ? 1 : maximum(runs) + 1
+    run_dir = joinpath(base_dir, string(next_id))
+    mkpath(run_dir)
+    return run_dir
+end
+
 
 
 end
