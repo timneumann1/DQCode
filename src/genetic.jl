@@ -157,11 +157,12 @@ function evaluate_population(population, code_params, network_specs, opt_params)
                 #println(current_bit_matrix)
                 push!(tableau_distances, tableau_distance(current_bit_matrix, code_params.target_bit_matrices[idx], network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric))
             end
-            
+            rand() < 0.0025 ? println("Distance for individual $idx: 00:$(tableau_distances[1]),01:$(tableau_distances[2]), 10:$(tableau_distances[3]), 11:$(tableau_distances[4])" ) : ""
             fidelities[idx] = 1 - sum(tableau_distances)/length(tableau_distances) # 1 is perfect alignment, average over four different executions (for four logical basis states)
             circuit_sizes[idx] =  (num_single_qubit_gates, num_two_qubit_gates, num_telegates) #circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         
         end
+        println()
     
     end
         
@@ -442,7 +443,7 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
 
         fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 25== 0
+        if gen % 1== 0
         println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size:")
         println("Single qubit gates: $(circuit_sizes[argmax(fitness_scores)][1]), Two qubit gates: $(circuit_sizes[argmax(fitness_scores)][2]), Telegates: $(circuit_sizes[argmax(fitness_scores)][3]) \n ")
         end
@@ -488,11 +489,14 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
         verification_logical_state = verification_logical_state == 1.0 ? true : false
         println("\nVerification Genetic Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
     elseif code_params isa CodeParametersLog 
-        verification_logical_state1 = verify_success(GA_result_exec_circuit, code_params.target_states[1], network_specs)
+        verification_logical_state1 = verify_success(GA_result_exec_circuit, code_params.initial_states[1], code_params.target_states[1], network_specs)
         println("00 state correct?: $verification_logical_state1")
-        verification_logical_state2 = verify_success(GA_result_exec_circuit, code_params.target_states[2], network_specs)
-        verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.target_states[3], network_specs)
-        verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.target_states[4], network_specs)
+        verification_logical_state2 = verify_success(GA_result_exec_circuit, code_params.initial_states[2], code_params.target_states[2], network_specs)
+        println("01 state correct?: $verification_logical_state2")
+        verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.initial_states[3], code_params.target_states[3], network_specs)
+        println("10 state correct?: $verification_logical_state3")
+        verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.initial_states[4], code_params.target_states[4], network_specs)
+        println("11 state correct?: $verification_logical_state1")
         if verification_logical_state1 == 1.0 && verification_logical_state2 == 1.0 && verification_logical_state3 == 1.0  && verification_logical_state4 == 1.0 
             verification_logical_state = true
         end
@@ -515,11 +519,20 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
             println(io, fname, " = ", repr(getfield(network_specs, fname)))
         end
     end
+    if code_params isa CodeParameters
+        open(joinpath(GA_dir, "code_params.txt"), "w") do io
+            println(io, "Code parameters")
+            for fname in fieldnames(Types.CodeParameters)
+                println(io, fname, " = ", repr(getfield(code_params, fname)))
+            end
+        end
 
-    open(joinpath(GA_dir, "code_params.txt"), "w") do io
-        println(io, "Code parameters")
-        for fname in fieldnames(Types.CodeParameters)
-            println(io, fname, " = ", repr(getfield(code_params, fname)))
+    elseif code_params isa CodeParametersLog
+        open(joinpath(GA_dir, "code_params.txt"), "w") do io
+            println(io, "Code parameters")
+            for fname in fieldnames(Types.CodeParametersLog)
+                println(io, fname, " = ", repr(getfield(code_params, fname)))
+            end
         end
     end
 

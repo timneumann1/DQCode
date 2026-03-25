@@ -25,8 +25,8 @@ opt_params = OptimisationParameters(
 ) 
 
 genetic_params = GeneticParameters(
-    1, # individuals
-    0, # generations
+    2000, # individuals
+    500, # generations
     100, # max length of (raw) circuit individual
     0.8,  # mutation rate
     5, # tournament size
