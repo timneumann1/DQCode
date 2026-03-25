@@ -324,6 +324,18 @@ function save_circuit_diagram(circuit::Vector{AbstractOperation}, directory, lab
     end
 end
 
+function verify_success(circuit, initial_state, target_state, n)
+    verification_circuit = copy(circuit)
+    push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
+    
+    initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
+    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=10000)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
+            throw(ErrorException("Some runs were invalid"))
+    end
+    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    return fidelity
+end
 
 function verify_success(circuit, target_state, n)
     verification_circuit = copy(circuit)

@@ -15,7 +15,7 @@ using QuantumClifford: true_success_stat, false_success_stat, continue_stat, fai
 
 export standard_logical_zero_encoding_circuit
 #export golay_encoding_circuit
-export baseline_encoding, run_tests
+export baseline_encoding, baseline_encoding_circuit, run_tests
 
 """
 This function creates the naive encoding circuit by first obtaining the canonical form of the stabiliser tableau, without re-permuting
@@ -199,18 +199,16 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true, logical_Xs 
     code_original_with_logicals, circ, transpositions
 end
 
+function baseline_encoding_circuit(qec_code, network_specs; logical_Xs = false)
 
+    @assert qec_code !== nothing 
 
-function baseline_encoding(code_params, network_specs; data_storage = true)
-
-    ### Baseline comparison of standard encoding in DQC setting
-    @assert code_params.qec_code !== nothing 
-    standard_circuit = standard_logical_zero_encoding_circuit(code_params.qec_code)
+    code_original_with_logicals, baseline_circuit, transpositions = standard_logical_zero_encoding_circuit(qec_code, logical_Xs = logical_Xs)
     #standard_circuit_length = length(standard_circuit[2])
-    permutation = transpositions_to_perm(reverse(standard_circuit[3]), network_specs.num_data_qubits)
+    permutation = transpositions_to_perm(reverse(transpositions), network_specs.num_data_qubits)
 
     baseline_gates = Gate[]
-    for op in standard_circuit[2]
+    for op in baseline_circuit
         if op isa QuantumClifford.sHadamard
             push!(baseline_gates, HadamardGate(permutation[op.q]))
         elseif op isa QuantumClifford.sPhase
@@ -222,6 +220,9 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
         elseif op isa QuantumClifford.sZCX
             control, target = Tuple(affectedqubits(op))
             push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
+        elseif op isa QuantumClifford.sCNOT
+            control, target = Tuple(affectedqubits(op))
+            push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
         # elseif op isa QuantumClifford.sZCY
         #     control, target = Tuple(affectedqubits(op))
         #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
@@ -231,18 +232,33 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
         elseif op isa QuantumClifford.sSWAP
             continue
         else
-            error("Unsupported warm-start gate type: $(typeof(op))")
+            error("Unsupported gate type: $(typeof(op))")
         end  
         
     end
 
     #baseline_raw_circuit = CircuitIndividual(baseline_gates)
     #println(typeof(baseline_raw_circuit))
-    baseline_exec_circuit = construct_executable_circuit(baseline_gates, network_specs)
+    baseline_exec_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(baseline_gates, network_specs, telegate_overhead = true)
+    circuit_sizes = (num_single_qubit_gates, num_two_qubit_gates, num_telegates)
+    # print(baseline_circuit)
+    # print(circuit_sizes)
+    # print(circuit_size(baseline_exec_circuit))
+    # print(sum(circuit_sizes))
+    @assert length(baseline_gates) == sum(circuit_sizes)
     #println(typeof(baseline_exec_circuit))
     #println(typeof(baseline_raw_circuit.gates))
-    println("\nRaw size of standard encoding circuit: $(length(baseline_gates))\n")
-    println("DQC Size of standard encoding circuit: $(circuit_size(baseline_exec_circuit))\n")
+    println("Original Code with repermuted logical operators appended: $(code_original_with_logicals)")
+    println("\nRaw size of standard encoding circuit: $(sum(circuit_sizes))\n")
+    println("DQC Size of standard encoding circuit: $(circuit_sizes)\n")
+    println("Single qubit: $num_single_qubit_gates, Two qubit: $num_two_qubit_gates, Telegates: $num_telegates")
+    return baseline_gates, baseline_exec_circuit, circuit_sizes
+end
+
+function baseline_encoding(code_params, network_specs; data_storage = true)
+
+    ### Baseline comparison of standard encoding in DQC setting
+    baseline_gates, baseline_exec_circuit, circuit_sizes = baseline_encoding_circuit(code_params.qec_code, network_specs)
 
     verification_logical_state = verify_success(baseline_exec_circuit, code_params.target_state, network_specs)
 
@@ -259,8 +275,8 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
 
         println("Saving results to $(dir)")
 
-        save_circuit_diagram(baseline_gates, dir, "baseline_raw_circuit__size_$(circuit_size(gates_to_circuit(baseline_gates))).png")
-        save_circuit_diagram(baseline_exec_circuit, dir, "baseline_exec_circuit__size_$(circuit_size(baseline_exec_circuit)).png")
+        save_circuit_diagram(baseline_gates, dir, "baseline_raw_circuit__size_$(sum(circuit_sizes)).png")
+        save_circuit_diagram(baseline_exec_circuit, dir, "baseline_exec_circuit__size_$(circuit_sizes).png")
 
         open(joinpath(dir, "network_specs.txt"), "w") do io
             println(io, "Network Specifications")
@@ -277,14 +293,14 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
         end
 
         open(joinpath(dir, "baseline_raw.txt"), "w") do io
-            println(io, "# Raw gate sequence of size $(length(baseline_gates))")
+            println(io, "# Raw gate sequence of size $(sum(circuit_sizes))")
             for (i, g) in enumerate(baseline_gates)
                 println(io, i, "\t", repr(g))
             end
         end
 
         open(joinpath(dir, "baseline_exec_circuit.txt"), "w") do io
-            println(io, "# Executable (DQC) circuit operations of size $(circuit_size(baseline_exec_circuit)) (excl. SWAPS)")
+            println(io, "# Executable (DQC) circuit operations of sizes $(circuit_sizes) (excl. SWAPS)")
             for (i, op) in enumerate(baseline_exec_circuit)
                 println(io, i, "\t", repr(op))
             end
@@ -292,8 +308,8 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
 
         open(joinpath(dir, "summary.txt"), "w") do io
             println(io, "# Encoding successful: $verification_logical_state")
-            println(io, "# Raw gate sequence of size $(length(baseline_gates))")
-            println(io, "# Executable (DQC) circuit operations of size $(circuit_size(baseline_exec_circuit)) (excl. SWAPS)")
+            println(io, "# Raw gate sequence of size $(sum(circuit_sizes))")
+            println(io, "# Executable (DQC) circuit operations of size $(circuit_sizes) (excl. SWAPS)")
         end
     end
         ###########################################
@@ -302,6 +318,9 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
 
     return baseline_gates
 end
+
+
+
 
 
 

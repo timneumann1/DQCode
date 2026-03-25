@@ -51,7 +51,7 @@ end
 # comm_inv_perm_idx(index::Int, n::NetworkingSpecifications) = n.inv_perm[index] + n.num_comm_qubits_per_register * (n.register_lookup_array[n.inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
 
 
-function construct_executable_circuit(gates, n)
+function construct_executable_circuit(gates, n; telegate_overhead = false)
     
     # n stands for networking specs
 
@@ -59,6 +59,9 @@ function construct_executable_circuit(gates, n)
 
     #circuit = []
     circuit = Vector{QuantumClifford.AbstractOperation}()  
+    num_single_qubit_gates = 0
+    num_two_qubit_gates = 0
+    num_telegates = 0
    
     # Apply the inverse permutation of the mapping by applying transpoistions of inverse perm in left action <-> transpoistions of perm in right action via reverse(mapping) [the mapping contains transposition derived from the permutation, implementing it in left action]
     for (i,j) in reverse(n.mapping)
@@ -75,6 +78,7 @@ function construct_executable_circuit(gates, n)
         if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
             qubit = gate.index
             push!(circuit, gate_to_apply(typeof(gate),n.comm_inv_perm_idx[qubit]) ) 
+            num_single_qubit_gates += 1
             
         elseif gate isa CNOT_Gate  
             control = gate.control
@@ -85,12 +89,19 @@ function construct_executable_circuit(gates, n)
 
             if control_register == target_register # the lookup array does not account for the communication qubits
                 push!(circuit, sCNOT(n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target] ))
+                num_two_qubit_gates +=1
             else
 
                     # Perform telegate between control and target qubit in different registers, 
                     # i.e., push!(circuit, sCNOT(comm_inv_perm_idx(control),comm_inv_perm_idx(target)) ) remotely
                     # println("Performing a telegated between (unmapped) qubits $control and $target")
-                circuit = add_telegate(circuit, control, target, control_register, target_register, n)
+                if telegate_overhead
+                    circuit = add_telegate(circuit, control, target, control_register, target_register, n)
+                    num_telegates += 1
+                else 
+                    push!(circuit, sCNOT(n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target]))
+                    num_telegates += 1
+                end
             end
         end
     end
@@ -157,7 +168,7 @@ function construct_executable_circuit(gates, n)
     #add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(4), Main.DQCircuitSearch.Types.PauliZGate() )
     #add_noise(circuit, gate_noise_prob, comm_inv_perm_idx(6), Main.DQCircuitSearch.Types.PauliZGate() )
 
-    return circuit
+    return circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates
 end
 
 
@@ -422,6 +433,13 @@ function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500)#
     #print(circuit)
     return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
 end
+
+function execute_circuit(circuit, num_qubits, num_registers, initial_state; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
+    # Circuit execution for logical CNOT search
+    initial_state = Register(initial_state, num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
+    return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
+end
+
 
 function execute_circuit(circuit, num_qubits)#, mode = "pert")
     initial_state = one(MixedDestabilizer,num_qubits)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state

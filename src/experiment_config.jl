@@ -25,14 +25,15 @@ opt_params = OptimisationParameters(
 ) 
 
 genetic_params = GeneticParameters(
-    10000, # individuals
-    5000, # generations
+    1, # individuals
+    0, # generations
     100, # max length of (raw) circuit individual
-    0.75,  # mutation rate
+    0.8,  # mutation rate
     5, # tournament size
     0.5, # selection_ratio
     1, # num_elite
     false, # warm_start
+    [1,3,10] # fitness weights
     )
 
 mcts_params = MCTSParameters(

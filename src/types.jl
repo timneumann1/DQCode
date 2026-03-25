@@ -11,7 +11,7 @@ using QECCore: AbstractCSSCode
 import Quantikz: QuantikzOp, ClassicalDecision
 
 export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SGate, SWAP_Gate, Gate, ConditionalGate
-export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
+export CodeParameters,CodeParametersLog, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
 
 # Parameter structures
 
@@ -34,6 +34,19 @@ struct CodeParameters
     stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
     target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
     target_bit_matrix::Matrix{Int}
+    n::Int
+    k::Int
+    distance::Int
+end
+
+struct CodeParametersLog
+    qec_code::AbstractCSSCode
+    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    initial_states::Vector{MixedDestabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}}
+    target_states::Vector{Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}}
+    target_bit_matrices::Vector{Matrix{Int}}
+    n::Int
+    k::Int
     distance::Int
 end
 
@@ -70,6 +83,7 @@ struct GeneticParameters
     selection_ratio::Float64
     num_elite::Int
     warm_start::Bool
+    fitness_weights::Vector{Float64}
     #qec_code::AbstractCSSCode
     #tableau_metric::String
 end

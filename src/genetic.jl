@@ -14,8 +14,9 @@ using CairoMakie
 export genetic_search
 
 
-function fitness_function(fidelities, circuit_sizes, gen, genetic_params)
-    return 1e7*fidelities-circuit_sizes  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
+function fitness_function(fidelities, circuit_sizes, gen, g)
+    penalties = map(cs -> sum(g.fitness_weights .* cs) , circuit_sizes) #w[1]*cs[1] + w[2]*cs[2] + w[3]*cs[3]
+    return 1e6 .* fidelities .- penalties #circuit_sizes[1]-3*circuit_sizes[2]-10*circuit_sizes[3]  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
 end
 
 function initialise_population(code_params, network_specs, genetic_params; standard_encoding = false, warm_start = false, min_len=10)
@@ -37,7 +38,7 @@ function initialise_population(code_params, network_specs, genetic_params; stand
         gates = Gate[]#Circuit(num_data_qubits, depth)  
         if standard_encoding 
             
-            gates = baseline_gates
+            gates = copy(baseline_gates)
             # TODO: convert to my own type but add indices there!
             
             #permutation = transpositions_to_perm(reverse(standard_circuit[3]), num_data_qubits)
@@ -117,57 +118,53 @@ end
 function evaluate_population(population, code_params, network_specs, opt_params)
 
     fidelities = Vector{Float64}(undef, length(population))
-    circuit_sizes = Vector{Float64}(undef, length(population))
-    for (idx, circ_individual) in enumerate(population)
-        #print(ind_tensor)
-        quantum_clifford_circuit = construct_executable_circuit(circ_individual.gates, network_specs)
-        #push!(quantum_clifford_circuit, VerifyOp(target_state, data_qubits)) 
-       # println(quantum_clifford_circuit)
-        #println("Size of circuit:$(length(quantum_clifford_circuit))")
+    circuit_sizes = Vector{NTuple{3, Int}}(undef, length(population))
 
-        # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
-        # also, PauliMeasurement don't work with pert. expansion currently
-        mc_result = execute_circuit(quantum_clifford_circuit, network_specs.num_qubits, network_specs.num_registers; num_traj=network_specs.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.
-        #print("MC Result:$mc_result")
-        # is of type Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }
-                
-        tableau_distances = Float64[]
-        
-        for stab in collect(mc_result) # each component here is a MixedDestabilizer
-
-            stab_view = stabilizerview(stab)
-            #println("$comm_qubits")
-            #println("Stab view: $stab_view")
-            #println(typeof(stab_view))
+    if code_params isa CodeParameters # logical zero state genetic search
+        for (idx, circ_individual) in enumerate(population)
+            quantum_clifford_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(circ_individual.gates, network_specs)
+            @assert network_specs.num_shots == 1
+            # for perturbative expansion, only the leading order is kept, so probabilities can be smaller than 1, 
+            # also, PauliMeasurement don't work with pert. expansion currently
+            mc_result = execute_circuit(quantum_clifford_circuit, network_specs.num_qubits, network_specs.num_registers; num_traj=network_specs.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.
+            stab_view = stabilizerview(only(mc_result))
             stab_view = traceout!(copy(stab_view), network_specs.comm_qubits) # TODO: This can be refactored to ptrace upon stable QS release
             # NOTE: if we swtich to ptrace, then also tableau_distance in the helper.jl needs to be adapted!
-            #println("Stab view traceout: $stab_view")
             stab_canon = canonicalize_rref!( stab_view )
             tableau = tab(stab_canon[1])
-            #println("tableau:$tableau")
-            # convert to stabiliser
-            #println("current Tableau after canon:$tableau")
             current_bit_matrix = tableau_to_bitmatrix(tableau) # extract the stabiliser tableau from MixedDestabilizer object
-            push!(tableau_distances, tableau_distance(current_bit_matrix, code_params.target_bit_matrix, network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric))
-            
-            #println(stab_bit_matrix)
-            #Determine tableau distance with target_state
+            tab_distance = tableau_distance(current_bit_matrix, code_params.target_bit_matrix, network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric)
+            fidelities[idx] = 1 - tab_distance # 1 is perfect alignment, here we are in the noiseless setting (one shot)
+            circuit_sizes[idx] =  (num_single_qubit_gates, num_two_qubit_gates, num_telegates) #circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         end
+
+    elseif code_params isa CodeParametersLog  # logical CNOT search
+
+        for (idx, circ_individual) in enumerate(population)
+            quantum_clifford_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(circ_individual.gates, network_specs)
+            tableau_distances = Float64[]
+            # for each of the four logical basis states |00>, |01>, |10> and |11>, we determine the result of applying the circuit to the given initial state
+            for idx in 1:4 
+                mc_result = execute_circuit(quantum_clifford_circuit, network_specs.num_qubits, network_specs.num_registers, code_params.initial_states[idx] ; num_traj=network_specs.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.            
+                stab_view = stabilizerview(only(mc_result))
+                stab_view = traceout!(copy(stab_view), network_specs.comm_qubits) # TODO: This can be refactored to ptrace upon stable QS release
+                # NOTE: if we swtich to ptrace, then also tableau_distance in the helper.jl needs to be adapted!
+                stab_canon = canonicalize_rref!( stab_view )
+                tableau = tab(stab_canon[1])
+                current_bit_matrix = tableau_to_bitmatrix(tableau) # extract the stabiliser tableau from MixedDestabilizer object
+                #println(tableau)
+                #println(code_params.target_bit_matrices[idx])
+                #println(current_bit_matrix)
+                push!(tableau_distances, tableau_distance(current_bit_matrix, code_params.target_bit_matrices[idx], network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric))
+            end
+            
+            fidelities[idx] = 1 - sum(tableau_distances)/length(tableau_distances) # 1 is perfect alignment, average over four different executions (for four logical basis states)
+            circuit_sizes[idx] =  (num_single_qubit_gates, num_two_qubit_gates, num_telegates) #circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
         
-        #println("\nFinal Steane-7 dict: $(mc_result) \n")
-        # if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != genetic_params.num_shots
-        #     throw(ErrorException("Some runs were invalid"))
-        # end
-
-        #fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
-        fidelities[idx] = 1 - sum(tableau_distances)/length(tableau_distances) # 1 is perfect alignment, average over different executions
-        #print(quantum_clifford_circuit)
-        circuit_sizes[idx] = circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
-        #println("Hamming distances for individual $idx is in [$(minimum(hamming_distances)),$(maximum(hamming_distances))] ")
-        #println("Fitness score for individual $idx is in [$(1-maximum(hamming_distances)),$(1-minimum(hamming_distances))] -> avg. fitness is $(fitness_scores[idx]).  ")
-
-    end
+        end
     
+    end
+        
     return fidelities, circuit_sizes
 end
 
@@ -427,21 +424,36 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
     gen = 0
     population = initialise_population(code_params, network_specs, genetic_params, standard_encoding = false, warm_start=genetic_params.warm_start, min_len = 3)# length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))
     
-    println("############ Generation #$gen ##########: Generation size: $(length(population))")
+    println("############ Initial Population ##########: Generation size: $(length(population))")
     println("")
 
-    # evaluate population
-    fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params)
-    #print("fidelity is $fidelities")
-    fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params) # TODO: Need to find a fair weighting here
+    # # evaluate population
+    # fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params)
+    # #print("fidelity is $fidelities")
+    # fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params) # TODO: Need to find a fair weighting here
     
-    println("\n Generation $gen of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and DQC circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
+    # println("\n Generation $gen of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and DQC circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
     
-    push!(fitness_evolution, maximum(fitness_scores))
+    # push!(fitness_evolution, maximum(fitness_scores))
     
-    while gen<genetic_params.num_generations
+    GA_result_raw_circuit = nothing
+    GA_result_circuit_sizes = nothing
+    while gen<=genetic_params.num_generations
 
-        gen += 1
+        fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params)
+        fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
+        if gen % 25== 0
+        println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size:")
+        println("Single qubit gates: $(circuit_sizes[argmax(fitness_scores)][1]), Two qubit gates: $(circuit_sizes[argmax(fitness_scores)][2]), Telegates: $(circuit_sizes[argmax(fitness_scores)][3]) \n ")
+        end
+        push!(fitness_evolution, maximum(fitness_scores))
+
+        if gen == genetic_params.num_generations
+            best_individual = argmax(fitness_scores)
+            GA_result_raw_circuit = population[best_individual]
+            GA_result_circuit_sizes = circuit_sizes[best_individual]
+            break
+        end
         #@btime evaluate_population($population, $networking_params, $genetic_params, $mapping, $inv_perm, $register_lookup_array, $data_qubits, $comm_qubits, $num_comm_qubits_per_register, $num_qubits, $target_bit_matrix, $data_qubit_capacities, $num_registers)
         # perform selection
         best_individuals = selection(population, fitness_scores, tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
@@ -451,34 +463,40 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
         #mutated = mutations(new_generation, genetic_params)
         #population = new_generation
         # evaluate population
-        fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params)
-        fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 25== 0
-        println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and DQC circuit size = $(circuit_sizes[argmax(fitness_scores)]) \n")
-        end
-        push!(fitness_evolution, maximum(fitness_scores))
+        gen += 1
         
     end
 
     # Extract best-performing individual
-    GA_result_raw_circuit = population[argmax(fitness_scores)]
-    GA_result_raw_circuit_size = circuit_size(gates_to_circuit(GA_result_raw_circuit.gates))
+    #GA_result_raw_circuit_size = circuit_size(gates_to_circuit(GA_result_raw_circuit.gates))
     #print_gate_matrix(winner_winner_chicken_dinner)
     
     #println(winner_winner_chicken_dinner_circuit)
     #println(GA_result_raw_circuit.gates)
     #print(baseline_exec_circuit)
-    GA_result_exec_circuit = construct_executable_circuit(GA_result_raw_circuit.gates, network_specs)
-    GA_result_exec_circuit_size = circuit_size(GA_result_exec_circuit)
+    GA_result_exec_circuit, _,_,_= construct_executable_circuit(GA_result_raw_circuit.gates, network_specs, telegate_overhead = true)
+    #GA_result_exec_circuit_size = circuit_size(GA_result_exec_circuit)
     #baseline_raw_circuit_size = circuit_size(gates_to_circuit(baseline_raw_circuit.gates))
     #baseline_exec_circuit_size = circuit_size(baseline_exec_circuit)
 
-    println("\n Optimised circuit length (DQC setting): $(GA_result_exec_circuit_size)") #  vs. $baseline_exec_circuit_size in baseline")
-    
-    verification_logical_state = verify_success(GA_result_exec_circuit, code_params.target_state, network_specs)
+    println("\n Optimised circuit length (DQC setting):: Single-qubit gates: $(GA_result_circuit_sizes[1]), Two-qubit gates: $(GA_result_circuit_sizes[2]), Telegates: $(GA_result_circuit_sizes[3])") #  vs. $baseline_exec_circuit_size in baseline")
+
+    verification_logical_state = false
+    if code_params isa CodeParameters
+        verification_logical_state = verify_success(GA_result_exec_circuit, code_params.target_state, network_specs)
     # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
-    println("\nVerification Genetic Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
-    verification_logical_state = verification_logical_state == 1.0 ? true : false
+        verification_logical_state = verification_logical_state == 1.0 ? true : false
+        println("\nVerification Genetic Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
+    elseif code_params isa CodeParametersLog 
+        verification_logical_state1 = verify_success(GA_result_exec_circuit, code_params.target_states[1], network_specs)
+        println("00 state correct?: $verification_logical_state1")
+        verification_logical_state2 = verify_success(GA_result_exec_circuit, code_params.target_states[2], network_specs)
+        verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.target_states[3], network_specs)
+        verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.target_states[4], network_specs)
+        if verification_logical_state1 == 1.0 && verification_logical_state2 == 1.0 && verification_logical_state3 == 1.0  && verification_logical_state4 == 1.0 
+            verification_logical_state = true
+        end
+    end
 
     ###########################################
     ############# DATA STORAGE ################
@@ -488,8 +506,8 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
     GA_dir = next_run_dir(base_ga_dir)
 
     println("Saving results to $(GA_dir)")
-    save_circuit_diagram(GA_result_raw_circuit.gates, GA_dir, "GA_raw_circuit__size_$(GA_result_raw_circuit_size).png")
-    save_circuit_diagram(GA_result_exec_circuit, GA_dir, "GA_exec_circuit__size_$(GA_result_exec_circuit_size).png")
+    save_circuit_diagram(GA_result_raw_circuit.gates, GA_dir, "GA_raw_circuit__size_$(sum(GA_result_circuit_sizes)).png")
+    save_circuit_diagram(GA_result_exec_circuit, GA_dir, "GA_exec_circuit__size_$(GA_result_circuit_sizes).png")
 
     open(joinpath(GA_dir, "network_specs.txt"), "w") do io
         println(io, "Network Specifications")
@@ -513,14 +531,14 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
     end
 
     open(joinpath(GA_dir, "GA_raw_circuit.txt"), "w") do io
-        println(io, "# Raw gate sequence of size $GA_result_raw_circuit_size")
+        println(io, "# Raw gate sequence of size $(sum(GA_result_circuit_sizes))")
         for (i, g) in enumerate(GA_result_raw_circuit.gates)
             println(io, i, "\t", repr(g))
         end
     end
 
     open(joinpath(GA_dir, "GA_exec_circuit.txt"), "w") do io
-        println(io, "# Executable (DQC) circuit operations of size $GA_result_exec_circuit_size")
+        println(io, "# Executable (DQC) circuit operations of size:: $GA_result_circuit_sizes")
         for (i, op) in enumerate(GA_result_exec_circuit)
             println(io, i, "\t", repr(op))
         end
@@ -528,8 +546,8 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
 
     open(joinpath(GA_dir, "summary.txt"), "w") do io
         println(io, "# Encoding successful: $verification_logical_state")
-        println(io, "# Raw gate sequence of size $(GA_result_raw_circuit_size)")
-        println(io, "# Executable (DQC) circuit operations of size $(GA_result_exec_circuit_size) (excl. SWAPS)")
+        println(io, "# Raw gate sequence of size $(sum(GA_result_circuit_sizes))")
+        println(io, "# Executable (DQC) circuit operations of size $(GA_result_circuit_sizes) (excl. SWAPS)")
     end
 
     # Plot the evolution of fitness values
