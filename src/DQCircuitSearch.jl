@@ -41,8 +41,8 @@ function experiment_setup_logical_CNOT(qec_code, register_sizes)
     code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
 
     ###### Quantum Network #####
-
-    @assert sum(register_sizes) == code_n(qec_code)
+    
+    @assert sum(register_sizes) == code_n(qec_code) "$(code_n(qec_code))"
     permutation = data_qubit_partitioning(register_sizes, Stabilizer(qec_code))
     # Note: Whereas for partitioning, we use the original stabiliser formalism (used in QEC cycles), 
     # for optimisation, we use the canonical form again for commensurability -- the target state is identical since 
@@ -90,6 +90,7 @@ function experiment_setup_logical_CNOT(qec_code, register_sizes)
     stabilizers = [copy(p) for p in stabilizerview(code)]
     logical_Zs  = [copy(p) for p in logicalzview(code)]
     logical_Xs  = [copy(p) for p in logicalxview(code)]
+    println("\n$(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), d]]-code.\n\n")
     @assert length(logical_Zs) == 2 "Currently searching for logical CNOT gate in [[n,2,d]] codes"
 
     # the inital state needs to be provided to the MC trajectories function, hence it should be a MixedDestabilizer

@@ -16,7 +16,7 @@ export genetic_search
 
 function fitness_function(fidelities, circuit_sizes, gen, g)
     penalties = map(cs -> sum(g.fitness_weights .* cs) , circuit_sizes) #w[1]*cs[1] + w[2]*cs[2] + w[3]*cs[3]
-    return 1e6 .* fidelities .- penalties #circuit_sizes[1]-3*circuit_sizes[2]-10*circuit_sizes[3]  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
+    return 1e1 .* fidelities .+ penalties #circuit_sizes[1]-3*circuit_sizes[2]-10*circuit_sizes[3]  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
 end
 
 function initialise_population(code_params, network_specs, genetic_params; standard_encoding = false, warm_start = false, min_len=10)
