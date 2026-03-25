@@ -144,8 +144,8 @@ function evaluate_population(population, code_params, network_specs, opt_params)
             quantum_clifford_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(circ_individual.gates, network_specs)
             tableau_distances = Float64[]
             # for each of the four logical basis states |00>, |01>, |10> and |11>, we determine the result of applying the circuit to the given initial state
-            for idx in 1:4 
-                mc_result = execute_circuit(quantum_clifford_circuit, network_specs.num_qubits, network_specs.num_registers, code_params.initial_states[idx] ; num_traj=network_specs.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.            
+            for state in eachindex(code_params.initial_states)
+                mc_result = execute_circuit(quantum_clifford_circuit, network_specs.num_qubits, network_specs.num_registers, code_params.initial_states[state] ; num_traj=network_specs.num_shots)#, keepstates = true) # if specifying num_traj, we use MC sampling, otherwise perturbation.            
                 stab_view = stabilizerview(only(mc_result))
                 stab_view = traceout!(copy(stab_view), network_specs.comm_qubits) # TODO: This can be refactored to ptrace upon stable QS release
                 # NOTE: if we swtich to ptrace, then also tableau_distance in the helper.jl needs to be adapted!
@@ -155,7 +155,7 @@ function evaluate_population(population, code_params, network_specs, opt_params)
                 #println(tableau)
                 #println(code_params.target_bit_matrices[idx])
                 #println(current_bit_matrix)
-                push!(tableau_distances, tableau_distance(current_bit_matrix, code_params.target_bit_matrices[idx], network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric))
+                push!(tableau_distances, tableau_distance(current_bit_matrix, code_params.target_bit_matrices[state], network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric))
             end
             rand() < 0.0025 ? println("Distance for individual $idx: 00:$(tableau_distances[1]),01:$(tableau_distances[2]), 10:$(tableau_distances[3]), 11:$(tableau_distances[4])" ) : ""
             fidelities[idx] = 1 - sum(tableau_distances)/length(tableau_distances) # 1 is perfect alignment, average over four different executions (for four logical basis states)
@@ -496,7 +496,7 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params)
         verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.initial_states[3], code_params.target_states[3], network_specs)
         println("10 state correct?: $verification_logical_state3")
         verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.initial_states[4], code_params.target_states[4], network_specs)
-        println("11 state correct?: $verification_logical_state1")
+        println("11 state correct?: $verification_logical_state4")
         if verification_logical_state1 == 1.0 && verification_logical_state2 == 1.0 && verification_logical_state3 == 1.0  && verification_logical_state4 == 1.0 
             verification_logical_state = true
         end

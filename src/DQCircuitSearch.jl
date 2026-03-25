@@ -100,6 +100,7 @@ function experiment_setup_logical_CNOT(qec_code, register_sizes)
     target_bit_matrices = Matrix{Int}[]
 
     for b1 in 0:1, b2 in 0:1
+        println("\n\n\n\n $b1,$b2 \n\n\n\n")
 
         _ , baseline_exec_circuit, _ = baseline_encoding_circuit(qec_code, network_specs, logical_Xs = true)
         if b1 == 1
@@ -149,7 +150,7 @@ function experiment_setup_logical_CNOT(qec_code, register_sizes)
     println("Logical Z operators are \n$(logicalzview(code))\n")
 
     test_init = tab(canonicalize_rref!(traceout!(copy(stabilizerview(initial_states[1])), network_specs.comm_qubits))[1])
-    test_targ = tab(canonicalize_rref!(target_states[1])[1])
+    test_targ = tab(canonicalize_rref!(copy(target_states[1]))[1])
     println("\nFirst Initial state:$(test_init)\n")
     println("\nFirst target state:$(test_targ)\n")
     # println("\nSecond Initial state:$(initial_states[2])\n")

@@ -21,12 +21,12 @@ type_two_register_sizes = [3,3,3,3]
 ##### Optimisation Parameters #####
 
 opt_params = OptimisationParameters(
-    "hamming" # tableau distance metric
+    "jaccard" # tableau distance metric
 ) 
 
 genetic_params = GeneticParameters(
-    2000, # individuals
-    500, # generations
+    300, # individuals
+    100, # generations
     100, # max length of (raw) circuit individual
     0.8,  # mutation rate
     5, # tournament size
