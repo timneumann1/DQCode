@@ -120,16 +120,50 @@ function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{
             bits[r, c] = x + 2*z # we map I, X, Z, Y to 0, 1, 2 and 3 to later determine the Hamming distance (in how many entries they disagree)
         end
         # phases
-        if (tableau.phases[r] ∉ (0, 2))
-            throw("Phase of the tableau is imaginary. Please investigate this case.")
-        end
-        bits[r, cols + 1] = 1/2*tableau.phases[r]  # phase +1 is represented as 0, phase -1 is represented as 2
+        # if (tableau.phases[r] ∉ (0,2))
+        #     throw("Phase of the tableau is imaginary. Please investigate this case.")
+        # end
+        # bits[r, cols + 1] = 1/2*tableau.phases[r]  # phase +1 is represented as 0, phase -1 is represented as 2
         # -> positive phase is represented as 0, negative phase as 1
         #println(bits[r,:])
+        bits[r, cols + 1] = tableau.phases[r] 
     end
     return bits
     
 end
+
+function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}; metric = "jaccard")
+    #check that both marices have same dimensions
+   
+    # tableau distance without communication qubit overhead
+
+    #cols_keep = vcat(data_qubits, size(matrix, 2))
+    #matrix = matrix[:, cols_keep] 
+    # we also want to eliminate the first #comm_qubits rows, which contain the stabilisers of the communication qubits after rref!().
+    # the assumption is that the tableau is always in a product state of dataqubits and comm qubits, which is valid 
+    # since the comm qubits get measured and then reset to zero
+    #matrix = matrix[(length(comm_qubits)+1):end,:]
+    
+    # the target matrix already has the lexicographical ordering of data qubits, so no need to filter or change here
+    @assert size(matrix) == size(target_matrix) "Mismatch in dimensions"
+    # hamming count = 0
+    # for rows
+    #     for columns
+    #         if numbers at repective positions different
+    #             increae hamming count by one
+    # return hammingcount/(rows*cols)
+    #println("Final matrix: $matrix")
+    #println("Final target: $target_matrix")
+    difference_mask = matrix .!= target_matrix
+
+    if metric == "hamming"
+        return count(difference_mask) / length(matrix)
+    elseif metric == "jaccard"
+        support_mask = (matrix .!= 0) .| (target_matrix .!= 0)
+        return count(difference_mask .& support_mask) / count(support_mask) # edge case of denom == 0 is trivial (n identity operators stabilise the state) and cannot occur for any valid stabilizer code
+    end
+end
+
 
 function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_qubits, comm_qubits, metric = "jaccard")
     #check that both marices have same dimensions
@@ -137,7 +171,7 @@ function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
     # we want to compare the data qubits, so we only keep the columns (qubits) corresponding to data qubits AND the phase column
     cols_keep = vcat(data_qubits, size(matrix, 2))
     matrix = matrix[:, cols_keep] 
-    # we also want to eliminate the first #comm_qubits rows, which contain the stabilisers of the communication qubits 
+    # we also want to eliminate the first #comm_qubits rows, which contain the stabilisers of the communication qubits after rref!().
     # the assumption is that the tableau is always in a product state of dataqubits and comm qubits, which is valid 
     # since the comm qubits get measured and then reset to zero
     matrix = matrix[(length(comm_qubits)+1):end,:]
@@ -207,7 +241,8 @@ function data_qubit_partitioning(capacities, stabilizers)
     k = length(capacities)
     nqubits = size(stabilizers, 2)
     @assert sum(capacities) == nqubits "Register capacities must sum to code length."
-
+    
+    println("Stabilizers: $stabilizers")
     # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
     I = Int[]
     J = Int[]
@@ -274,17 +309,26 @@ gate_to_apply(::Type{PauliXGate}, i::Int) = sX(i)
 gate_to_apply(::Type{PauliYGate}, i::Int) = sY(i)
 gate_to_apply(::Type{PauliZGate}, i::Int) = sZ(i)
 gate_to_apply(::Type{SGate}, i::Int) = sPhase(i)
+gate_to_apply(::Type{InvSGate}, i::Int) = sInvPhase(i)
+gate_to_apply(::Type{SqrtXGate}, i::Int) = sSQRTX(i)
+gate_to_apply(::Type{InvSqrtXGate}, i::Int) = sInvSQRTX(i)
 
-function gates_to_circuit(gates)
+gate_to_apply(::Type{CX_Gate}, i::Int, j::Int) = sCNOT(i,j)
+gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
+
+
+
+function gates_to_circuit(gates, gate_set)
     "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
 
     circuit = Vector{QuantumClifford.AbstractOperation}()
 
     for gate in gates
-        if gate isa Union{PauliXGate, HadamardGate, SGate}
-            push!(circuit, gate_to_apply(typeof(gate), gate.index))
-        elseif gate isa CNOT_Gate
-            push!(circuit, sCNOT(gate.control, gate.target))
+        T = typeof(gate)
+        if T in gate_set.single_qubit_gates
+            push!(circuit, gate_to_apply(T, gate.index))
+        elseif T in gate_set.two_qubit_gates
+            push!(circuit, gate_to_apply(T, gate.control, gate.target))
         else
             throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
         end
@@ -294,11 +338,11 @@ function gates_to_circuit(gates)
 end
 
 
-function save_circuit_diagram(gates::Vector{Gate}, directory, label)
+function save_circuit_diagram(gates::Vector{Gate}, gate_set, directory, label)
     @with classicalbitslayout => :expanded begin
         try
         savecircuit(
-            gates_to_circuit(gates),
+            gates_to_circuit(gates, gate_set),
             joinpath(directory, label);
             scale = 1
             
@@ -329,8 +373,8 @@ function verify_success(circuit, initial_state, target_state, n)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
     
     initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
-    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=10000)
-    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
+    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=n.num_shots)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != n.num_shots
             throw(ErrorException("Some runs were invalid"))
     end
     fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
@@ -343,8 +387,8 @@ function verify_success(circuit, target_state, n)
     
     initial_state = Register(one(MixedDestabilizer, n.num_qubits),n.num_registers*(n.num_registers-1))
     #print(mctrajectories(initial_state, circuit, trajectories=10000))
-    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=10000)
-    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 10000
+    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=n.num_shots)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != n.num_shots
             throw(ErrorException("Some runs were invalid"))
     end
     fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
@@ -353,10 +397,14 @@ end
 
 
 function code_dirname(code)
-    s = lowercase(string(typeof(code)))                     # e.g. trivariatebicyclecode.trivariatebicycleviacirculantmat
-    s = replace(s, r"^main\.dqcircuitsearch\." => "")      # drop Main.DQCircuitSearch.
-    s = split(s, '.')[1]                                    # keep only "trivariatebicyclecode"
-    return s
+    # s = lowercase(string(typeof(code)))                     # e.g. trivariatebicyclecode.trivariatebicycleviacirculantmat
+    # s = replace(s, r"^main\.dqcircuitsearch\." => "")      # drop Main.DQCircuitSearch.
+    # s = split(s, '.')[1]                                    # keep only "trivariatebicyclecode"
+    # return s
+    name = string(nameof(typeof(code)))   # "Steane7" or "TrivariateBicycleViaCirculantMat"
+    name = replace(name, r"Via.*$" => "") # "TrivariateBicycle"
+    name = replace(name, r"\d+$" => "")   # "Steane"
+    return name
 end
 
 function next_run_dir(base_dir::AbstractString)

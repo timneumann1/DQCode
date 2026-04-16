@@ -10,8 +10,9 @@ using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual, HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CNOT_Gate, SGate, SWAP_Gate, Gate, ConditionalGate
-export CodeParameters,CodeParametersLog, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
+export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual
+export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, Gate, GateSet, ConditionalGate
+export CodeParameters, CodeParametersLogical, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
 
 # Parameter structures
 
@@ -32,6 +33,9 @@ end
 struct CodeParameters
     qec_code::AbstractCSSCode
     stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    stabilizer_group
+    num_X_checks::Int
+    logical_Zs
     target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
     target_bit_matrix::Matrix{Int}
     n::Int
@@ -39,12 +43,14 @@ struct CodeParameters
     distance::Int
 end
 
-struct CodeParametersLog
+struct CodeParametersLogical
     qec_code::AbstractCSSCode
-    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
-    initial_states::Vector{MixedDestabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}}
-    target_states::Vector{Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}}
-    target_bit_matrices::Vector{Matrix{Int}}
+    stabilizer_generators::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+    stabilizer_group::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+    logical_Xs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+    logical_Zs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+    target_logical_Xs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
+    target_logical_Zs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
     n::Int
     k::Int
     distance::Int
@@ -89,8 +95,11 @@ struct GeneticParameters
 end
 
 struct MCTSParameters
-    max_steps::Int
-    n_iterations::Int
+    depth::Int # depth that the solver traverses to maximally in each rollout
+    n_iterations::Int # number of iterations the solver rolls out to choose the best next action
+    max_steps::Int # Maximum number of steps (actions) that the solver takes, is equivalent to maximum circuit size
+    fitness_weights::Vector{Float64}
+    discount_factor::Float64 
     exploration_constant::Float64
 end
 
@@ -100,6 +109,11 @@ end
 
 
 # Gate Types
+
+struct GateSet
+    single_qubit_gates::Vector{Type}
+    two_qubit_gates::Vector{Type}
+end
 
 abstract type Gate end
 
@@ -128,9 +142,25 @@ struct SGate <: Gate
     index::Int
 end
 
+struct InvSGate <: Gate 
+    index::Int
+end
+
+struct SqrtXGate <: Gate 
+    index::Int
+end
+
+struct InvSqrtXGate <: Gate 
+    index::Int
+end
 
 # two-qubit gates (store the counterpart of the operation)
-struct CNOT_Gate <: Gate
+struct CX_Gate <: Gate
+    control::Int
+    target::Int
+end
+
+struct CZ_Gate <: Gate
     control::Int
     target::Int
 end

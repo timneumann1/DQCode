@@ -51,7 +51,7 @@ end
 # comm_inv_perm_idx(index::Int, n::NetworkingSpecifications) = n.inv_perm[index] + n.num_comm_qubits_per_register * (n.register_lookup_array[n.inv_perm[index]]-1) # applies correct mapping based on the inverse permutation of the qubit partitioning
 
 
-function construct_executable_circuit(gates, n; telegate_overhead = false)
+function construct_executable_circuit(gates, gate_set, n; telegate_overhead = false)
     
     # n stands for networking specs
 
@@ -74,13 +74,14 @@ function construct_executable_circuit(gates, n; telegate_overhead = false)
     #end
 
     for gate in gates
-
-        if gate isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+        
+        T = typeof(gate)
+        if T in gate_set.single_qubit_gates# isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
             qubit = gate.index
-            push!(circuit, gate_to_apply(typeof(gate),n.comm_inv_perm_idx[qubit]) ) 
+            push!(circuit, gate_to_apply(T, n.comm_inv_perm_idx[qubit]) ) 
             num_single_qubit_gates += 1
             
-        elseif gate isa CNOT_Gate  
+        elseif T in gate_set.two_qubit_gates 
             control = gate.control
             target = gate.target
             control_register = n.register_lookup_array[n.inv_perm[control]] 
@@ -88,7 +89,7 @@ function construct_executable_circuit(gates, n; telegate_overhead = false)
             
 
             if control_register == target_register # the lookup array does not account for the communication qubits
-                push!(circuit, sCNOT(n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target] ))
+                push!(circuit, gate_to_apply(T, n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target] ))
                 num_two_qubit_gates +=1
             else
 
@@ -99,7 +100,7 @@ function construct_executable_circuit(gates, n; telegate_overhead = false)
                     circuit = add_telegate(circuit, control, target, control_register, target_register, n)
                     num_telegates += 1
                 else 
-                    push!(circuit, sCNOT(n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target]))
+                    push!(circuit, gate_to_apply(T, n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target]))
                     num_telegates += 1
                 end
             end
@@ -425,7 +426,7 @@ function mctrajectories_states(initialstate, circuit; trajectories::Int=500) # r
 end
 
 
-function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
+function execute_circuit(circuit, num_qubits::Int, num_registers::Int; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
     initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
     #print(fieldnames(typeof(Register(one(MixedDestabilizer, 1), 1))))
     #println(typeof(mctrajectories(initial_state, circuit, trajectories=num_traj)))
@@ -434,14 +435,14 @@ function execute_circuit(circuit, num_qubits, num_registers; num_traj::Int=500)#
     return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
 end
 
-function execute_circuit(circuit, num_qubits, num_registers, initial_state; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
-    # Circuit execution for logical CNOT search
-    initial_state = Register(initial_state, num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
+function execute_circuit(circuit, initial_state::MixedDestabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}; num_traj::Int=1)#, keepstates::Bool=false)#, mode = "mc")
+    # Circuit execution for MCTS
+    initial_state = Register(initial_state, 0)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we don't need num_communication_qubits slots in this simulation
     return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
 end
 
 
-function execute_circuit(circuit, num_qubits)#, mode = "pert")
+function execute_circuit(circuit, num_qubits::Int)#, mode = "pert")
     initial_state = one(MixedDestabilizer,num_qubits)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state
     return petrajectories(initial_state, circuit)
 end
