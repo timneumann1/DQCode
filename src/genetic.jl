@@ -10,13 +10,14 @@ using QuantumClifford
 using QuantumClifford: MixedDestabilizer, @S_str, true_success_stat, false_success_stat, continue_stat, failure_stat, PauliMeasurement, VerifyOp
 using BenchmarkTools
 using CairoMakie
+using Serialization
 
 export genetic_search
 
 
 function fitness_function(fidelities, circuit_sizes, gen, g)
     penalties = map(cs -> sum(g.fitness_weights[2:4] .* cs) , circuit_sizes) #w[1]*cs[1] + w[2]*cs[2] + w[3]*cs[3]
-    return g.fitness_weights[1] .* fidelities .- penalties  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
+    return g.fitness_weights[1] .* fidelities .- (1.2-gen/g.num_generations)*penalties  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
 end
 
 function initialise_population(code_params, network_specs, genetic_params, gate_set; standard_encoding = false, warm_start = false, warm_start_gates = [], min_len=10)
@@ -40,6 +41,12 @@ function initialise_population(code_params, network_specs, genetic_params, gate_
         if standard_encoding 
             
             gates = copy(baseline_encoding(code_params, network_specs, gate_set, data_storage = false))
+            hadamard_indices = [g.index for g in gates if typeof(g) in gate_set.single_qubit_gates]
+            filter!(g -> !(typeof(g) in gate_set.single_qubit_gates), gates)
+            for index in hadamard_indices
+                pushfirst!(gates, HadamardGate(index))
+            end
+            
             # TODO: convert to my own type but add indices there!
             
             #permutation = transpositions_to_perm(reverse(standard_circuit[3]), num_data_qubits)
@@ -185,6 +192,8 @@ function evaluate_population(population, code_params, network_specs, opt_params,
         # tab_distance = tableau_distance(current_bit_matrix, code_params.target_bit_matrix, network_specs.data_qubits, network_specs.comm_qubits, opt_params.tableau_metric)
         fidelities[idx] = 1 - tab_distance # 1 is perfect alignment, here we are in the noiseless setting (one shot)
         circuit_sizes[idx] =  gate_counts#(num_single_qubit_gates, num_two_qubit_gates, num_telegates) #circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
+        @assert gate_counts[1] == code_params.num_X_checks
+        
     end
 
     # elseif code_params isa CodeParametersLog  # logical CNOT search
@@ -495,7 +504,8 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
     
     # TODO: simplify this init at zero then loop structure
     gen = 0
-    population = initialise_population(code_params, network_specs, genetic_params, gate_set; standard_encoding = true, warm_start = genetic_params.warm_start, warm_start_gates = warm_start_gates_mcts)# length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))
+    @assert !(genetic_params.standard_encoding && genetic_params.warm_start)
+    population = initialise_population(code_params, network_specs, genetic_params, gate_set; standard_encoding = genetic_params.standard_encoding, warm_start = genetic_params.warm_start, warm_start_gates = warm_start_gates_mcts)# length(standard_logical_zero_encoding_circuit(genetic_params.qec_code)[2]))
     
     println("############ Initial Population ##########: Generation size: $(length(population))")
     println("")
@@ -515,7 +525,7 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
 
         fidelities, circuit_sizes = evaluate_population(population, code_params, network_specs, opt_params, gate_set)
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
-        if gen % 100 == 0
+        if gen % 75 == 0
             println("Generation $gen (/$(genetic_params.num_generations)) of size $(length(population)): Best fitness is $(maximum(fitness_scores)), where fidelity = $(fidelities[argmax(fitness_scores)]) and circuit size:")
             println("Single qubit gates: $(circuit_sizes[argmax(fitness_scores)][1]), Two qubit gates: $(circuit_sizes[argmax(fitness_scores)][2]), Telegates: $(circuit_sizes[argmax(fitness_scores)][3]) \n ")
         end
@@ -584,7 +594,9 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
     println("Saving results to $(GA_dir)")
     save_circuit_diagram(GA_result_raw_circuit.gates, gate_set, GA_dir, "GA_raw_circuit__size_$(sum(GA_result_circuit_sizes)).png")
     #save_circuit_diagram(GA_result_exec_circuit, GA_dir, "GA_exec_circuit__size_$(GA_result_circuit_sizes).png")
-
+    
+    serialize(joinpath(GA_dir, "raw_circuit.jls"), GA_result_raw_circuit.gates)
+    
     open(joinpath(GA_dir, "network_specs.txt"), "w") do io
         println(io, "Network Specifications")
         for fname in fieldnames(Types.NetworkSpecifications)
