@@ -17,8 +17,11 @@ export genetic_search
 
 function fitness_function(fidelities, circuit_sizes, gen, g)
     penalties = map(cs -> sum(g.fitness_weights[2:4] .* cs) , circuit_sizes) #w[1]*cs[1] + w[2]*cs[2] + w[3]*cs[3]
-    return g.fitness_weights[1] .* fidelities .- (1.2-gen/g.num_generations)*penalties  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
+    return g.fitness_weights[1] .* fidelities .- 2*exp10(-gen/g.num_generations)*penalties  # fitness can decrease over time since weighting is time-dependent if (gen/genetic_params.num_generations)*
 end
+#(1.2-gen/g.num_generations)
+# the prefactor allows for some variability in the first third of the generations, if the parameters are tuned well (keep also some non-1 fidelity in the beginning)
+# in the end, we are only optimising while maintaining one fidelity
 
 function initialise_population(code_params, network_specs, genetic_params, gate_set; standard_encoding = false, warm_start = false, warm_start_gates = [], min_len=10)
     
@@ -309,6 +312,9 @@ function crossover(best_individuals, mutation_rate, num_data_qubits, max_len, ga
         child1 = mutation(child1, mutation_rate, num_data_qubits, gate_set)
         child2 = mutation(child2, mutation_rate, num_data_qubits, gate_set)
         
+        child1 = _clean_circuit(child1)
+        child2 = _clean_circuit(child2)
+
         _ensure_min_size!(child1, num_hadamards+2, num_data_qubits, num_hadamards, gate_set)
         _ensure_min_size!(child2, num_hadamards+2, num_data_qubits, num_hadamards, gate_set)
 
@@ -323,12 +329,27 @@ function crossover(best_individuals, mutation_rate, num_data_qubits, max_len, ga
     if length(best_individuals)%2 != 0
         child = CircuitIndividual(copy(parents[end].gates))
         child = mutation(child, mutation_rate, num_data_qubits, gate_set)
+        child = _clean_circuit(child)
         _ensure_min_size!(child, num_hadamards+2, num_data_qubits, num_hadamards, gate_set)
         _cap_individual_size(child, max_len)
         push!(new_generation, child)
     end
 
     return new_generation
+end
+
+function _clean_circuit(circuit)
+    # Removes gate duplicates
+    new_gates = empty(circuit.gates) # will contain the clean gate sequence
+    for gate in circuit.gates
+        if !isempty(new_gates) && new_gates[end] == gate
+            pop!(new_gates)
+        else
+            push!(new_gates, gate)
+        end
+    end
+    circuit.gates = new_gates
+    return circuit
 end
 
 function _random_single_qubit_gate(num_data_qubits, gate_set)

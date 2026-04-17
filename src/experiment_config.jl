@@ -50,7 +50,7 @@ function trivariate()
     ) 
 
     genetic_params = GeneticParameters(
-        5000, # individuals
+        10000, # individuals
         3500, # generations
         100, # max length of (raw) circuit individual
         0.85,  # mutation rate
@@ -170,6 +170,6 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = quantum_reed_muller()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
 
 end

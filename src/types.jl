@@ -88,6 +88,7 @@ struct GeneticParameters
     tournament_size::Int
     selection_ratio::Float64
     num_elite::Int
+    standard_encoding::Bool
     warm_start::Bool
     fitness_weights::Vector{Float64}
     #qec_code::AbstractCSSCode
