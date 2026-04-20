@@ -1,7 +1,7 @@
 module Genetic
 
 using ..Types
-using ..CircuitSimulator
+#using ..CircuitSimulator
 using ..Helper
 using ..LogicalEnc
 
@@ -36,7 +36,7 @@ function initialise_population(code_params, network_specs, genetic_params, gate_
     #if standard_encoding || warm_start
     #    baseline_gates = baseline_encoding(code_params, network_specs, gate_set, data_storage = false)
     #end
-    print(warm_start_gates)
+    #print(warm_start_gates)
     
     for i in eachindex(population)
         
@@ -133,39 +133,40 @@ function evaluate_population(population, code_params, network_specs, opt_params,
 
     #if code_params isa CodeParameters # logical zero state genetic search
     for (idx, circ_individual) in enumerate(population)
-        gate_counts = [0,0,0]
-        #quantum_clifford_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(circ_individual.gates, gate_set, network_specs)
-        @assert network_specs.num_shots == 1
-        circuit = Vector{QuantumClifford.AbstractOperation}()  
-        for gate in circ_individual.gates
-            T = typeof(gate)
-            #println(gate)
-            if T in gate_set.single_qubit_gates# isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
-                #reward -= mdp.mcts_params.fitness_weights[2]
-                gate_counts += [1,0,0]
-                #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[qubit]) ], initial_quantum_state, num_traj = 1)
-                push!(circuit, gate_to_apply(T, gate.index) ) 
+        circuit, gate_counts = gates_to_circuit(circ_individual.gates, network_specs)
+        # gate_counts = [0,0,0]
+        # #quantum_clifford_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(circ_individual.gates, gate_set, network_specs)
+        # @assert network_specs.num_shots == 1
+        # circuit = Vector{QuantumClifford.AbstractOperation}()  
+        # for gate in circ_individual.gates
+        #     T = typeof(gate)
+        #     #println(gate)
+        #     if T in gate_set.single_qubit_gates# isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+        #         #reward -= mdp.mcts_params.fitness_weights[2]
+        #         gate_counts += [1,0,0]
+        #         #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[qubit]) ], initial_quantum_state, num_traj = 1)
+        #         push!(circuit, gate_to_apply(T, gate.index) ) 
 
-            elseif T in gate_set.two_qubit_gates 
-                control = gate.control #network_specs.inv_perm[gate.control]
-                target = gate.target #network_specs.inv_perm[gate.target]
-                control_register = network_specs.register_lookup_array[network_specs.inv_perm[control]] 
-                target_register = network_specs.register_lookup_array[network_specs.inv_perm[target]]
+        #     elseif T in gate_set.two_qubit_gates 
+        #         control = gate.control #network_specs.inv_perm[gate.control]
+        #         target = gate.target #network_specs.inv_perm[gate.target]
+        #         control_register = network_specs.register_lookup_array[network_specs.inv_perm[control]] 
+        #         target_register = network_specs.register_lookup_array[network_specs.inv_perm[target]]
                 
-                if control_register == target_register # the lookup array does not account for the communication qubits
-                    #reward -= mdp.mcts_params.fitness_weights[3]
-                    gate_counts += [0,1,0]
-                else
-                    #reward -= mdp.mcts_params.fitness_weights[4]
-                    gate_counts += [0,0,1]
+        #         if control_register == target_register # the lookup array does not account for the communication qubits
+        #             #reward -= mdp.mcts_params.fitness_weights[3]
+        #             gate_counts += [0,1,0]
+        #         else
+        #             #reward -= mdp.mcts_params.fitness_weights[4]
+        #             gate_counts += [0,0,1]
                 
-                end
-                push!(circuit, gate_to_apply(T, control, target ))
+        #         end
+        #         push!(circuit, gate_to_apply(T, control, target ))
                 
                 
-                #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[control], mdp.network_specs.inv_perm[target]) ], initial_quantum_state, num_traj = 1)
-            end
-        end
+        #         #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[control], mdp.network_specs.inv_perm[target]) ], initial_quantum_state, num_traj = 1)
+        #     end
+        # end
 
 
         new_quantum_state = execute_circuit(circuit, network_specs.num_data_qubits, 0; num_traj=1)
@@ -309,8 +310,8 @@ function crossover(best_individuals, mutation_rate, num_data_qubits, max_len, ga
         child2.gates[num_hadamards+1:cp_2] = p2.gates[num_hadamards+1:cp_2]
         child2.gates[cp_2+1:end] = p1.gates[cp_1+1:end]
 
-        child1 = mutation(child1, mutation_rate, num_data_qubits, gate_set)
-        child2 = mutation(child2, mutation_rate, num_data_qubits, gate_set)
+        child1 = mutation(child1, mutation_rate, num_data_qubits, num_hadamards, gate_set)
+        child2 = mutation(child2, mutation_rate, num_data_qubits, num_hadamards, gate_set)
         
         child1 = _clean_circuit(child1)
         child2 = _clean_circuit(child2)
@@ -328,7 +329,7 @@ function crossover(best_individuals, mutation_rate, num_data_qubits, max_len, ga
 
     if length(best_individuals)%2 != 0
         child = CircuitIndividual(copy(parents[end].gates))
-        child = mutation(child, mutation_rate, num_data_qubits, gate_set)
+        child = mutation(child, mutation_rate, num_data_qubits, num_hadamards, gate_set)
         child = _clean_circuit(child)
         _ensure_min_size!(child, num_hadamards+2, num_data_qubits, num_hadamards, gate_set)
         _cap_individual_size(child, max_len)
@@ -385,7 +386,7 @@ function _random_gate(num_data_qubits, gate_set::GateSet; p_two_qubit=0.7)
     end
 end
 
-function mutation(individual, mutation_rate, num_data_qubits, gate_set)
+function mutation(individual, mutation_rate, num_data_qubits, num_hadamards, gate_set)
     
     if rand() < mutation_rate
         # Pick one matrix elemenet randomly
@@ -409,28 +410,33 @@ function mutation(individual, mutation_rate, num_data_qubits, gate_set)
             end
 
 
-        # elseif T in gate_set.single_qubit_gates
-        #     r = rand() 
-        #     if r>0.9 # mutate single qubit gates into single-qubit gates on random qubit
-        #         individual.gates[index] = _random_single_qubit_gate(rand(1:num_data_qubits), gate_set)
-        #     elseif r>0.5 && index != circuit_length
-        #         individual.gates[index], individual.gates[index+1] = individual.gates[index+1], individual.gates[index]
-        #     elseif r>0.25   # ... or multi-qubit gates
-        #         control_index = rand(1:num_data_qubits)
-        #         target_index = rand(1:num_data_qubits)
-        #         tries = 0
-        #         #while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
-        #         while target_index == control_index
-        #             target_index = rand(1:num_data_qubits)
-        #             tries +=1
-        #         end
-        #         if tries >= 10
-        #             return individual
-        #         end    
-        #         individual.gates[index] = _random_two_qubit_gate(gate_set, control_index, target_index)
-        #     else
-        #         deleteat!(individual.gates, index)
-        #     end
+        # the probability to sample a single qubit gate is inherently lower already, 
+        elseif T in gate_set.single_qubit_gates
+            r = rand() 
+            hadamard_indices = [gate.index for gate in individual.gates[1:num_hadamards]]
+            if r>1 # mutate single qubit gates into single-qubit gates on random qubit
+                new_idx = rand(1:num_data_qubits)
+                if new_idx ∉ hadamard_indices
+                    individual.gates[index] = HadamardGate(new_idx)#_random_single_qubit_gate(new_idx, gate_set)
+                end
+            # elseif r>0.5 && index != circuit_length
+            #     individual.gates[index], individual.gates[index+1] = individual.gates[index+1], individual.gates[index]
+            # elseif r>0.25   # ... or multi-qubit gates
+            #     control_index = rand(1:num_data_qubits)
+            #     target_index = rand(1:num_data_qubits)
+            #     tries = 0
+            #     #while ( (ind.gates[target_index,c] isa CNOT_Gate) || (target_index == r) ) && tries < 10
+            #     while target_index == control_index
+            #         target_index = rand(1:num_data_qubits)
+            #         tries +=1
+            #     end
+            #     if tries >= 10
+            #         return individual
+            #     end    
+            #     individual.gates[index] = _random_two_qubit_gate(gate_set, control_index, target_index)
+            # else
+            #     deleteat!(individual.gates, index)
+            end
         end
     end
 
@@ -540,7 +546,7 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
     
     # push!(fitness_evolution, maximum(fitness_scores))
     
-    GA_result_raw_circuit = nothing
+    GA_result_circuit = nothing
     GA_result_circuit_sizes = nothing
     while gen<=genetic_params.num_generations
 
@@ -554,7 +560,7 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
 
         if gen == genetic_params.num_generations
             best_individual = argmax(fitness_scores)
-            GA_result_raw_circuit = population[best_individual]
+            GA_result_circuit = population[best_individual]
             GA_result_circuit_sizes = circuit_sizes[best_individual]
             break
         end
@@ -578,7 +584,8 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
     #println(winner_winner_chicken_dinner_circuit)
     #println(GA_result_raw_circuit.gates)
     #print(baseline_exec_circuit)
-    GA_result_exec_circuit, _,_,_= construct_executable_circuit(GA_result_raw_circuit.gates, gate_set, network_specs, telegate_overhead = true)
+    GA_result_qs_circuit = gates_to_circuit(GA_result_circuit.gates)
+    #GA_result_exec_circuit, _,_,_= construct_executable_circuit(GA_result_raw_circuit.gates, gate_set, network_specs, telegate_overhead = true)
     #GA_result_exec_circuit_size = circuit_size(GA_result_exec_circuit)
     #baseline_raw_circuit_size = circuit_size(gates_to_circuit(baseline_raw_circuit.gates))
     #baseline_exec_circuit_size = circuit_size(baseline_exec_circuit)
@@ -587,22 +594,22 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
 
     verification_logical_state = false
     if code_params isa CodeParameters
-        verification_logical_state = verify_success(GA_result_exec_circuit, code_params.target_state, network_specs)
+        verification_logical_state = verify_success(GA_result_qs_circuit, code_params.target_state, network_specs)
     # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
         verification_logical_state = verification_logical_state == 1.0 ? true : false
         println("\nVerification Genetic Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
-    elseif code_params isa CodeParametersLog 
-        verification_logical_state1 = verify_success(GA_result_exec_circuit, code_params.initial_states[1], code_params.target_states[1], network_specs)
-        println("00 state correct?: $verification_logical_state1")
-        verification_logical_state2 = verify_success(GA_result_exec_circuit, code_params.initial_states[2], code_params.target_states[2], network_specs)
-        println("01 state correct?: $verification_logical_state2")
-        verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.initial_states[3], code_params.target_states[3], network_specs)
-        println("10 state correct?: $verification_logical_state3")
-        verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.initial_states[4], code_params.target_states[4], network_specs)
-        println("11 state correct?: $verification_logical_state4")
-        if verification_logical_state1 == 1.0 && verification_logical_state2 == 1.0 && verification_logical_state3 == 1.0  && verification_logical_state4 == 1.0 
-            verification_logical_state = true
-        end
+    # elseif code_params isa CodeParametersLog 
+    #     verification_logical_state1 = verify_success(GA_result_exec_circuit, code_params.initial_states[1], code_params.target_states[1], network_specs)
+    #     println("00 state correct?: $verification_logical_state1")
+    #     verification_logical_state2 = verify_success(GA_result_exec_circuit, code_params.initial_states[2], code_params.target_states[2], network_specs)
+    #     println("01 state correct?: $verification_logical_state2")
+    #     verification_logical_state3 = verify_success(GA_result_exec_circuit, code_params.initial_states[3], code_params.target_states[3], network_specs)
+    #     println("10 state correct?: $verification_logical_state3")
+    #     verification_logical_state4 = verify_success(GA_result_exec_circuit, code_params.initial_states[4], code_params.target_states[4], network_specs)
+    #     println("11 state correct?: $verification_logical_state4")
+    #     if verification_logical_state1 == 1.0 && verification_logical_state2 == 1.0 && verification_logical_state3 == 1.0  && verification_logical_state4 == 1.0 
+    #         verification_logical_state = true
+    #     end
     end
 
     ###########################################
@@ -613,10 +620,10 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
     GA_dir = next_run_dir(base_ga_dir)
 
     println("Saving results to $(GA_dir)")
-    save_circuit_diagram(GA_result_raw_circuit.gates, gate_set, GA_dir, "GA_raw_circuit__size_$(sum(GA_result_circuit_sizes)).png")
+    save_circuit_diagram(GA_result_qs_circuit, GA_dir, "GA_circuit__size_$(sum(GA_result_circuit_sizes)).png")
     #save_circuit_diagram(GA_result_exec_circuit, GA_dir, "GA_exec_circuit__size_$(GA_result_circuit_sizes).png")
     
-    serialize(joinpath(GA_dir, "raw_circuit.jls"), GA_result_raw_circuit.gates)
+    serialize(joinpath(GA_dir, "circuit.jls"), GA_result_circuit.gates)
     
     open(joinpath(GA_dir, "network_specs.txt"), "w") do io
         println(io, "Network Specifications")
@@ -650,17 +657,17 @@ function genetic_search(code_params, network_specs, opt_params, genetic_params, 
 
     open(joinpath(GA_dir, "GA_raw_circuit.txt"), "w") do io
         println(io, "# Raw gate sequence of size $(sum(GA_result_circuit_sizes))")
-        for (i, g) in enumerate(GA_result_raw_circuit.gates)
+        for (i, g) in enumerate(GA_result_circuit.gates)
             println(io, i, "\t", repr(g))
         end
     end
 
-    open(joinpath(GA_dir, "GA_exec_circuit.txt"), "w") do io
-        println(io, "# Executable (DQC) circuit operations of size:: $GA_result_circuit_sizes")
-        for (i, op) in enumerate(GA_result_exec_circuit)
-            println(io, i, "\t", repr(op))
-        end
-    end
+    # open(joinpath(GA_dir, "GA_exec_circuit.txt"), "w") do io
+    #     println(io, "# Executable (DQC) circuit operations of size:: $GA_result_circuit_sizes")
+    #     for (i, op) in enumerate(GA_result_exec_circuit)
+    #         println(io, i, "\t", repr(op))
+    #     end
+    # end
 
     open(joinpath(GA_dir, "summary.txt"), "w") do io
         println(io, "# Encoding successful: $verification_logical_state")

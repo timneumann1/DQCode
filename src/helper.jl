@@ -10,8 +10,9 @@ using Quantikz: savecircuit, @with, classicalbitslayout
 
 export create_lookup_array, comm_qubits_array, perm_to_transpositions, transpositions_to_perm
 export data_qubit_partitioning, circuit_size, baseline_comparison, tableau_distance, tableau_to_bitmatrix
-export gate_to_apply, gates_to_circuit, verify_success, save_circuit_diagram
+export execute_circuit, gate_to_apply, gates_to_circuit, verify_success, save_circuit_diagram
 export next_run_dir, code_dirname
+export compare_states
 
 # lookup arrays needs to be created only once before executing the genetic search
 #TODO: replace with cleaner version
@@ -31,6 +32,53 @@ export next_run_dir, code_dirname
 #     #print(register_lookup_array, register_start_indices)
 #     return register_lookup_array, register_start_indices
 # end
+
+
+function mctrajectories_states(initialstate, circuit; trajectories::Int=500) # returns Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }
+    #counts = Dict{Tuple{typeof(initialstate), QuantumClifford.CircuitStatus}, Int}()
+    stabilisers = Vector{ QuantumClifford.MixedDestabilizer{ QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}} } }()
+    for i in 1:trajectories
+        st, stat = QuantumClifford.mctrajectory!(copy(initialstate), circuit)
+        #println("Type: $(typeof(st)), $(typeof(st.stab))")
+        #println("$(fieldnames(typeof(st)))")
+        if (stat==continue_stat)
+            push!(stabilisers, st.stab)
+            #print(typeof(st.stab))
+        else
+            throw("There were faulty circuit executions")
+        end
+        # println("Trajectory $i: status $stat")
+        # println("Correct status?: $(stat==continue_stat)")
+        # #counts[key] = get(counts, key, 0) + 1
+        # #push!(stabilisers, st)
+        # println("Current array of tableaus: $stabilisers")
+    end
+    return stabilisers
+end
+
+
+function execute_circuit(circuit, num_qubits::Int, num_registers::Int; num_traj::Int=500)#, keepstates::Bool=false)#, mode = "mc")
+    initial_state = Register(one(MixedDestabilizer,num_qubits),num_registers*(num_registers-1))# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we need num_communication_qubits slots in the classical register
+    #print(fieldnames(typeof(Register(one(MixedDestabilizer, 1), 1))))
+    #println(typeof(mctrajectories(initial_state, circuit, trajectories=num_traj)))
+    #println("No. of trajectories:$(num_traj)")
+    #print(circuit)
+    return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
+end
+
+function execute_circuit(circuit, initial_state::MixedDestabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}; num_traj::Int=1)#, keepstates::Bool=false)#, mode = "mc")
+    # Circuit execution for MCTS
+    initial_state = Register(initial_state, 0)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state  # we don't need num_communication_qubits slots in this simulation
+    return mctrajectories_states(initial_state, circuit, trajectories=num_traj)
+end
+
+
+function execute_circuit(circuit, num_qubits::Int)#, mode = "pert")
+    initial_state = one(MixedDestabilizer,num_qubits)# S" IIIIIIZ IIIIIZI IIIIZII IIIZIII IIZIIII IZIIIII ZIIIIII"  # zero state
+    return petrajectories(initial_state, circuit)
+end
+
+
 
 function create_lookup_array(num_data_qubits_per_register)
     
@@ -316,33 +364,87 @@ gate_to_apply(::Type{InvSqrtXGate}, i::Int) = sInvSQRTX(i)
 gate_to_apply(::Type{CX_Gate}, i::Int, j::Int) = sCNOT(i,j)
 gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
 
-
-
-function gates_to_circuit(gates, gate_set)
-    "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
-
-    circuit = Vector{QuantumClifford.AbstractOperation}()
-
+function gates_to_circuit(gates, n)
+    gate_counts = [0,0,0]
+    @assert n.num_shots == 1
+    circuit = Vector{QuantumClifford.AbstractOperation}()  
     for gate in gates
         T = typeof(gate)
-        if T in gate_set.single_qubit_gates
-            push!(circuit, gate_to_apply(T, gate.index))
-        elseif T in gate_set.two_qubit_gates
-            push!(circuit, gate_to_apply(T, gate.control, gate.target))
+        
+        if T <: SingleQubitGate # isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+            #reward -= mdp.mcts_params.fitness_weights[2]
+            gate_counts += [1,0,0]
+            #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[qubit]) ], initial_quantum_state, num_traj = 1)
+            push!(circuit, gate_to_apply(T, gate.index) ) 
+
+        elseif T <: TwoQubitGate
+            control = gate.control #network_specs.inv_perm[gate.control]
+            target = gate.target #network_specs.inv_perm[gate.target]
+            control_register = n.register_lookup_array[n.inv_perm[control]] 
+            target_register = n.register_lookup_array[n.inv_perm[target]]
+            
+            if control_register == target_register # the lookup array does not account for the communication qubits
+                #reward -= mdp.mcts_params.fitness_weights[3]
+                gate_counts += [0,1,0]
+            else
+                #reward -= mdp.mcts_params.fitness_weights[4]
+                gate_counts += [0,0,1]
+            
+            end
+            push!(circuit, gate_to_apply(T, control, target ))
+        
+        else
+            throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
+            
+            #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[control], mdp.network_specs.inv_perm[target]) ], initial_quantum_state, num_traj = 1)
+        end
+    end
+    return circuit, gate_counts
+end
+
+function gates_to_circuit(gates)
+   
+    circuit = Vector{QuantumClifford.AbstractOperation}()  
+    for gate in gates
+        T = typeof(gate)
+        if T <: SingleQubitGate # isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+            push!(circuit, gate_to_apply(T, gate.index) ) 
+        elseif T <: TwoQubitGate
+            control = gate.control #network_specs.inv_perm[gate.control]
+            target = gate.target #network_specs.inv_perm[gate.target]
+            push!(circuit, gate_to_apply(T, control, target ))
         else
             throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
         end
     end
-
     return circuit
 end
 
+# function gates_to_circuit(gates, gate_set)
+#     "Function to convert array of Main.DQCircuitSearch.Types.Gate gates to AbstractOperations object (e.g., for plotting)"
 
-function save_circuit_diagram(gates::Vector{Gate}, gate_set, directory, label)
+#     circuit = Vector{QuantumClifford.AbstractOperation}()
+
+#     for gate in gates
+#         T = typeof(gate)
+#         if T in gate_set.single_qubit_gates
+#             push!(circuit, gate_to_apply(T, gate.index))
+#         elseif T in gate_set.two_qubit_gates
+#             push!(circuit, gate_to_apply(T, gate.control, gate.target))
+#         else
+#             throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
+#         end
+#     end
+
+#     return circuit
+# end
+
+
+function save_circuit_diagram(gates::Vector{Gate}, directory, label)
     @with classicalbitslayout => :expanded begin
         try
         savecircuit(
-            gates_to_circuit(gates, gate_set),
+            gates_to_circuit(gates),
             joinpath(directory, label);
             scale = 1
             
@@ -368,6 +470,14 @@ function save_circuit_diagram(circuit::Vector{AbstractOperation}, directory, lab
     end
 end
 
+function compare_states(test_state, target_state, n)
+    circ = [VerifyOp(target_state, n.data_qubits)]
+#    initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
+    mc_result = mctrajectories(test_state, circ, trajectories=1)
+    identity = ((round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10)) == 1.0) ? true : false
+    return identity
+end
+
 function verify_success(circuit, initial_state, target_state, n)
     verification_circuit = copy(circuit)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
@@ -381,10 +491,13 @@ function verify_success(circuit, initial_state, target_state, n)
     return fidelity
 end
 
-function verify_success(circuit, target_state, n)
+function verify_success(circuit, target_state, n; comm_setting=false)
     verification_circuit = copy(circuit)
-    push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
-    
+    if comm_setting
+        push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
+    else
+        push!(verification_circuit, VerifyOp(target_state, collect(1:n.num_data_qubits)))
+    end
     initial_state = Register(one(MixedDestabilizer, n.num_qubits),n.num_registers*(n.num_registers-1))
     #print(mctrajectories(initial_state, circuit, trajectories=10000))
     mc_result = mctrajectories(initial_state, verification_circuit, trajectories=n.num_shots)
@@ -394,7 +507,6 @@ function verify_success(circuit, target_state, n)
     fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
     return fidelity
 end
-
 
 function code_dirname(code)
     # s = lowercase(string(typeof(code)))                     # e.g. trivariatebicyclecode.trivariatebicycleviacirculantmat

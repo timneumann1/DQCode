@@ -14,7 +14,7 @@ function steane()
 
     genetic_params = GeneticParameters(
         1000, # individuals
-        200, # generations
+        1000, # generations
         100, # max length of (raw) circuit individual
         0.85,  # mutation rate
         5, # tournament size
@@ -27,7 +27,7 @@ function steane()
 
     mcts_params = MCTSParameters(
         10, # max depth
-        2500, #iterations
+        100, #iterations
         20, # steps before termination
         [1e4,1,2,3],
         0.85, # discount factor
@@ -50,27 +50,26 @@ function trivariate()
     ) 
 
     genetic_params = GeneticParameters(
-        10000, # individuals
-        3500, # generations
+        15000, # individuals
+        7500, # generations
         100, # max length of (raw) circuit individual
         0.85,  # mutation rate
         5, # tournament size
         0.5, # selection_ratio
         1, # num_elite
-        true, #standard_encoding
-        false, # warm_start
+        false, #standard_encoding
+        true, # warm_start
         [2e4,1,10,100] # fitness weights (fidelity, single-, two- and telegates)
     )
 
     mcts_params = MCTSParameters(
-        10, # max depth
-        50000, #iterations
-        30, # steps before termination
-        [1e5,1,5,10],
-        0.85, # discount factor
-        2.5 # exploration constant
+        20, # max depth
+        1e6, #iterations
+        22, # steps before termination
+        [1e6,1,5,1e3],
+        0.999, # discount factor
+        1.5 # exploration constant
     )
-#    [1e4,1,5,100],
 
     gate_set = GateSet(
         [HadamardGate],#HadamardGate],#, SqrtXGate, SGate],#PauliXGate, PauliYGate, PauliZGate, InvSGate, SqrtXGate, InvSqrtXGate],  # single-qubit gates
@@ -102,7 +101,7 @@ function quantum_reed_muller()
 
     mcts_params = MCTSParameters(
         12, # max depth
-        1000, #iterations
+        2500, #iterations
         20, # steps before termination
         [1e4,1,5,100],
         0.85, # discount factor
@@ -171,5 +170,21 @@ end
 # )
 
 distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
+p = 0.01
+noise_model = NoiseSpecs(p,p,p,p,p,p,p,p,p,p,p,p)
+
+# init_noise::Float64     # Initialisation noise
+#     idle_depolarising_noise::Float64  # idling depolarising probability
+#     idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
+#     single_q_gate_noise::Float64      # single qubit gate noise probability
+#     two_q_gate_noise::Float64         # two-qubit gate noise probability
+#     measurement_noise::Float64        # Measurement noise
+#     two_q_gate_noise_diff_species::Float64         # two-qubit gate noise probability between communication and memory qubit
+#     comm_qubit_init_noise::Float64 # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
+#     comm_idle_depolarising_noise::Float64  # idling depolarising probability
+#     single_comm_q_gate_noise::Float64 
+#     comm_qubit_measurement_noise::Float64
+#     classical_comm_noise::Float64
+
 
 end
