@@ -7,6 +7,7 @@ using ..QECTools
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, continue_stat, AbstractOperation, AbstractStabilizer, AbstractNoise, apply_single_x!, apply_single_y!, apply_single_z! #, sX, SY, SZ
 using QECCore
+using QuantumClifford.ECC: DecoderCorrectionGate, CSSTableDecoder, decode
 
 import QuantumClifford: apply!, affectedqubits, applynoise! # we want to extend this with ConditionalGate
 export add_telegate, add_noise, construct_executable_circuit
@@ -622,12 +623,12 @@ end
 function dqc_state_prep(gates, code_params, network_specs, noise)
     DQC_circuit = construct_DQC_executable_circuit(gates, network_specs, noise)
     success = verify_success(DQC_circuit, code_params.target_state, network_specs; comm_setting = true)
-    println("Success: $success")
+    println("Success: $success -> error rate = $(1-success)")
     #println("DQC circuit: \n $DQC_circuit")
    
     css_lut_decoder = CSSTableDecoder(code_params.qec_code, error_weight = 1)
-    println("X Lookup Table: $(css_lut_decoder.tabledecoderx.lookup_table)")
-    println("Z Lookup Table: $(css_lut_decoder.tabledecoderz.lookup_table)")
+    #println("X Lookup Table: $(css_lut_decoder.tabledecoderx.lookup_table)")
+    #println("Z Lookup Table: $(css_lut_decoder.tabledecoderz.lookup_table)")
     H = parity_checks(css_lut_decoder)
     # Build perfect syndrome circuit, with ancillas being appended to DQC cores (consisting of data and comm qubits)
     # and bit string measurements being written into classical register n.num_registers*(n.num_registers-1) + 1
@@ -637,49 +638,117 @@ function dqc_state_prep(gates, code_params, network_specs, noise)
 
     total_number_qubits = network_specs.num_qubits + n_anc_syndrome + n_anc_logical_Z
 
-    circuit = vcat(DQC_circuit, syndrome_circ, logical_Z_circ)
+    circuit = vcat(DQC_circuit, syndrome_circ, logical_Z_circ ) #sX(9),sX(13),sX(14),sX(19), sX(21) gives a logical X error, [sHadamard(1),sHadamard(2), sHadamard(3), sHadamard(7), sHadamard(8), sHadamard(9), sHadamard(13),sHadamard(14), sHadamard(15), sHadamard(19), sHadamard(20), sHadamard(21)] a logical H
+    logical_failures_pre_decoding = 0
     logical_failures = 0
+    apply_correction = false # for code testing
     #println("\n\n\n $circuit \n\n\n")
     for _ in 1:network_specs.num_shots
+
         initial_state = Register(one(MixedDestabilizer,total_number_qubits),network_specs.num_registers*(network_specs.num_registers-1)+length(syndrome_bits)+length(logical_Z_bits))
-        st, stat = mctrajectory!(initial_state, copy(circuit))
         
-        matching = compare_states(st.stab, code_params.target_state, network_specs)
-        println("Matching States: $matching")
-        syndrome = st.bits[syndrome_bits]
-        measured_logical_Z_bits = st.bits[logical_Z_bits] 
+        if apply_correction # for code testing
+            correction_gate = DecoderCorrectionGate(css_lut_decoder, network_specs.data_qubits, syndrome_bits )
+            #print(correction_gate)
+            state, stats = mctrajectory!(initial_state, vcat(circuit, correction_gate))
+            syndrome = Vector{Bool}(state.bits[syndrome_bits])
+            println("Syndrome is: $syndrome")
+            println("Error guess is $(decode(css_lut_decoder, syndrome))")
+            println("Logical Z bits are $(state.bits[logical_Z_bits])")
+            
+            matching = compare_states(state.stab, code_params.target_state, network_specs)
+            println("Matching States: $matching")
+            continue
+        end
+        
+        
+        state, stats = mctrajectory!(initial_state, copy(circuit))
+        #println("st: $(state.stab)")
+        #println("Of type $(typeof(state.stab))")
+        
+        syndrome = Vector{Bool}(state.bits[syndrome_bits])
+        measured_logical_Z_bits = state.bits[logical_Z_bits] # since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
+        if any(measured_logical_Z_bits)==1 || any(syndrome)==1
+            logical_failures_pre_decoding +=1
+        end
 
-        println(st.bits)
-        println(syndrome)
-        println(measured_logical_Z_bits)
+        #matching = compare_states(state.stab, code_params.target_state, network_specs)
+        #println("Matching States: $matching")
+        #println("Syndrome: $syndrome")
+        #println("Logical Zs: $measured_logical_Z_bits")
 
+        # evaluate encoding of Z state by identifying decoding correction and checking via measured fault in Z logical classically (we check whether a logical X error has been applied, leading to a logical Z error in the stabiliser)
+
+
+        #println(state.bits) # those are the 1:#registers(#registers-1) bits from telegates (these are irrelevant for decoding)
+        #println(syndrome) # these are the next |stab_generator| bits 
+        #println(measured_logical_Z_bits) # the remaining ones are the ones for logical measurement 
+
+        # what would the logical Z measuremten show if the state was + and thus stabilised by X (what else than 0 for 0 state and 1 for 1 state)
+        
         error_guess = decode(css_lut_decoder, syndrome)
-        println(error_guess)
+
+        #println(error_guess)
         if isnothing(error_guess)
             # Table decoder can't find a matching syndrome bc error weight is too high
+            # this edge case only occurs if the syndrome is non-trivial, hence it is safe to say that if it occurs, there will be a logical error (since the
+            #state is incorrect yet nothing got corrected)
+            # could instead populate an error guess of all zeros, which would also lead to detection of a logical error in the next loop
+
             logical_failures += 1
             continue
         end
 
+        # fault matrix is a (2k)x(2n) dimensional matrix, and to determine the logical Z part, we need the last k rows: O[end÷2+1:end,:]
+        faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] #  decoder has the faults_matrix as attribute
+        for j in 1:size(faults_matrix_z, 1) # iterate over the k logical Z operators
+            sum_mod = 0
+            @inbounds @simd for k in 1:size(faults_matrix_z, 2) # iterate over all the physical qubits (/error locations)
+                sum_mod += faults_matrix_z[j, k] * error_guess[k]
+            end
+            sum_mod %= 2  # will be 1 if there is an odd number of agreed indiced between fault matrix and error_guess for the given jth logical Z operator
+            # the logic behind this is error degeneracy of the code: If there are is an even number of corrections in error guess coinciding with locations that actually lead to
+            # a logical flip of this operator, then applying the even number cancels out the flip. Then if there was a logical error for this logical operator, we will not correct it (if there was not)
+            # i.e., sum_mod == measured_fault, we are fine since the even number of corrections fixes the state.
+            # If there is an odd number of corrections matching, we perform a logical correction. Now if there was an error (agian sum_mod == mneasured fault), this is exactly what we want. If not, we INTRODUCE an error, 
+            # again leading to a logical failure. 
+            if sum_mod != measured_logical_Z_bits[j] # measured_logical_Z_bits = measured_Z_faults
+                logical_failures += 1
+                break
+            end
+        end
+
+
+        # # add assertion of same state and logical error count: for this, we need to actually simulate the decoding operation
+        # println("Logical error occured: $logical_failures")
+        # matching = compare_states(state.stab, code_params.target_state, network_specs)
+        # println("Matching States: $matching")
+        
         #TODO: Apply the correction gate (since there is a correctable syndrome, this measn that the correction will bring us back to the codespace)
             # applying pauli correction: https://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl maps back to the codespace so stabilisers are satisfied. 
         #and see if the logical syndrome is correct now (if everything is zero we are in the codespace and the logicals are satisfied)
-        DecoderCorrectionGate(css_lut_decoder, network_specs.data_qubits,syndrome )
+    
+        
+        #print(correction_gate)
+        #correction_gate = DecoderCorrectionGate(decoder, 1:7, 1:6)
+        #apply!(circuit, correction_gate)
+        #state_decoded, stats_decoded = mctrajectory!(Register(state.stab, network_specs.num_registers*(network_specs.num_registers-1)+length(syndrome_bits)+length(logical_Z_bits)), [correction_gate, syndrome_circ, logical_Z_circ ])
 
         # initial_state = Register(one(MixedDestabilizer,total_number_qubits),network_specs.num_registers*(network_specs.num_registers-1)+length(syndrome_bits)+length(logical_Z_bits))
         # st, stat = mctrajectory!(initial_state, copy(circuit))
         
-        # matching = compare_states(st.stab, code_params.target_state, network_specs)
-        # println("Matching States: $matching")
-        # syndrome = st.bits[syndrome_bits]
-        # measured_logical_Z_bits = st.bits[logical_Z_bits] 
+        # syndrome = state_decoded.bits[syndrome_bits]
+        # measured_logical_Z_bits = state_decoded.bits[logical_Z_bits] 
 
         # println(st.bits)
-        # println(syndrome)
-        # println(measured_logical_Z_bits)
+        #println("Syndrome: $syndrome")
+        #println("Logical Zs: $measured_logical_Z_bits")
     end
 
-    return nothing
+    logical_error_rate = logical_failures/network_specs.num_shots
+    println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/network_specs.num_shots) ")
+    println("Over $(network_specs.num_shots) runs, the logical error rate (after decoding) is $logical_error_rate")
+    return logical_error_rate
 end
 
 

@@ -32,7 +32,7 @@ using .LogicalEnc: baseline_encoding_circuit
 
 #using .CircuitSimulator: execute_circuit
 
-using .ExperimentConfig: distributed_qec_code, type_two_register_sizes, logical_op, opt_params, genetic_params, mcts_params, gate_set, noise_model
+using .ExperimentConfig: distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set, noise_model, n_shots
 
 using .QECTools
 using .DQCLogicalStatePrepSimulator
@@ -78,7 +78,7 @@ function network_setup(qec_code, register_sizes)
         num_qubits,     # total number of qubits
         comm_idx,       # array containing indices under communication qubit reindexing
         comm_inv_perm_idx, # array containing indices under communication qubit reindexing after inverse permutation
-        1e0 # number of shots
+        n_shots # number of shots
     )
     return network_specs
 
@@ -323,12 +323,12 @@ function run_genetic_search()
 end
 export run_genetic_search
 
-function run_genetic_search_logical_op()
-    network_specs = network_setup(distributed_qec_code, type_two_register_sizes)
-    code_params = code_setup(distributed_qec_code)#, network_specs, logical_op) 
-    return Genetic.genetic_search(code_params, network_specs, opt_params, genetic_params, gate_set)
-end
-export run_genetic_search_logical_op
+# function run_genetic_search_logical_op()
+#     network_specs = network_setup(distributed_qec_code, type_two_register_sizes)
+#     code_params = code_setup(distributed_qec_code)#, network_specs, logical_op) 
+#     return Genetic.genetic_search(code_params, network_specs, opt_params, genetic_params, gate_set)
+# end
+# export run_genetic_search_logical_op
 
 #using .MonteCarloTreeSearch: run_MCTS
 function run_MCTS()
@@ -353,7 +353,6 @@ function run_dqc_state_prep()
     filepath = "/Users/tim/Tim/projects/thesis/src/results/TrivariateBicycle/GA/90/raw_circuit.jls"
     gates = deserialize(filepath)
     return DQCLogicalStatePrepSimulator.dqc_state_prep(gates, code_params, network_specs, noise_model)
-     
 end
 export run_dqc_state_prep
 

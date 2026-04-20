@@ -170,8 +170,9 @@ end
 # )
 
 distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
-p = 0.01
+p = 1e-2
 noise_model = NoiseSpecs(p,p,p,p,p,p,p,p,p,p,p,p)
+n_shots = 1e5
 
 # init_noise::Float64     # Initialisation noise
 #     idle_depolarising_noise::Float64  # idling depolarising probability

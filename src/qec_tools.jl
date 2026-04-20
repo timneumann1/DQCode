@@ -8,13 +8,13 @@ using ..Helper
 using QuantumClifford
 using QuantumClifford: AbstractOperation
 using QECCore
-using QuantumClifford.ECC: AbstractSyndromeDecoder, faults_matrix
+using QuantumClifford.ECC: AbstractSyndromeDecoder, faults_matrix, CSSTableDecoder, ClassicalTableDecoder, create_lookup_table
 using Combinatorics: combinations
 
-import QuantumClifford.ECC: parity_checks
+import QuantumClifford.ECC: parity_checks, decode
 export parity_checks
 
-export ClassicalTableDecoder, CSSTableDecoder, decode
+#export ClassicalTableDecoder, CSSTableDecoder
 
 function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, bit_index, network_specs)
     circuit = AbstractOperation[]
@@ -82,98 +82,98 @@ end
 # end
 
 
-struct ClassicalTableDecoder <: AbstractSyndromeDecoder
-    """Parity check matrix defining the code"""
-    H::Matrix{Bool}
-    """The number of bits in the code"""
-    n::Int
-    """The number of parity checks"""
-    s::Int
-    """The maximum weight of errors in the lookup table"""
-    error_weight::Int
-    """The lookup table corresponding to the code"""
-    lookup_table::Dict{Vector{Bool},Vector{Bool}}
-    lookup_buffer::Vector{Bool}
-    ClassicalTableDecoder(H, n, s, error_weight, lookup_table) = new(H, n, s, error_weight, lookup_table, fill(false, s))
-end
+# struct ClassicalTableDecoder <: AbstractSyndromeDecoder
+#     """Parity check matrix defining the code"""
+#     H::Matrix{Bool}
+#     """The number of bits in the code"""
+#     n::Int
+#     """The number of parity checks"""
+#     s::Int
+#     """The maximum weight of errors in the lookup table"""
+#     error_weight::Int
+#     """The lookup table corresponding to the code"""
+#     lookup_table::Dict{Vector{Bool},Vector{Bool}}
+#     lookup_buffer::Vector{Bool}
+#     ClassicalTableDecoder(H, n, s, error_weight, lookup_table) = new(H, n, s, error_weight, lookup_table, fill(false, s))
+# end
 
-function ClassicalTableDecoder(H::Matrix{Bool}; error_weight=1)
-    s, n = size(H)
-    lookup_table = create_lookup_table(H; error_weight)
-    return ClassicalTableDecoder(H, n, s, error_weight, lookup_table)
-end
+# function ClassicalTableDecoder(H::Matrix{Bool}; error_weight=1)
+#     s, n = size(H)
+#     lookup_table = create_lookup_table(H; error_weight)
+#     return ClassicalTableDecoder(H, n, s, error_weight, lookup_table)
+# end
 
-function create_lookup_table(H::Matrix{Bool}; error_weight=1) # TODO there is inefficient casting between Bool vectors and bitvectors here
-    lookup_table = Dict{Vector{Bool},Vector{Bool}}()
-    s, n = size(H)
-    # Process errors from highest weight to lowest
-    # so that lower-weight errors overwrite higher-weight ones
-    # (lower-weight errors are more probable)
-    for w in error_weight:-1:1
-        for positions in combinations(1:n, w)
-            error = falses(n)
-            for pos in positions
-                error[pos] = true
-            end
-            # Calculate syndrome: s = H * e (mod 2)
-            syndrome = Bool[(sum(H[row, pos] for pos in positions) % 2) == 1 for row in 1:s]
-            lookup_table[syndrome] = error
-        end
-    end
-    # In the case of no errors
-    lookup_table[falses(s)] = falses(n)
-    lookup_table
-end
+# function create_lookup_table(H::Matrix{Bool}; error_weight=1) # TODO there is inefficient casting between Bool vectors and bitvectors here
+#     lookup_table = Dict{Vector{Bool},Vector{Bool}}()
+#     s, n = size(H)
+#     # Process errors from highest weight to lowest
+#     # so that lower-weight errors overwrite higher-weight ones
+#     # (lower-weight errors are more probable)
+#     for w in error_weight:-1:1
+#         for positions in combinations(1:n, w)
+#             error = falses(n)
+#             for pos in positions
+#                 error[pos] = true
+#             end
+#             # Calculate syndrome: s = H * e (mod 2)
+#             syndrome = Bool[(sum(H[row, pos] for pos in positions) % 2) == 1 for row in 1:s]
+#             lookup_table[syndrome] = error
+#         end
+#     end
+#     # In the case of no errors
+#     lookup_table[falses(s)] = falses(n)
+#     lookup_table
+# end
 
-function decode(d::ClassicalTableDecoder, syndrome_sample)
+function decode(d::ClassicalTableDecoder, syndrome_sample::Vector{Bool})
     d.lookup_buffer .= syndrome_sample
     return get(d.lookup_table, d.lookup_buffer, nothing)
 end
 
 
-struct CSSTableDecoder <: AbstractSyndromeDecoder
-    """Stabilizer tableau defining the code"""
-    H
-    """Faults matrix corresponding to the code"""
-    faults_matrix
-    """The number of qubits in the code"""
-    n::Int
-    """The number of parity checks"""
-    s::Int
-    """The number of encoded qubits"""
-    k::Int
-    """The number of X checks"""
-    cx::Int
-    """The number of Z checks"""
-    cz::Int
-    """The maximum weight of errors in the lookup table"""
-    error_weight::Int
-    """Classical decoder for X errors (decodes Z syndrome)"""
-    tabledecoderx::ClassicalTableDecoder
-    """Classical decoder for Z errors (decodes X syndrome)"""
-    tabledecoderz::ClassicalTableDecoder
-end
+# struct CSSTableDecoder <: AbstractSyndromeDecoder
+#     """Stabilizer tableau defining the code"""
+#     H
+#     """Faults matrix corresponding to the code"""
+#     faults_matrix
+#     """The number of qubits in the code"""
+#     n::Int
+#     """The number of parity checks"""
+#     s::Int
+#     """The number of encoded qubits"""
+#     k::Int
+#     """The number of X checks"""
+#     cx::Int
+#     """The number of Z checks"""
+#     cz::Int
+#     """The maximum weight of errors in the lookup table"""
+#     error_weight::Int
+#     """Classical decoder for X errors (decodes Z syndrome)"""
+#     tabledecoderx::ClassicalTableDecoder
+#     """Classical decoder for Z errors (decodes X syndrome)"""
+#     tabledecoderz::ClassicalTableDecoder
+# end
 
-function CSSTableDecoder(c; error_weight=1)
-    Hx = parity_matrix_x(c)
-    Hz = parity_matrix_z(c)
-    H = parity_checks(c) 
-    # is this not just Stabilizer(c)?
-    #H = Stabilizer(parity_matrix(c))
-    s, n = size(H)
-    _, _, r = canonicalize!(copy(H), ranks=true)
-    k = n - r
-    cx = size(Hx, 1)
-    cz = size(Hz, 1)
-    fm = faults_matrix(H)
-    tabledecoderx = ClassicalTableDecoder(Matrix{Bool}(Hx); error_weight)
-    tabledecoderz = ClassicalTableDecoder(Matrix{Bool}(Hz); error_weight)
-    return CSSTableDecoder(H, fm, n, s, k, cx, cz, error_weight, tabledecoderx, tabledecoderz)
-end
+# function CSSTableDecoder(c; error_weight=1)
+#     Hx = parity_matrix_x(c)
+#     Hz = parity_matrix_z(c)
+#     H = parity_checks(c) 
+#     # is this not just Stabilizer(c)?
+#     #H = Stabilizer(parity_matrix(c))
+#     s, n = size(H)
+#     _, _, r = canonicalize!(copy(H), ranks=true)
+#     k = n - r
+#     cx = size(Hx, 1)
+#     cz = size(Hz, 1)
+#     fm = faults_matrix(H)
+#     tabledecoderx = ClassicalTableDecoder(Matrix{Bool}(Hx); error_weight)
+#     tabledecoderz = ClassicalTableDecoder(Matrix{Bool}(Hz); error_weight)
+#     return CSSTableDecoder(H, fm, n, s, k, cx, cz, error_weight, tabledecoderx, tabledecoderz)
+# end
 
-parity_checks(d::CSSTableDecoder) = d.H
+# parity_checks(d::CSSTableDecoder) = d.H
 
-function decode(d::CSSTableDecoder, syndrome_sample)
+function decode(d::CSSTableDecoder, syndrome_sample::Vector{Bool})
     row_x = @view syndrome_sample[1:d.cx]
     row_z = @view syndrome_sample[d.cx+1:d.cx+d.cz]
     guess_z = decode(d.tabledecoderx, row_x)
