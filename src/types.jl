@@ -11,8 +11,9 @@ using QECCore: AbstractCSSCode
 import Quantikz: QuantikzOp, ClassicalDecision
 
 export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual
-export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, Gate, GateSet, ConditionalGate
-export CodeParameters, CodeParametersLogical, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters
+export Gate, GateSet, SingleQubitGate, TwoQubitGate
+export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, ConditionalGate
+export CodeParameters, CodeParametersLogical, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters, NoiseSpecs
 
 # Parameter structures
 
@@ -43,18 +44,18 @@ struct CodeParameters
     distance::Int
 end
 
-struct CodeParametersLogical
-    qec_code::AbstractCSSCode
-    stabilizer_generators::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-    stabilizer_group::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-    logical_Xs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-    logical_Zs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-    target_logical_Xs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
-    target_logical_Zs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
-    n::Int
-    k::Int
-    distance::Int
-end
+# struct CodeParametersLogical
+#     qec_code::AbstractCSSCode
+#     stabilizer_generators::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+#     stabilizer_group::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+#     logical_Xs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+#     logical_Zs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
+#     target_logical_Xs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
+#     target_logical_Zs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
+#     n::Int
+#     k::Int
+#     distance::Int
+# end
 
 struct OptimisationParameters
     tableau_metric::String
@@ -74,10 +75,22 @@ struct NetworkSpecifications
     num_qubits::Int
     comm_idx::Vector{Int}
     comm_inv_perm_idx::Vector{Int}
-    depolarising_noise::Float64        # Circuit Noise probability
-    gate_noise::Float64                 # Gate Noise probability
-    telegate_noise::Float64
     num_shots::Int
+end
+
+struct NoiseSpecs # Defining circuit-level noise
+    init_noise::Float64     # Initialisation noise
+    idle_depolarising_noise::Float64  # idling depolarising probability
+    idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
+    single_q_gate_noise::Float64      # single qubit gate noise probability
+    two_q_gate_noise::Float64         # two-qubit gate noise probability
+    measurement_noise::Float64        # Measurement noise
+    two_q_gate_noise_diff_species::Float64         # two-qubit gate noise probability between communication and memory qubit
+    comm_qubit_init_noise::Float64 # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
+    comm_idle_depolarising_noise::Float64  # idling depolarising probability
+    single_comm_q_gate_noise::Float64 
+    comm_qubit_measurement_noise::Float64
+    classical_comm_noise::Float64
 end
 
 struct GeneticParameters
@@ -117,56 +130,58 @@ struct GateSet
 end
 
 abstract type Gate end
+abstract type SingleQubitGate <: Gate end
+abstract type TwoQubitGate <: Gate end
 
 # single-qubit gates
-struct IdentityGate <: Gate 
+struct IdentityGate <: SingleQubitGate 
     index::Int
 end
 
-struct PauliXGate <: Gate
+struct PauliXGate <: SingleQubitGate
     index::Int
 end
 
-struct PauliYGate <: Gate
+struct PauliYGate <: SingleQubitGate
     index::Int
 end
 
-struct PauliZGate <: Gate 
+struct PauliZGate <: SingleQubitGate 
     index::Int
 end
 
-struct HadamardGate <: Gate 
+struct HadamardGate <: SingleQubitGate 
     index::Int
 end
 
-struct SGate <: Gate 
+struct SGate <: SingleQubitGate 
     index::Int
 end
 
-struct InvSGate <: Gate 
+struct InvSGate <: SingleQubitGate 
     index::Int
 end
 
-struct SqrtXGate <: Gate 
+struct SqrtXGate <: SingleQubitGate 
     index::Int
 end
 
-struct InvSqrtXGate <: Gate 
+struct InvSqrtXGate <: SingleQubitGate 
     index::Int
 end
 
 # two-qubit gates (store the counterpart of the operation)
-struct CX_Gate <: Gate
+struct CX_Gate <: TwoQubitGate
     control::Int
     target::Int
 end
 
-struct CZ_Gate <: Gate
+struct CZ_Gate <: TwoQubitGate
     control::Int
     target::Int
 end
 
-struct SWAP_Gate <: Gate
+struct SWAP_Gate <: TwoQubitGate
     qubit_1::Int
     qubit_2::Int
 end

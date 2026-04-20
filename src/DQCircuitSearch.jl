@@ -4,12 +4,14 @@ include("types.jl")
 include("trivariate_bicycle_code.jl")
 include("experiment_config.jl")
 include("helper.jl")
-include("circsim.jl")
+#include("circsim.jl")
 include("logical_encoding.jl")
 #include("plots.jl")
 #include("dtsimulation.jl")
 include("genetic.jl")
 include("mcts.jl")
+include("qec_tools.jl")
+include("dqc_state_prep_sim.jl")
 #include("deep_q.jl")
 #include("parameters.jl")
 
@@ -20,16 +22,20 @@ using .TrivariateBicycleCode
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, Stabilizer, Tableau, stabilizerview, logicalxview, logicalzview, canonicalize_rref!, tab, sX, AbstractOperation
 using QuantumClifford.ECC: DistanceMIPAlgorithm
+using Serialization
 
-using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success
+
+using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit
 using .Types
 
 using .LogicalEnc: baseline_encoding_circuit
 
-using .CircuitSimulator: execute_circuit
+#using .CircuitSimulator: execute_circuit
 
-using .ExperimentConfig: distributed_qec_code, type_two_register_sizes, logical_op, opt_params, genetic_params, mcts_params, gate_set
+using .ExperimentConfig: distributed_qec_code, type_two_register_sizes, logical_op, opt_params, genetic_params, mcts_params, gate_set, noise_model
 
+using .QECTools
+using .DQCLogicalStatePrepSimulator
 
 using HiGHS
 using JuMP
@@ -72,10 +78,7 @@ function network_setup(qec_code, register_sizes)
         num_qubits,     # total number of qubits
         comm_idx,       # array containing indices under communication qubit reindexing
         comm_inv_perm_idx, # array containing indices under communication qubit reindexing after inverse permutation
-        0.0, # depolarising noise
-        0.0, # gate noise
-        0.0, # telegate noise            
-        1 # number of shots
+        1e0 # number of shots
     )
     return network_specs
 
@@ -105,7 +108,7 @@ function code_setup(qec_code)
 
 
     stabilizer_generators = [copy(p) for p in stabilizerview(code)]
-    logical_Zs  = [copy(p) for p in logicalzview(code)]
+    logical_Zs  = logicalzview(code)
     stabilizer_group = [stabilizer_generators[1] * stabilizer_generators[1]] # start with the identity element of the stabilizer group
 
     for gen in stabilizer_generators
@@ -132,43 +135,43 @@ function code_setup(qec_code)
 end
 
 
-function code_setup(qec_code, op )
+# function code_setup(qec_code, op )
 
-    # Experiment performing a logical CNOT between the first and second logical qubit encoded in the qLDPC code
+#     # Experiment performing a logical CNOT between the first and second logical qubit encoded in the qLDPC code
     
-    code = MixedDestabilizer(qec_code)
-    code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
+#     code = MixedDestabilizer(qec_code)
+#     code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
 
-    #stabilizers = collect(stabilizerview(code))
-    #logical_Zs = collect(logicalzview(code))
-    stabilizer_generators = [copy(p) for p in stabilizerview(code)]
-    logical_Zs  = [copy(p) for p in logicalzview(code)]
-    logical_Xs  = [copy(p) for p in logicalxview(code)]
-    logical_Ys = [(-im)*logical_Zs[p]*logical_Xs[p] for p in eachindex(logical_Xs)]
-    println("Logical Ys:$logical_Ys")
-    println("\n$(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), d]]-code.\n\n")
-    @assert length(logical_Zs) == 2 "Currently searching for logical CNOT gate in [[n,2,d]] codes"
+#     #stabilizers = collect(stabilizerview(code))
+#     #logical_Zs = collect(logicalzview(code))
+#     stabilizer_generators = [copy(p) for p in stabilizerview(code)]
+#     logical_Zs  = [copy(p) for p in logicalzview(code)]
+#     logical_Xs  = [copy(p) for p in logicalxview(code)]
+#     logical_Ys = [(-im)*logical_Zs[p]*logical_Xs[p] for p in eachindex(logical_Xs)]
+#     println("Logical Ys:$logical_Ys")
+#     println("\n$(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), d]]-code.\n\n")
+#     @assert length(logical_Zs) == 2 "Currently searching for logical CNOT gate in [[n,2,d]] codes"
 
-    # the inital state needs to be provided to the MC trajectories function, hence it should be a MixedDestabilizer
-    # in contrast, the target states only serve for verification, and can thus be Stabilizers
+#     # the inital state needs to be provided to the MC trajectories function, hence it should be a MixedDestabilizer
+#     # in contrast, the target states only serve for verification, and can thus be Stabilizers
 
-    # build the entire stabiliser group, in general O(2^n)
-    stabilizer_group = [stabilizer_generators[1] * stabilizer_generators[1]] # start with the identity element of the stabilizer group
+#     # build the entire stabiliser group, in general O(2^n)
+#     stabilizer_group = [stabilizer_generators[1] * stabilizer_generators[1]] # start with the identity element of the stabilizer group
 
-    for gen in stabilizer_generators
-        new_elements = [s * gen for s in stabilizer_group]
-        append!(stabilizer_group, new_elements)
-    end
+#     for gen in stabilizer_generators
+#         new_elements = [s * gen for s in stabilizer_group]
+#         append!(stabilizer_group, new_elements)
+#     end
 
-    @assert length(Set(stabilizer_group)) == 2^(code_n(qec_code)-code_k(qec_code)) "Stabilizer group does not have the correct size of 2^|stabilizer_generators|"
+#     @assert length(Set(stabilizer_group)) == 2^(code_n(qec_code)-code_k(qec_code)) "Stabilizer group does not have the correct size of 2^|stabilizer_generators|"
     
-    if op == "H1"
-        # a logical Hadamard maps logical Xs to logical Zs and vice versa
-        target_logical_X1 = [logical_Zs[1]*s for s in stabilizer_group]
-        target_logical_X2 = [logical_Xs[2]*s for s in stabilizer_group]
-        target_logical_Z1 = [logical_Xs[1]*s for s in stabilizer_group]
-        target_logical_Z2 = [logical_Zs[2]*s for s in stabilizer_group]
-    end
+#     if op == "H1"
+#         # a logical Hadamard maps logical Xs to logical Zs and vice versa
+#         target_logical_X1 = [logical_Zs[1]*s for s in stabilizer_group]
+#         target_logical_X2 = [logical_Xs[2]*s for s in stabilizer_group]
+#         target_logical_Z1 = [logical_Xs[1]*s for s in stabilizer_group]
+#         target_logical_Z2 = [logical_Zs[2]*s for s in stabilizer_group]
+#     end
 
    
     # if op == "CX" ### THIS IS CURRENTLY WRONG
@@ -288,21 +291,21 @@ function code_setup(qec_code, op )
     #     code_distance
     # )
 
-    code_params = CodeParametersLogical(
-        qec_code,
-        stabilizer_generators,
-        stabilizer_group,
-        logical_Xs,
-        logical_Zs,
-        [target_logical_X1, target_logical_X2],
-        [target_logical_Z1, target_logical_Z2],
-        code_n(qec_code),
-        code_k(qec_code),
-        code_distance
-    )
+#     code_params = CodeParametersLogical(
+#         qec_code,
+#         stabilizer_generators,
+#         stabilizer_group,
+#         logical_Xs,
+#         logical_Zs,
+#         [target_logical_X1, target_logical_X2],
+#         [target_logical_Z1, target_logical_Z2],
+#         code_n(qec_code),
+#         code_k(qec_code),
+#         code_distance
+#     )
 
-    return code_params
-end
+#     return code_params
+# end
 
 
 function run_baseline_encoding()
@@ -344,6 +347,15 @@ function run_circuit_search()
 end
 export run_circuit_search
 
+function run_dqc_state_prep()
+    network_specs = network_setup(distributed_qec_code, type_two_register_sizes)
+    code_params = code_setup(distributed_qec_code)
+    filepath = "/Users/tim/Tim/projects/thesis/src/results/TrivariateBicycle/GA/90/raw_circuit.jls"
+    gates = deserialize(filepath)
+    return DQCLogicalStatePrepSimulator.dqc_state_prep(gates, code_params, network_specs, noise_model)
+     
+end
+export run_dqc_state_prep
 
 # using .Parameters: run_parameter_sweep
 # export run_parameter_sweep

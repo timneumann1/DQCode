@@ -4,7 +4,7 @@ module LogicalEnc
 
 using ..Types
 using ..Helper
-using ..CircuitSimulator
+#using ..CircuitSimulator
 
 
 using QuantumClifford
@@ -12,6 +12,7 @@ using QECCore
 using Quantikz: savecircuit
 #using QuantumSavory: H, CNOT, X, Y, Z, stateof
 using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat
+
 
 export standard_logical_zero_encoding_circuit
 #export golay_encoding_circuit
@@ -35,87 +36,6 @@ By calling MixedDestabilizer(code, undoperm=true), we can additionally directly 
 The implementation is based on [cleve1997efficient](@cite) and [gottesman1997stabilizer](@cite), which however is partly erroneous
     (see https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html), [grassl2002algorithmic](@cite) and [grassl2011variations](@cite) )
 """
-
-
-# function naive_encoding_circuit(code; undoperm=true)
-
-#     ### Also contains logical X operators for arbitrary initial states
-    
-#     # Creatung the canonical tableau (without re-permuting the columns)
-#     n = code_n(code)
-#     k = code_k(code)
-#     #println("\nFor the given code, we have n=$n, k=$k. \n")
-    
-#     code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true); # undoperm without returns gives the orignal stabiliser tableau
-#     #println("Standard form of code is \n$code_standard_form")
-#     X = logicalxview(code_standard_form)
-#     Z = logicalzview(code_standard_form)
-    
-#     # Creating te canonical tableau (with re-permuting the columns) for final state specification
-#     code_original_with_logicals = MixedDestabilizer(code, undoperm=true);
-#     # X_cleaned = logicalxview(md_cleaned)
-#     # println("X is $X_cleaned")
-#     # Z_cleaned = logicalzview(md_cleaned)
-#     # println("Z is $Z_cleaned")
-
-#     circ = QuantumClifford.AbstractOperation[]
-#     #push!(circ, Reset(initial_state, [1,2,3,4,5,6,7]))
-    
-#     # Constructing the encoding circuit
-
-#     S = stabilizerview(code_standard_form)
-
-#     # logical Xs
-#     for i in 1:k
-#         for t in 1:n-k
-#             if X[i,t][1] == true
-#                 push!(circ, sCNOT(n-k+i, t))
-#             end
-#         end
-#     end
-
-#     # projection on codespace
-#     for i in 1:r
-#         push!(circ, sHadamard(i))
-#         if S[i,i][2] == true
-#             push!(circ, sPhase(i))
-#         end
-#         for t in 1:n
-#             if i!=t
-#                 xz = S[i,t]
-#                 g = if xz == (true, true)  # Y
-#                     sZCY
-#                 elseif xz == (true, false) # X
-#                     sZCX
-#                 elseif xz == (false, true) && !(i<t<n-k+1) # Z
-#                     sZCZ
-#                 end
-#                 isnothing(g) || push!(circ, g(i,t))
-#             end
-#         end
-#     end
-
-#     # correct for negative phases in the tableau
-#     for i in 1:n-k 
-#         if phases(S)[i]!=0
-#             if i<=r
-#                 push!(circ, sZ(i))
-#             else
-#                 push!(circ, sX(i))
-#             end
-#         end
-#     end
-
-#     # undoing the permutations to have the correct circuit for the final (re-permuted) tableau
-#     if undoperm
-#         perm = permx[permz]
-#         transpositions = perm_to_transpositions(perm)
-#         for (i,j) in transpositions
-#             push!(circ, sSWAP(i,j))
-#         end
-#     end
-#     code_original_with_logicals, circ
-# end
 
 
 function standard_logical_zero_encoding_circuit(code; undoperm=true, logical_Xs = false)
@@ -199,7 +119,7 @@ function standard_logical_zero_encoding_circuit(code; undoperm=true, logical_Xs 
     code_original_with_logicals, circ, transpositions
 end
 
-function baseline_encoding_circuit(qec_code, network_specs; logical_Xs = false)
+function baseline_encoding_circuit(qec_code, network_specs, gate_set; logical_Xs = false)
 
     @assert qec_code !== nothing 
 
@@ -219,10 +139,10 @@ function baseline_encoding_circuit(qec_code, network_specs; logical_Xs = false)
             push!(baseline_gates, PauliZGate(permutation[op.q]))
         elseif op isa QuantumClifford.sZCX
             control, target = Tuple(affectedqubits(op))
-            push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
+            push!(baseline_gates, CX_Gate(permutation[control], permutation[target]))
         elseif op isa QuantumClifford.sCNOT
             control, target = Tuple(affectedqubits(op))
-            push!(baseline_gates, CNOT_Gate(permutation[control], permutation[target]))
+            push!(baseline_gates, CX_Gate(permutation[control], permutation[target]))
         # elseif op isa QuantumClifford.sZCY
         #     control, target = Tuple(affectedqubits(op))
         #     push!(gates, CNOT_Gate(permutation[control], permutation[target]))
@@ -239,28 +159,31 @@ function baseline_encoding_circuit(qec_code, network_specs; logical_Xs = false)
 
     #baseline_raw_circuit = CircuitIndividual(baseline_gates)
     #println(typeof(baseline_raw_circuit))
-    baseline_exec_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(baseline_gates, network_specs, telegate_overhead = true)
-    circuit_sizes = (num_single_qubit_gates, num_two_qubit_gates, num_telegates)
+    #baseline_exec_circuit, num_single_qubit_gates, num_two_qubit_gates, num_telegates = construct_executable_circuit(baseline_gates, gate_set, network_specs, telegate_overhead = true)
+    baseline_circuit, gate_counts = gates_to_circuit(baseline_gates, network_specs)
+    circuit_sizes = gate_counts
     # print(baseline_circuit)
     # print(circuit_sizes)
     # print(circuit_size(baseline_exec_circuit))
     # print(sum(circuit_sizes))
-    @assert length(baseline_gates) == sum(circuit_sizes)
+    #print(baseline_gates)
+    #println(circuit_sizes)
+    @assert length(baseline_gates) == sum(circuit_sizes) 
     #println(typeof(baseline_exec_circuit))
     #println(typeof(baseline_raw_circuit.gates))
     println("Original Code with repermuted logical operators appended: $(code_original_with_logicals)")
     println("\nRaw size of standard encoding circuit: $(sum(circuit_sizes))\n")
     println("DQC Size of standard encoding circuit: $(circuit_sizes)\n")
-    println("Single qubit: $num_single_qubit_gates, Two qubit: $num_two_qubit_gates, Telegates: $num_telegates")
-    return baseline_gates, baseline_exec_circuit, circuit_sizes
+    #println("Single qubit: $num_single_qubit_gates, Two qubit: $num_two_qubit_gates, Telegates: $num_telegates")
+    return baseline_gates, baseline_circuit, gate_counts
 end
 
-function baseline_encoding(code_params, network_specs; data_storage = true)
+function baseline_encoding(code_params, network_specs, gate_set; data_storage = true)
 
     ### Baseline comparison of standard encoding in DQC setting
-    baseline_gates, baseline_exec_circuit, circuit_sizes = baseline_encoding_circuit(code_params.qec_code, network_specs)
+    baseline_gates, baseline_circuit, gate_counts = baseline_encoding_circuit(code_params.qec_code, network_specs, gate_set)
 
-    verification_logical_state = verify_success(baseline_exec_circuit, code_params.target_state, network_specs)
+    verification_logical_state = verify_success(baseline_circuit, code_params.target_state, network_specs)
 
     println("\nVerification of baseline circuit successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state\n")
 
@@ -275,8 +198,8 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
 
         println("Saving results to $(dir)")
 
-        save_circuit_diagram(baseline_gates, dir, "baseline_raw_circuit__size_$(sum(circuit_sizes)).png")
-        save_circuit_diagram(baseline_exec_circuit, dir, "baseline_exec_circuit__size_$(circuit_sizes).png")
+        save_circuit_diagram(baseline_gates, dir, "baseline_raw_circuit__size_$(sum(gate_counts)).png")
+        #save_circuit_diagram(baseline_exec_circuit, dir, "baseline_exec_circuit__size_$(circuit_sizes).png")
 
         open(joinpath(dir, "network_specs.txt"), "w") do io
             println(io, "Network Specifications")
@@ -293,23 +216,23 @@ function baseline_encoding(code_params, network_specs; data_storage = true)
         end
 
         open(joinpath(dir, "baseline_raw.txt"), "w") do io
-            println(io, "# Raw gate sequence of size $(sum(circuit_sizes))")
+            println(io, "# Raw gate sequence of size $(sum(gate_counts))")
             for (i, g) in enumerate(baseline_gates)
                 println(io, i, "\t", repr(g))
             end
         end
 
-        open(joinpath(dir, "baseline_exec_circuit.txt"), "w") do io
-            println(io, "# Executable (DQC) circuit operations of sizes $(circuit_sizes) (excl. SWAPS)")
-            for (i, op) in enumerate(baseline_exec_circuit)
-                println(io, i, "\t", repr(op))
-            end
-        end
+        # open(joinpath(dir, "baseline_exec_circuit.txt"), "w") do io
+        #     println(io, "# Executable (DQC) circuit operations of sizes $(circuit_sizes) (excl. SWAPS)")
+        #     for (i, op) in enumerate(baseline_exec_circuit)
+        #         println(io, i, "\t", repr(op))
+        #     end
+        # end
 
         open(joinpath(dir, "summary.txt"), "w") do io
             println(io, "# Encoding successful: $verification_logical_state")
-            println(io, "# Raw gate sequence of size $(sum(circuit_sizes))")
-            println(io, "# Executable (DQC) circuit operations of size $(circuit_sizes) (excl. SWAPS)")
+            println(io, "# Raw gate sequence of size $(sum(gate_counts))")
+            println(io, "# Executable (DQC) circuit operations of size $(gate_counts) (excl. SWAPS)")
         end
     end
         ###########################################
@@ -321,43 +244,6 @@ end
 
 
 
-
-
-
-# Measurement-based initialisation
-
-
-function naive_ancillary_paulimeasurement(p::PauliOperator, ancillary_index=1, bit_index=1)
-    circuit = AbstractOperation[]
-    n = nqubits(p)
-    for qubit in 1:n
-        if p[qubit] == (1,0)
-            push!(circuit, sXCX(qubit, n + ancillary_index))
-        elseif p[qubit] == (0,1)
-            push!(circuit, sCNOT(qubit, n + ancillary_index))
-        elseif p[qubit] == (1,1)
-            push!(circuit, sYCX(qubit, n + ancillary_index))
-        end
-    end
-    p.phase[] == 0 || push!(circuit, sX(n + ancillary_index))
-    mz = sMRZ(n + ancillary_index, bit_index)
-    push!(circuit, mz)
-
-    return circuit
-end
-
-function naive_syndrome_circuit(parity_check_tableau, ancillary_index=1, bit_index=1)
-    naive_sc = AbstractOperation[]
-    ancillaries = 0
-    bits = 0
-    for check in parity_check_tableau
-        append!(naive_sc,naive_ancillary_paulimeasurement(check, ancillary_index+ancillaries, bit_index+bits))
-        ancillaries +=1
-        bits +=1
-    end
-
-    return naive_sc, ancillaries, bit_index:bit_index+bits-1
-end
 
 #####################################################################################
 #####################################################################################
