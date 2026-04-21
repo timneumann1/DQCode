@@ -73,17 +73,17 @@ function POMDPs.actions(mdp::EncodingMDP, s::CircuitState)
     #print(affected_qubits)
     #print(length(s.gates), mdp.code_params.num_X_checks )
     if length(s.gates) < mdp.code_params.num_X_checks # we add as many H as the number of X stabilisers (assuming blank start)
-        push!(actions, HadamardGate(1))
-        push!(actions, HadamardGate(4))
-        # for i in 1:n
-        #     for gate in single_qubit_gates # in this case only Hadamard
-        #         if length(s.gates)==0
-        #             push!(actions, gate(i))
-        #         elseif i ∉ affected_qubits
-        #             push!(actions, gate(i))
-        #         end
-        #     end 
-        # end
+        #push!(actions, HadamardGate(1))
+        #push!(actions, HadamardGate(4))
+        for i in 1:n
+            for gate in single_qubit_gates # in this case only Hadamard
+                if length(s.gates)==0
+                    push!(actions, gate(i))
+                elseif i ∉ affected_qubits
+                    push!(actions, gate(i))
+                end
+            end 
+        end
     else 
         for c in 1:n, t in 1:n
             c == t && continue
@@ -228,7 +228,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::Gate, rng)
     # end
     # Potential-based shaping: γΦ(s') - Φ(s), where Φ = -distance
     # This preserves the optimal policy while providing dense signal
-    reward = mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity) - sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
+    reward = mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity)# - sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
     
     new_state = CircuitState(new_circuit, copy(new_quantum_state), gate_counts, fidelity) 
     return (sp=new_state, r=reward) # state.fidelity  gc for logging purposes

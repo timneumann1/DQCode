@@ -26,12 +26,12 @@ function steane()
     )
 
     mcts_params = MCTSParameters(
-        10, # max depth
-        100, #iterations
-        20, # steps before termination
-        [1e4,1,2,3],
-        0.85, # discount factor
-        1.5 # exploration constant
+        4, # max depth
+        1e5, #iterations
+        13, # steps before termination
+        [1e6,1,5,10],
+        0.999, # discount factor
+        3.5 # exploration constant
     )
 
     gate_set = GateSet(
@@ -64,9 +64,9 @@ function shor()
 
     mcts_params = MCTSParameters(
         5, # max depth
-        1e4, #iterations
+        1e5, #iterations
         15, # steps before termination
-        [1e6,1,5,1e1],
+        [1e6,1,5,1e3],
         0.999, # discount factor
         3.5 # exploration constant
     )
@@ -100,12 +100,12 @@ function trivariate()
     )
 
     mcts_params = MCTSParameters(
-        20, # max depth
-        1e6, #iterations
-        22, # steps before termination
-        [1e6,1,5,1e3],
+        5, # max depth
+        1e5, #iterations
+        30, # steps before termination
+        [1e6,1,5,1e2],
         0.999, # discount factor
-        1.5 # exploration constant
+        10.0 # exploration constant
     )
 
     gate_set = GateSet(
@@ -206,7 +206,7 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = shor()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
 
 
 # init_noise::Float64     # Initialisation noise

@@ -366,7 +366,7 @@ gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
 
 function gates_to_circuit(gates, n)
     gate_counts = [0,0,0]
-    @assert n.num_shots == 1
+    #@assert n.num_shots == 1
     circuit = Vector{QuantumClifford.AbstractOperation}()  
     for gate in gates
         T = typeof(gate)
@@ -473,7 +473,7 @@ end
 function compare_states(test_state, target_state, n)
     circ = [VerifyOp(target_state, n.data_qubits)]
 #    initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
-    mc_result = mctrajectories(test_state, circ, trajectories=1)
+    mc_result = mctrajectory!(test_state, circ)#, trajectories=1)
     identity = ((round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10)) == 1.0) ? true : false
     return identity
 end
@@ -483,11 +483,11 @@ function verify_success(circuit, initial_state, target_state, n)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
     
     initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
-    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=n.num_shots)
-    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != n.num_shots
-            throw(ErrorException("Some runs were invalid"))
+    mc_result = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
+    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 1# n.num_shots
+            throw(ErrorException("Run was invalid"))
     end
-    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    fidelity = mc_result[true_success_stat]# (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
     return fidelity
 end
 
@@ -500,12 +500,21 @@ function verify_success(circuit, target_state, n; comm_setting=false)
     end
     initial_state = Register(one(MixedDestabilizer, n.num_qubits),n.num_registers*(n.num_registers-1))
     #print(mctrajectories(initial_state, circuit, trajectories=10000))
-    mc_result = mctrajectories(initial_state, verification_circuit, trajectories=n.num_shots)
-    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != n.num_shots
-            throw(ErrorException("Some runs were invalid"))
+    state, stat = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
+    if stat == QuantumClifford.true_success_stat
+        return 1.0
+    elseif stat == QuantumClifford.false_success_stat
+        return 0.0
+    else
+        throw(ErrorException("Run was invalid due to status: $stat"))
     end
-    fidelity = (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
-    return fidelity
+    # print(mc_result)
+    # print(mc_result[2])
+    # if (mc_result[2][true_success_stat]  + mc_result[2][false_success_stat]) != 1# n.num_shots
+    #         throw(ErrorException("Run was invalid"))
+    # end
+    # fidelity = mc_result[true_success_stat]#(round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    # return fidelity
 end
 
 function code_dirname(code)

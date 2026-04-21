@@ -75,10 +75,10 @@ struct NetworkSpecifications
     num_qubits::Int
     comm_idx::Vector{Int}
     comm_inv_perm_idx::Vector{Int}
-    num_shots::Int
 end
 
 struct NoiseSpecs # Defining circuit-level noise
+    n_samples::Int64
     init_noise::Float64     # Initialisation noise
     idle_depolarising_noise::Float64  # idling depolarising probability
     idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
