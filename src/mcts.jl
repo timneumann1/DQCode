@@ -128,15 +128,15 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::Gate, rng)
     gate_counts = copy(state.gate_counts)
     #println(typeof(initial_quantum_state))
     T = typeof(action)
-    if T in mdp.gate_set.single_qubit_gates# isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+    if action isa SingleQubitGate# T <: SingleQubitGate #in mdp.gate_set.single_qubit_gates# isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
         reward -= mdp.mcts_params.fitness_weights[2]
-        gate_counts += [1,0,0]
+        gate_counts[1] += 1#[1,0,0]
         qubit = action.index
 
         new_quantum_state = execute_circuit([gate_to_apply(T, qubit) ], initial_quantum_state, num_traj = 1)
         #push!(circuit, gate_to_apply(T, n.inv_perm[qubit]) ) 
 
-    elseif T in mdp.gate_set.two_qubit_gates 
+    elseif action isa TwoQubitGate#T <: TwoQubitGate#  in mdp.gate_set.two_qubit_gates 
         control = action.control
         target = action.target
         control_register = mdp.network_specs.register_lookup_array[mdp.network_specs.inv_perm[control]] 
@@ -144,11 +144,11 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::Gate, rng)
         
         if control_register == target_register # the lookup array does not account for the communication qubits
             reward -= mdp.mcts_params.fitness_weights[3]
-            gate_counts += [0,1,0]
+            gate_counts[2] += 1#[0,1,0]
             #push!(circuit, gate_to_apply(T, n.comm_inv_perm_idx[control], n.comm_inv_perm_idx[target] ))
         else
             reward -= mdp.mcts_params.fitness_weights[4]
-            gate_counts += [0,0,1]
+            gate_counts[3] += 1#[0,0,1]
         end
         
         new_quantum_state = execute_circuit([gate_to_apply(T, control, target) ], initial_quantum_state, num_traj = 1)
@@ -228,7 +228,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::Gate, rng)
     # end
     # Potential-based shaping: γΦ(s') - Φ(s), where Φ = -distance
     # This preserves the optimal policy while providing dense signal
-    reward = mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity)# - sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
+    reward += mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity)# - sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
     
     new_state = CircuitState(new_circuit, copy(new_quantum_state), gate_counts, fidelity) 
     return (sp=new_state, r=reward) # state.fidelity  gc for logging purposes

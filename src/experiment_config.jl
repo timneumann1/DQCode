@@ -63,10 +63,10 @@ function shor()
     )
 
     mcts_params = MCTSParameters(
-        5, # max depth
+        6, # max depth
         1e5, #iterations
         15, # steps before termination
-        [1e6,1,5,1e3],
+        [1e6,1,5,1e2],
         0.999, # discount factor
         3.5 # exploration constant
     )
@@ -206,7 +206,7 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = shor()
 
 
 # init_noise::Float64     # Initialisation noise
