@@ -29,9 +29,9 @@ function steane()
         3, # max depth
         1e5, #iterations
         15, # steps before termination
-        [1e6,1,5,1e2],
+        [1e6,1,5,1e4],
         0.999, # discount factor
-        3.5 # exploration constant
+        5 # exploration constant
     )
 
     gate_set = GateSet(
@@ -206,7 +206,7 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = steane()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
 
 
 # init_noise::Float64     # Initialisation noise
