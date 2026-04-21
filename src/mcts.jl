@@ -69,19 +69,21 @@ function POMDPs.actions(mdp::EncodingMDP, s::CircuitState)
     actions = Gate[]
     single_qubit_gates = mdp.gate_set.single_qubit_gates
     two_qubit_gates = mdp.gate_set.two_qubit_gates
-    affected_qubits = [q for g in s.gates for q in (g isa CX_Gate || g isa CZ_Gate ? (g.control, g.target) : (g.index,))]
+    affected_qubits = [q for g in s.gates for q in (typeof(g) <: TwoQubitGate ? g.target : g.index)]
     #print(affected_qubits)
     #print(length(s.gates), mdp.code_params.num_X_checks )
     if length(s.gates) < mdp.code_params.num_X_checks # we add as many H as the number of X stabilisers (assuming blank start)
-        for i in 1:n
-            for gate in single_qubit_gates # in this case only Hadamard
-                if length(s.gates)==0
-                    push!(actions, gate(i))
-                elseif i ∉ affected_qubits
-                    push!(actions, gate(i))
-                end
-            end 
-        end
+        push!(actions, HadamardGate(1))
+        push!(actions, HadamardGate(4))
+        # for i in 1:n
+        #     for gate in single_qubit_gates # in this case only Hadamard
+        #         if length(s.gates)==0
+        #             push!(actions, gate(i))
+        #         elseif i ∉ affected_qubits
+        #             push!(actions, gate(i))
+        #         end
+        #     end 
+        # end
     else 
         for c in 1:n, t in 1:n
             c == t && continue
@@ -91,7 +93,13 @@ function POMDPs.actions(mdp::EncodingMDP, s::CircuitState)
                     if !((c ∉ affected_qubits && t ∉ affected_qubits))
                         push!(actions, gate(c, t))
                     end
-                elseif !( (last(s.gates).control == c && last(s.gates).target ==t) || (c ∉ affected_qubits && t ∉ affected_qubits)) 
+                elseif !( (last(s.gates).control == c && last(s.gates).target ==t) || (c ∉ affected_qubits)) 
+                    # if (typeof(last(s.gates)) <: TwoQubitGate) && (last(s.gates).control == 4 && last(s.gates).target == 5) && (length(s.gates)>6) && (s.fidelity >0.93)
+                    #     println("Current gates: $(s.gates)")
+                    #     println("Possible action: $(gate(c,t))")
+                    # end
+                    #println("Current gates: $(s.gates)")
+                    #println("Possible action: $(gate(c,t))")
                     push!(actions, gate(c, t))
                 end
             end
@@ -319,12 +327,10 @@ function monte_carlo_tree_search(code_params, network_specs, opt_params, mcts_pa
     MCTS_exec_circuit = gates_to_circuit(copy(MCTS_circuit_state.gates))
     println("\n Optimised circuit length (DQC setting):: Single-qubit gates: $(MCTS_gate_counts[1]), Two-qubit gates: $(MCTS_gate_counts[2]), Telegates: $(MCTS_gate_counts[3])") #  vs. $baseline_exec_circuit_size in baseline")
     verification_logical_state = nothing
-    if mdp.code_params isa CodeParameters
-        verification_logical_state = verify_success(MCTS_exec_circuit, mdp.code_params.target_state, mdp.network_specs)
-        # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
-        verification_logical_state = verification_logical_state == 1.0 ? true : false
-        println("\nVerification MCTS Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
-    end
+    verification_logical_state = verify_success(MCTS_exec_circuit, mdp.code_params.target_state, mdp.network_specs)
+    # ^NOTE: this appends a verifyop operation, but we count before so this is irrelevant
+    verification_logical_state = verification_logical_state == 1.0 ? true : false
+    println("\nVerification MCTS Algorithm successful (target state fidelity; only expressive (binary) in noiseless setting): $verification_logical_state")
 
     ###########################################
     ############# DATA STORAGE ################

@@ -42,6 +42,43 @@ function steane()
 end
 
 
+function shor()
+    distributed_qec_code = Shor9()
+    type_two_register_sizes = [3,3,3]
+    opt_params = OptimisationParameters(
+    "hamming" # tableau distance metric
+    ) 
+
+    genetic_params = GeneticParameters(
+        15000, # individuals
+        7500, # generations
+        100, # max length of (raw) circuit individual
+        0.85,  # mutation rate
+        5, # tournament size
+        0.5, # selection_ratio
+        1, # num_elite
+        false, #standard_encoding
+        true, # warm_start
+        [2e4,1,10,100] # fitness weights (fidelity, single-, two- and telegates)
+    )
+
+    mcts_params = MCTSParameters(
+        5, # max depth
+        1e4, #iterations
+        15, # steps before termination
+        [1e6,1,5,1e1],
+        0.999, # discount factor
+        3.5 # exploration constant
+    )
+
+    gate_set = GateSet(
+        [HadamardGate],#HadamardGate],#, SqrtXGate, SGate],#PauliXGate, PauliYGate, PauliZGate, InvSGate, SqrtXGate, InvSqrtXGate],  # single-qubit gates
+        [CX_Gate]#CZ_Gate]  # two-qubit gates
+    )
+    return distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set
+end
+
+
 function trivariate()
     distributed_qec_code = TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]) # [12,2,3]
     type_two_register_sizes = [3,3,3,3]
@@ -169,10 +206,8 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
-p = 1e-2
-noise_model = NoiseSpecs(p,p,p,p,p,p,p,p,p,p,p,p)
-n_shots = 1e5
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = shor()
+
 
 # init_noise::Float64     # Initialisation noise
 #     idle_depolarising_noise::Float64  # idling depolarising probability
