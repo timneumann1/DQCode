@@ -9,7 +9,7 @@ function steane()
     distributed_qec_code = Steane7()
     type_two_register_sizes = [4,3]
     opt_params = OptimisationParameters(
-    "hamming" # tableau distance metric
+    "jaccard" # tableau distance metric
     ) 
 
     genetic_params = GeneticParameters(
@@ -26,10 +26,10 @@ function steane()
     )
 
     mcts_params = MCTSParameters(
-        4, # max depth
+        3, # max depth
         1e5, #iterations
-        13, # steps before termination
-        [1e6,1,5,10],
+        15, # steps before termination
+        [1e6,1,5,1e2],
         0.999, # discount factor
         3.5 # exploration constant
     )
@@ -46,7 +46,7 @@ function shor()
     distributed_qec_code = Shor9()
     type_two_register_sizes = [3,3,3]
     opt_params = OptimisationParameters(
-    "hamming" # tableau distance metric
+    "jaccard" # tableau distance metric
     ) 
 
     genetic_params = GeneticParameters(
@@ -206,7 +206,7 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = shor()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = steane()
 
 
 # init_noise::Float64     # Initialisation noise
