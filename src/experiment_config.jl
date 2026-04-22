@@ -26,12 +26,12 @@ function steane()
     )
 
     mcts_params = MCTSParameters(
-        3, # max depth
-        1e5, #iterations
+        5, # max depth
+        1e6, #iterations
         15, # steps before termination
-        [1e6,1,5,1e4],
+        [1e6,1,5,1e3],
         0.999, # discount factor
-        5 # exploration constant
+        10 # exploration constant
     )
 
     gate_set = GateSet(
@@ -83,7 +83,7 @@ function trivariate()
     distributed_qec_code = TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]) # [12,2,3]
     type_two_register_sizes = [3,3,3,3]
     opt_params = OptimisationParameters(
-    "hamming" # tableau distance metric
+    "jaccard" # tableau distance metric
     ) 
 
     genetic_params = GeneticParameters(
@@ -100,12 +100,12 @@ function trivariate()
     )
 
     mcts_params = MCTSParameters(
-        5, # max depth
-        1e5, #iterations
+        2, # max depth
+        1e4, #iterations
         30, # steps before termination
-        [1e6,1,5,1e2],
+        [1e6,1,5,1e4],
         0.999, # discount factor
-        10.0 # exploration constant
+        5.0 # exploration constant
     )
 
     gate_set = GateSet(
@@ -120,7 +120,7 @@ function quantum_reed_muller()
     distributed_qec_code = QuantumReedMuller(4) # [15,1,3]
     type_two_register_sizes = [3,3,3,3,3]
     opt_params = OptimisationParameters(
-    "hamming" # tableau distance metric
+    "jaccard" # tableau distance metric
     ) 
 
     genetic_params = GeneticParameters(
@@ -137,12 +137,48 @@ function quantum_reed_muller()
     )
 
     mcts_params = MCTSParameters(
-        12, # max depth
-        2500, #iterations
-        20, # steps before termination
-        [1e4,1,5,100],
-        0.85, # discount factor
-        2.5 # exploration constant
+        3, # max depth
+        1e4, #iterations
+        30, # steps before termination
+        [1e4,1,5,2e2],
+        0.999, # discount factor
+        5.0 # exploration constant
+    )
+
+    gate_set = GateSet(
+        [HadamardGate],#HadamardGate],#, SqrtXGate, SGate],#PauliXGate, PauliYGate, PauliZGate, InvSGate, SqrtXGate, InvSqrtXGate],  # single-qubit gates
+        [CX_Gate]#CZ_Gate]  # two-qubit gates
+    )
+    return distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set
+end
+
+function bivariate()
+    distributed_qec_code = BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]) # [18,4,4]
+    type_two_register_sizes = [3,3,3,3,3,3]
+    opt_params = OptimisationParameters(
+    "jaccard" # tableau distance metric
+    ) 
+
+    genetic_params = GeneticParameters(
+        5000, # individuals
+        3500, # generations
+        100, # max length of (raw) circuit individual
+        0.85,  # mutation rate
+        5, # tournament size
+        0.5, # selection_ratio
+        1, # num_elite
+        true, # standard_encoding
+        false, # warm_start
+        [1.5e4,1,10,100] # fitness weights (fidelity, single-, two- and telegates)
+    )
+
+    mcts_params = MCTSParameters(
+        3, # max depth
+        1e7, #iterations
+        70, # steps before termination
+        [1e5,1,5,1e2],
+        0.999, # discount factor
+        10.0 # exploration constant
     )
 
     gate_set = GateSet(
@@ -206,7 +242,7 @@ end
 #     [CX_Gate]  # two-qubit gates
 # )
 
-distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = trivariate()
+distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set = bivariate()
 
 
 # init_noise::Float64     # Initialisation noise
