@@ -175,9 +175,12 @@ function run_circuit_search()
 
         best_MCTS_gates = Vector{Gate}() 
         best_MCTS_telegate_count = typemax(Int)
-        for _ in 1:3
+        for _ in 1:2
             MCTS_gates, verification_logical_state, telegate_count = monte_carlo_tree_search(code_params, network_specs, cfg.opt_params, cfg.mcts_params, cfg.folder)
-            if verification_logical_state && telegate_count < best_MCTS_telegate_count
+            if isempty(best_MCTS_gates)
+                best_MCTS_gates = MCTS_gates
+                best_MCTS_telegate_count = telegate_count
+            elseif verification_logical_state && telegate_count < best_MCTS_telegate_count
                 best_MCTS_gates = MCTS_gates
                 best_MCTS_telegate_count = telegate_count
             end

@@ -573,15 +573,15 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
     ax_fid   = Axis(fig[3, 1], xlabel="Generation", ylabel="Fidelity")
 
     generations = 1:length(fitness_scores)
-    lines!(ax_fit, generations, fitness_scores, color=:blue, linewidth=2)
+    lines!(ax_fit, generations, fitness_scores, color=:chartreuse3, linewidth=2)
 
     single_q_counts = [g[1] for g in gate_counts]
     two_q_counts    = [g[2] for g in gate_counts]
     telegate_counts = [g[3] for g in gate_counts]
 
-    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:orange, linewidth=2)
-    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:black,  linewidth=2)
-    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:purple, linewidth=2)
+    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:goldenrod, linewidth=2)
+    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:steelblue,  linewidth=2)
+    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:pucrimsonrple, linewidth=2)
     axislegend(ax_gates, position=:rt) 
 
     lines!(ax_fid, generations, fidelities, color=:green, linewidth=2)
@@ -608,7 +608,7 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, m
     ax_fid   = Axis(fig[2, 1], xlabel="Step", ylabel="Fidelity")
 
     generations = 1:length(fidelities)
-    lines!(ax_fid, generations, fidelities, color=:blue, linewidth=2)
+    lines!(ax_fid, generations, fidelities, color=:chartreuse3, linewidth=2)
     ylims!(ax_fid, -0.05, 1.05) 
 
     tick_labels = string.(generations)
@@ -622,9 +622,9 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, m
     two_q_counts    = [g[2] for g in gate_counts]
     telegate_counts = [g[3] for g in gate_counts]
 
-    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:orange, linewidth=2)
-    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:black,  linewidth=2)
-    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:purple, linewidth=2)
+    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:goldenrod, linewidth=2)
+    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:steelblue,  linewidth=2)
+    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:crimson, linewidth=2)
     axislegend(ax_gates, position=:rt) 
 
     linkxaxes!(ax_gates, ax_fid)
