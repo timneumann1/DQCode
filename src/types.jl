@@ -10,116 +10,30 @@ using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export SimulationParameters, SimulationFidelity, Circuit, CircuitIndividual
+export Circuit, CircuitIndividual #SimulationParameters, SimulationFidelity,
 export Gate, GateSet, SingleQubitGate, TwoQubitGate
 export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, ConditionalGate
-export CodeParameters, CodeParametersLogical, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters, NoiseSpecs
+export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters, NoiseSpecs
 
 # Parameter structures
 
-struct SimulationParameters
-    register_sizes::Vector{Int}        # Number of qubits in each register
-    #T1_relaxation::Float64          # T1 relaxation time of all qubits   [Wang]
-    depolarising_noise::Float64       #  T2_dephasing::Float64         # T2 dephasing time of all qubits     [Wang]
-    single_qubit_gate_exec_time::Float64   # Execution Time of a single qubit gate
-    two_qubit_gate_exec_time::Float64      # Execution Time of a two qubit gate
-    projective_measurement_time::Float64      # Time to peform a measurement
-    classical_communication_time::Float64   # define in relation to speed of photons in fiber cable
-    bell_state_fidelity::Float64
-    success_prob::Float64
-    attempt_time::Float64
-    #TODO: Add measurement fidelity
-end
-
-struct CodeParameters
-    qec_code::AbstractCSSCode
-    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
-    stabilizer_group
-    num_X_checks::Int
-    logical_Zs
-    target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
-    target_bit_matrix::Matrix{Int}
-    n::Int
-    k::Int
-    distance::Int
-end
-
-# struct CodeParametersLogical
-#     qec_code::AbstractCSSCode
-#     stabilizer_generators::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-#     stabilizer_group::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-#     logical_Xs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-#     logical_Zs::Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}
-#     target_logical_Xs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
-#     target_logical_Zs::Vector{Vector{PauliOperator{Array{UInt8, 0}, Vector{UInt64}}}}
-#     n::Int
-#     k::Int
-#     distance::Int
+# struct SimulationParameters
+#     register_sizes::Vector{Int}        # Number of qubits in each register
+#     #T1_relaxation::Float64          # T1 relaxation time of all qubits   [Wang]
+#     depolarising_noise::Float64       #  T2_dephasing::Float64         # T2 dephasing time of all qubits     [Wang]
+#     single_qubit_gate_exec_time::Float64   # Execution Time of a single qubit gate
+#     two_qubit_gate_exec_time::Float64      # Execution Time of a two qubit gate
+#     projective_measurement_time::Float64      # Time to peform a measurement
+#     classical_communication_time::Float64   # define in relation to speed of photons in fiber cable
+#     bell_state_fidelity::Float64
+#     success_prob::Float64
+#     attempt_time::Float64
+#     #TODO: Add measurement fidelity
 # end
 
-struct OptimisationParameters
-    tableau_metric::String
-end
-
-struct NetworkSpecifications
-    register_sizes::Vector{Int}        # Number of qubits in each register
-    num_registers::Int
-    permutation::Vector{Int}
-    mapping::Vector{Tuple{Int, Int}}
-    inv_perm::Vector{Int}
-    register_lookup_array::Vector{Int}
-    data_qubits::Vector{Int}
-    comm_qubits::Vector{Int}
-    num_data_qubits::Int
-    num_comm_qubits_per_register::Int
-    num_qubits::Int
-    comm_idx::Vector{Int}
-    comm_inv_perm_idx::Vector{Int}
-end
-
-struct NoiseSpecs # Defining circuit-level noise
-    n_samples::Int64
-    init_noise::Float64     # Initialisation noise
-    idle_depolarising_noise::Float64  # idling depolarising probability
-    idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
-    single_q_gate_noise::Float64      # single qubit gate noise probability
-    two_q_gate_noise::Float64         # two-qubit gate noise probability
-    measurement_noise::Float64        # Measurement noise
-    two_q_gate_noise_diff_species::Float64         # two-qubit gate noise probability between communication and memory qubit
-    comm_qubit_init_noise::Float64 # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
-    comm_idle_depolarising_noise::Float64  # idling depolarising probability
-    single_comm_q_gate_noise::Float64 
-    comm_qubit_measurement_noise::Float64
-    classical_comm_noise::Float64
-end
-
-struct GeneticParameters
-    num_individuals::Int
-    num_generations::Int
-    max_len::Int
-    mutation_rate::Float64
-    tournament_size::Int
-    selection_ratio::Float64
-    num_elite::Int
-    standard_encoding::Bool
-    warm_start::Bool
-    fitness_weights::Vector{Float64}
-    #qec_code::AbstractCSSCode
-    #tableau_metric::String
-end
-
-struct MCTSParameters
-    depth::Int # depth that the solver traverses to maximally in each rollout
-    n_iterations::Int # number of iterations the solver rolls out to choose the best next action
-    max_steps::Int # Maximum number of steps (actions) that the solver takes, is equivalent to maximum circuit size
-    fitness_weights::Vector{Float64}
-    discount_factor::Float64 
-    exploration_constant::Float64
-end
-
-struct SimulationFidelity
-    fidelity::Float64
-end
+# struct SimulationFidelity
+#     fidelity::Float64
+# end
 
 
 # Gate Types
@@ -213,6 +127,93 @@ end
 #     @assert num_layers > 0
 #     Circuit(fill(IdentityGate(1), num_qubits, num_layers))
 # end
+
+
+struct CodeParameters
+    qec_code::AbstractCSSCode
+    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    stabilizer_group
+    num_X_checks::Int
+    logical_Zs
+    target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    target_bit_matrix::Matrix{Int}
+    n::Int
+    k::Int
+    distance::Int
+end
+
+struct NetworkSpecifications
+    register_sizes::Vector{Int}        # Number of qubits in each register
+    num_registers::Int
+    permutation::Vector{Int}
+    mapping::Vector{Tuple{Int, Int}}
+    inv_perm::Vector{Int}
+    register_lookup_array::Vector{Int}
+    data_qubits::Vector{Int}
+    comm_qubits::Vector{Int}
+    num_data_qubits::Int
+    num_comm_qubits_per_register::Int
+    num_qubits::Int
+    comm_idx::Vector{Int}
+    comm_inv_perm_idx::Vector{Int}
+end
+
+
+struct OptimisationParameters
+    tableau_metric::String
+    gate_set::GateSet
+end
+
+struct GeneticParameters
+    num_individuals::Int
+    num_generations::Int
+    max_len::Int
+    mutation_rate::Float64
+    tournament_size::Int
+    selection_ratio::Float64
+    num_elite::Int
+    #standard_encoding::Bool
+    #warm_start::Bool
+    fitness_weights::Vector{Float64}
+    decay_parameter::Float64
+    #qec_code::AbstractCSSCode
+    #tableau_metric::String
+end
+
+struct MCTSParameters
+    depth::Int # depth that the solver traverses to maximally in each rollout
+    n_iterations::Int # number of iterations the solver rolls out to choose the best next action
+    max_steps::Int # Maximum number of steps (actions) that the solver takes, is equivalent to maximum circuit size
+    fitness_weights::Vector{Float64}
+    discount_factor::Float64 
+    exploration_constant::Float64
+end
+
+struct NoiseSpecs # Defining circuit-level noise
+    n_samples::Int64
+    init_noise::Float64     # Initialisation noise
+    idle_depolarising_noise::Float64  # idling depolarising probability
+    idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
+    single_q_gate_noise::Float64      # single qubit gate noise probability
+    two_q_gate_noise::Float64         # two-qubit gate noise probability
+    measurement_noise::Float64        # Measurement noise
+    two_q_gate_noise_diff_species::Float64         # two-qubit gate noise probability between communication and memory qubit
+    comm_qubit_init_noise::Float64 # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
+    comm_idle_depolarising_noise::Float64  # idling depolarising probability
+    single_comm_q_gate_noise::Float64 
+    comm_qubit_measurement_noise::Float64
+    classical_comm_noise::Float64
+end
+
+
+
+
+
+
+
+
+
+
 
 # Plotting 
 

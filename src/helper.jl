@@ -3,16 +3,18 @@ module Helper
 using ..Types
 
 using QuantumClifford
-using QuantumClifford: AbstractOperation
+using QuantumClifford: AbstractOperation, true_success_stat
 using KaHyPar
 using SparseArrays
 using Quantikz: savecircuit, @with, classicalbitslayout
+using CairoMakie
 
 export create_lookup_array, comm_qubits_array, perm_to_transpositions, transpositions_to_perm
-export data_qubit_partitioning, circuit_size, baseline_comparison, tableau_distance, tableau_to_bitmatrix
+export data_qubit_partitioning, circuit_size, tableau_distance, tableau_to_bitmatrix
 export execute_circuit, gate_to_apply, gates_to_circuit, verify_success, save_circuit_diagram
 export next_run_dir, code_dirname
 export compare_states
+export plot_evolution
 
 # lookup arrays needs to be created only once before executing the genetic search
 #TODO: replace with cleaner version
@@ -360,11 +362,11 @@ gate_to_apply(::Type{SGate}, i::Int) = sPhase(i)
 gate_to_apply(::Type{InvSGate}, i::Int) = sInvPhase(i)
 gate_to_apply(::Type{SqrtXGate}, i::Int) = sSQRTX(i)
 gate_to_apply(::Type{InvSqrtXGate}, i::Int) = sInvSQRTX(i)
-
 gate_to_apply(::Type{CX_Gate}, i::Int, j::Int) = sCNOT(i,j)
 gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
 
 function gates_to_circuit(gates, n)
+    # Converts gates to a circuit (same indexing), but counts gate overhead (in contrast to the below function which only constructs the circuit)
     gate_counts = [0,0,0]
     #@assert n.num_shots == 1
     circuit = Vector{QuantumClifford.AbstractOperation}()  
@@ -394,7 +396,7 @@ function gates_to_circuit(gates, n)
             push!(circuit, gate_to_apply(T, control, target ))
         
         else
-            throw(ArgumentError("Unsupported gate type in gates_to_circuit: $(typeof(gate))"))
+            error("Unsupported gate type in gates_to_circuit: $(typeof(gate))")
             
             #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[control], mdp.network_specs.inv_perm[target]) ], initial_quantum_state, num_traj = 1)
         end
@@ -473,9 +475,16 @@ end
 function compare_states(test_state, target_state, n)
     circ = [VerifyOp(target_state, n.data_qubits)]
 #    initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
-    mc_result = mctrajectory!(test_state, circ)#, trajectories=1)
-    identity = ((round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10)) == 1.0) ? true : false
-    return identity
+    state, stat = mctrajectory!(test_state, circ)#, trajectories=1)
+    if stat == true_success_stat
+        return true
+    elseif stat == false_success_stat
+        return false
+    else
+        throw(ErrorException("Run was invalid due to status: $stat"))
+    end
+    # identity = ((round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10)) == 1.0) ? true : false
+    # return identity
 end
 
 function verify_success(circuit, initial_state, target_state, n)
@@ -483,12 +492,19 @@ function verify_success(circuit, initial_state, target_state, n)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
     
     initial_state = Register(initial_state,n.num_registers*(n.num_registers-1))
-    mc_result = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
-    if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 1# n.num_shots
-            throw(ErrorException("Run was invalid"))
+    state, stat = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
+    # if (mc_result[true_success_stat]  + mc_result[false_success_stat]) != 1# n.num_shots
+    #         throw(ErrorException("Run was invalid"))
+    # end
+    # fidelity = mc_result[true_success_stat]# (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
+    # return fidelity
+    if stat == true_success_stat
+        return true
+    elseif stat == false_success_stat
+        return false
+    else
+        throw(ErrorException("Run was invalid due to status: $stat"))
     end
-    fidelity = mc_result[true_success_stat]# (round(mc_result[true_success_stat] / (mc_result[true_success_stat]+mc_result[false_success_stat]),digits=10))
-    return fidelity
 end
 
 function verify_success(circuit, target_state, n; comm_setting=false)
@@ -501,10 +517,10 @@ function verify_success(circuit, target_state, n; comm_setting=false)
     initial_state = Register(one(MixedDestabilizer, n.num_qubits),n.num_registers*(n.num_registers-1))
     #print(mctrajectories(initial_state, circuit, trajectories=10000))
     state, stat = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
-    if stat == QuantumClifford.true_success_stat
-        return 1.0
-    elseif stat == QuantumClifford.false_success_stat
-        return 0.0
+    if stat == true_success_stat
+        return true
+    elseif stat == false_success_stat
+        return false
     else
         throw(ErrorException("Run was invalid due to status: $stat"))
     end
@@ -545,6 +561,81 @@ function next_run_dir(base_dir::AbstractString)
     mkpath(run_dir)
     return run_dir
 end
+
+function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, gate_counts, genetic_params::GeneticParameters, success)
+    title_str = "Evolution of optimiser metrics for $optimiser_label"     
+    subtitle_str = "$(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations -- Optimisation Success: $(success)"
+    
+    fig = Figure(size = (800, 900))
+
+    ax_fit   = Axis(fig[1, 1], ylabel="Fitness", title=title_str, subtitle = subtitle_str)
+    ax_gates = Axis(fig[2, 1], ylabel="Gate Counts")
+    ax_fid   = Axis(fig[3, 1], xlabel="Generation", ylabel="Fidelity")
+
+    generations = 1:length(fitness_scores)
+    lines!(ax_fit, generations, fitness_scores, color=:blue, linewidth=2)
+
+    single_q_counts = [g[1] for g in gate_counts]
+    two_q_counts    = [g[2] for g in gate_counts]
+    telegate_counts = [g[3] for g in gate_counts]
+
+    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:orange, linewidth=2)
+    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:black,  linewidth=2)
+    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:purple, linewidth=2)
+    axislegend(ax_gates, position=:rt) 
+
+    lines!(ax_fid, generations, fidelities, color=:green, linewidth=2)
+    ylims!(ax_fid, -0.05, 1.05) 
+
+    linkxaxes!(ax_fit, ax_gates, ax_fid)
+    hidexdecorations!(ax_fit, grid=false)
+    hidexdecorations!(ax_gates, grid=false)
+
+    rowgap!(fig.layout, 10)
+
+    outpath = joinpath(dir, "Optimisation_Evolution.png")
+    save(outpath, fig)
+end
+
+function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, mcts_params::MCTSParameters, success)
+    
+    title_str = "Evolution of optimiser metrics for $optimiser_label"     
+    subtitle_str = "$(mcts_params.n_iterations) Iterations over depth $(mcts_params.depth)-- Optimisation Success: $(success)"
+    
+    fig = Figure(size = (800, 900))
+
+    ax_gates = Axis(fig[1, 1], ylabel="Gate Counts",  title=title_str, subtitle = subtitle_str)
+    ax_fid   = Axis(fig[2, 1], xlabel="Step", ylabel="Fidelity")
+
+    generations = 1:length(fidelities)
+    lines!(ax_fid, generations, fidelities, color=:blue, linewidth=2)
+    ylims!(ax_fid, -0.05, 1.05) 
+
+    tick_labels = string.(generations)
+    ax_gates.xticks = (generations, tick_labels)
+    ax_fid.xticks = (generations, tick_labels)
+
+    ax_gates.xticklabelrotation = pi/4
+    ax_fid.xticklabelrotation = pi/4
+
+    single_q_counts = [g[1] for g in gate_counts]
+    two_q_counts    = [g[2] for g in gate_counts]
+    telegate_counts = [g[3] for g in gate_counts]
+
+    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:orange, linewidth=2)
+    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:black,  linewidth=2)
+    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:purple, linewidth=2)
+    axislegend(ax_gates, position=:rt) 
+
+    linkxaxes!(ax_gates, ax_fid)
+    hidexdecorations!(ax_gates, grid=false)
+
+    rowgap!(fig.layout, 10)
+
+    outpath = joinpath(dir, "Optimisation_Evolution.png")
+    save(outpath, fig)
+end
+
 
 
 
