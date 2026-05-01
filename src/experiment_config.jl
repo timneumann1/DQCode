@@ -13,7 +13,6 @@ function experiment_configurations()
     ConfigValueType = @NamedTuple{
         code::AbstractCSSCode,
         qpu_sizes::Vector{Int},
-        opt_params::OptimisationParameters, 
         genetic_params::GeneticParameters, 
         mcts_params::MCTSParameters, 
         folder::String
@@ -25,9 +24,8 @@ function experiment_configurations()
     configs["steane_4_3"] = (
         Steane7(),
         [4,3],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(1000, 1000, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
-        MCTSParameters( 5, 1e6, 15, [1e6, 1, 5, 1e3], 0.999, 10),
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 1000, 1000, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 1e1], "jaccard"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 3, 1e6, 15, [1e6, 1, 5, 1e3], 99.999, 3.5, "jaccard"),
         joinpath(@__DIR__, "results", string(code_dirname(Steane7())), string([4, 3]))
         )
     
@@ -36,9 +34,8 @@ function experiment_configurations()
     configs["shor_3_3_3"] = (
         Shor9(),
         [3,3,3],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
-        MCTSParameters(6, 1e5, 15, [1e6, 1, 5, 1e2], 0.999, 3.5),
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 1e2], "jaccard"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 6, 1e5, 15, [1e6, 1, 5, 1e2], 0.999, 3.5, "jaccard"),
         joinpath(@__DIR__, "results", string(code_dirname(Shor9())), string([3,3,3]))
         )
 
@@ -47,88 +44,96 @@ function experiment_configurations()
     configs["trivariate_3_3_3_3"] = (
         TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
         [3,3,3,3],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
-        MCTSParameters(2, 5e4, 30, [1e6, 1, 5, 1e4], 0.999, 5.0),
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 10000, 1000, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "jaccard"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 5, 1e5, 25, [1e3, 1, 5, 25], 0.99, 10, "jaccard"),
         joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([3,3,3,3]))
         )
     
-    # ------- Trivariate Bicycle - [4,4,4] ---------
+    # # ------- Trivariate Bicycle - [4,4,4] ---------
 
-    configs["trivariate_4_4_4"] = (
-        TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
-        [4,4,4],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
-        MCTSParameters(2, 5e4, 30, [1e6, 1, 5, 1e4], 0.999, 5.0),
-        joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([4,4,4]))
-        )
+    # configs["trivariate_4_4_4"] = (
+    #     TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
+    #     [4,4,4],
+    #     OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
+    #     GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
+    #     MCTSParameters(2, 5e4, 30, [1e6, 1, 5, 1e4], 0.999, 5.0),
+    #     joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([4,4,4]))
+    #     )
 
-    # ------- Trivariate Bicycle - [6,6] ---------
+    # # ------- Trivariate Bicycle - [6,6] ---------
 
-    configs["trivariate_6_6"] = (
-        TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
-        [6,6],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
-        MCTSParameters(2, 5e4, 30, [1e6, 1, 5, 1e4], 0.999, 5.0),
-        joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([6,6]))
-        )
+    # configs["trivariate_6_6"] = (
+    #     TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
+    #     [6,6],
+    #     OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
+    #     GeneticParameters(15000, 7500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 100], 2),
+    #     MCTSParameters(2, 5e4, 30, [1e6, 1, 5, 1e4], 0.999, 5.0),
+    #     joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([6,6]))
+    #     )
 
     # ------- Quantum Reed-Muller - [3,3,3,3,3] ---------
 
     configs["quantum_reed_muller_3_3_3_3_3"] = (
         QuantumReedMuller(4),
         [3,3,3,3,3],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(5000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
-        MCTSParameters(3, 5e4, 30, [1e4, 1, 5, 2e2], 0.999, 5.0),
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 15000, 2000, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "hamming"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 3, 5e5, 30, [1e6, 1, 5, 5e2], 9.999, 7.5, "hamming"),
         joinpath(@__DIR__, "results", string(code_dirname(QuantumReedMuller(4))), string([3,3,3,3,3]))
         )
         
-    # ------- Quantum Reed-Muller - [5,5,5] ---------
+    # # ------- Quantum Reed-Muller - [5,5,5] ---------
 
-    configs["quantum_reed_muller_5_5_5"] = (
-        QuantumReedMuller(4),
-        [5,5,5],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(5000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
-        MCTSParameters(3, 5e4, 30, [1e4, 1, 5, 2e2], 0.999, 5.0),
-        joinpath(@__DIR__, "results", string(code_dirname(QuantumReedMuller(4))), string([5,5,5]))
-        )
+    # configs["quantum_reed_muller_5_5_5"] = (
+    #     QuantumReedMuller(4),
+    #     [5,5,5],
+    #     OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
+    #     GeneticParameters(5000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
+    #     MCTSParameters(3, 5e4, 40, [1e4, 1, 5, 2e2], 0.999, 5.0),
+    #     joinpath(@__DIR__, "results", string(code_dirname(QuantumReedMuller(4))), string([5,5,5]))
+    #     )
 
     # ------- Bivariate Bicycle - [3,3,3,3,3,3] ---------
 
     configs["bivariate_3_3_3_3_3_3"] = (
         BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]),
         [3,3,3,3,3,3],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
-        MCTSParameters(3, 1e6, 50, [1e5, 1, 5, 1e2], 0.999, 10.0),
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 1e2], "hamming"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 3, 5e6, 70, [5e5, 1, 5, 1e2], 0.999, 10.0, "hamming"),
         joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([3,3,3,3,3,3]))
         )
     
-    # ------- Bivariate Bicycle - [6,6,6] ---------
+    # # ------- Bivariate Bicycle - [6,6,6] ---------
 
-    configs["bivariate_6_6_6"] = (
-        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]),
-        [6,6,6],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
-        MCTSParameters(3, 1e6, 50, [1e5, 1, 5, 1e2], 0.999, 10.0),
-        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([6,6,6]))
+    # configs["bivariate_6_6_6"] = (
+    #     BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]),
+    #     [6,6,6],
+    #     OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
+    #     GeneticParameters(10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
+    #     MCTSParameters(3, 1e6, 65, [1e5, 1, 5, 1e2], 0.999, 10.0),
+    #     joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([6,6,6]))
+    #     )
+
+    # # ------- Bivariate Bicycle - [9,9] ---------
+
+    # configs["bivariate_9_9"] = (
+    #     BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]),
+    #     [9,9],
+    #     OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
+    #     GeneticParameters(10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
+    #     MCTSParameters(3, 1e6, 65, [1e5, 1, 5, 1e2], 0.999, 10.0),
+    #     joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([9,9]))
+    #     )
+
+    # # ------- Bivariate Bicycle - [[144,12,12]] ---------
+
+    configs["bivariate_12"] = (
+        BivariateBicycleViaCirculantMat(12, 6, [(:x, 3), (:y, 1), (:y, 2)], [(:y, 3), (:x, 1), (:x, 2)]),
+        [12,12,12,12,12,12,12,12,12,12,12,12],
+        GeneticParameters(GateSet([HadamardGate], [CX_Gate]), 10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 1e2], "hamming"),
+        MCTSParameters(GateSet([HadamardGate], [CX_Gate]), 2, 1e5, 2500, [5e5, 1, 5, 1e2], 0.999, 10.0, "jaccard"),
+        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(12, 6, [(:x, 3), (:y, 1), (:y, 2)], [(:y, 3), (:x, 1), (:x, 2)]))), string([12,12,12,12,12,12,12,12,12,12,12,12]))
         )
 
-    # ------- Bivariate Bicycle - [9,9] ---------
-
-    configs["bivariate_9_9"] = (
-        BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]),
-        [9,9],
-        OptimisationParameters("jaccard", GateSet([HadamardGate], [CX_Gate])),
-        GeneticParameters(10000, 3500, 100, 0.85, 5, 0.5, 1, [1.5e4, 1, 10, 100], 2),
-        MCTSParameters(3, 1e6, 50, [1e5, 1, 5, 1e2], 0.999, 10.0),
-        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([9,9]))
-        )
     return configs
 
 end

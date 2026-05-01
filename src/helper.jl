@@ -93,22 +93,24 @@ function create_lookup_array(num_data_qubits_per_register)
 
     # Takes in an array containing the number of data qubits per module
     register_lookup_array = Vector{Int}(undef, num_data_qubits)
-    data_qubits = Vector{Int}(undef, num_data_qubits)
+    #data_qubit_dqc_indices = Vector{Int}(undef, num_data_qubits)
 
     register = 1
     register_start_index = 1
-    data_qubit_start_index = 1
+    #data_qubit_start_index = 1
     
     for j in num_data_qubits_per_register
         register_lookup_array[register_start_index:register_start_index+j-1] .= register 
-        data_qubits[register_start_index: (register_start_index+j-1)] = data_qubit_start_index: (data_qubit_start_index+j-1)  
+        #data_qubit_dqc_indices[register_start_index: (register_start_index+j-1)] = data_qubit_start_index: (data_qubit_start_index+j-1)  
 
         register_start_index+=j
         register +=1
-        data_qubit_start_index += (j+num_comm_qubits_per_register)
+        #data_qubit_start_index += (j+num_comm_qubits_per_register)
     end
 
-    return register_lookup_array, data_qubits, num_data_qubits, num_comm_qubits_per_register
+#    return register_lookup_array, data_qubit_dqc_indices, num_data_qubits, num_comm_qubits_per_register
+    return register_lookup_array, num_data_qubits, num_comm_qubits_per_register
+
 end
 
 #function create_lookup_array(params)
@@ -130,11 +132,12 @@ function comm_qubits_array(params)
 end
 
 function perm_to_transpositions(perm)
+    
     n = length(perm)
     transpositions = Tuple{Int, Int}[]
-    for i in n:-1:1
+    for i in 1:n
         if perm[i]!=i
-            j = findfirst(==(i), perm)
+            j = findlast(==(i), perm)
             @assert !isnothing(j)
             push!(transpositions, (i, j))
             perm[j] = perm[i]
@@ -145,7 +148,7 @@ end
 
 function transpositions_to_perm(transpositions::Vector{Tuple{Int,Int}}, n::Int)
     perm = collect(1:n)
-    for (i, j) in transpositions
+    for (i, j) in reverse(transpositions)
         perm[i], perm[j] = perm[j], perm[i]
     end
     return perm
@@ -246,42 +249,42 @@ function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}, data_
     end
 end
 
-function _repair_partition_capacities(assignments::Vector{Int}, capacities::Vector{Int})
-    k = length(capacities)
+# function _repair_partition_capacities(assignments::Vector{Int}, capacities::Vector{Int})
+#     k = length(capacities)
     
-    # Count actual block sizes
-    block_sizes = [count(==(b), assignments) for b in 1:k]
-    println("Actual block sizes: $block_sizes")
-    println("Required capacities: $capacities")
+#     # Count actual block sizes
+#     block_sizes = [count(==(b), assignments) for b in 1:k]
+#     println("Actual block sizes: $block_sizes")
+#     println("Required capacities: $capacities")
     
-    # Find permutation of block labels that matches capacities
-    # i.e. find which block should be relabelled as which register
-    label_map = zeros(Int, k)
-    remaining_blocks = collect(1:k)
+#     # Find permutation of block labels that matches capacities
+#     # i.e. find which block should be relabelled as which register
+#     label_map = zeros(Int, k)
+#     remaining_blocks = collect(1:k)
     
-    for (reg, cap) in enumerate(capacities)
-        # Find a block whose size matches this register's capacity
-        idx = findfirst(b -> block_sizes[b] == cap, remaining_blocks)
-        if isnothing(idx)
-            throw(ArgumentError(
-                "No block with exactly $cap qubits found for register $reg. Please change the register sizes or relax the constraint on equal-weight partitions."))
-            # fallback: assign whatever is left
-            idx = 1
-        end
-        label_map[reg] = remaining_blocks[idx]
-        deleteat!(remaining_blocks, idx)
-    end
+#     for (reg, cap) in enumerate(capacities)
+#         # Find a block whose size matches this register's capacity
+#         idx = findfirst(b -> block_sizes[b] == cap, remaining_blocks)
+#         if isnothing(idx)
+#             throw(ArgumentError(
+#                 "No block with exactly $cap qubits found for register $reg. Please change the register sizes or relax the constraint on equal-weight partitions."))
+#             # fallback: assign whatever is left
+#             idx = 1
+#         end
+#         label_map[reg] = remaining_blocks[idx]
+#         deleteat!(remaining_blocks, idx)
+#     end
     
-    println("Label map (register => old block): $label_map")
+#     @info "Label map (register => old block): $label_map"
 
-    # Apply relabeling
-    repaired = similar(assignments)
-    for (reg, old_block) in enumerate(label_map)
-        repaired[assignments .== old_block] .= reg
-    end
+#     # Apply relabeling
+#     repaired = similar(assignments)
+#     for (reg, old_block) in enumerate(label_map)
+#         repaired[assignments .== old_block] .= reg
+#     end
     
-    return repaired
-end
+#     return repaired
+# end
 
 
 function data_qubit_partitioning(capacities, stabilizers)
@@ -329,28 +332,40 @@ function data_qubit_partitioning(capacities, stabilizers)
 
     # exact balance for equal capacities; otherwise allow small imbalance then repair
     #equal_caps = all(c -> c == capacities[1], capacities)
-    imbalance = 0.0 # equal_caps ? 0.0 : 0.2
+    #imbalance = 0.0 # equal_caps ? 0.0 : 0.2
+
+    #partition = KaHyPar.partition(h,k,configuration = :connectivity)
     cfg = joinpath(@__DIR__, "km1_rKaHyPar_sea20.ini")
     partition = KaHyPar.partition(h, k; configuration=cfg)#  :edge_cut, imbalance=imbalance, seed = 42)
+    
     #improved_partition = KaHyPar.improve_partition(h, k, partition; num_iterations=10, imbalance=imbalance, seed = 42)
     # normalize block ids to 1..k 
-    min_id = minimum(partition)
-    assignments = min_id == 0 ? Int.(partition .+ 1) : Int.(partition)
-    #println("Partitioning is $assignments")
-    assignments = _repair_partition_capacities(assignments, capacities)
-    #println("Partitioning is $assignments")
 
-    permutation = Int[]
+    #min_id = minimum(partition)
+    #println("MINID PARTITION: $min_id")
+    #assignments = min_id == 0 ? Int.(partition .+ 1) : Int.(partition)
+    assignments = partition.+1 # KaHyPar is a Python-based optimiser based on 0 indexing
+    #println("Partitioning is $assignments")
+    #assignments = _repair_partition_capacities(assignments, capacities)
+    #println("Partitioning is $assignments")
+    block_sizes = [count(==(b), assignments) for b in 1:k]
+    println("Actual block sizes: $block_sizes")
+    println("Required capacities: $capacities")
+    if block_sizes != capacities
+        error("KaHyPar failed to satisfy the capacity constraint with correct block sizes, please change the capacities or alter the mapping manually")
+    end
+    mapping = Int[]
     for b in 1:k
-        append!(permutation, sort(findall(==(b), assignments)))
+        append!(mapping, sort(findall(==(b), assignments)))
     end
 
-    @assert length(permutation) == nqubits
-    @assert sort(permutation) == collect(1:nqubits)
+    @assert length(mapping) == nqubits
+    @assert sort(mapping) == collect(1:nqubits)
 
+    # mapping here indicates for each position, which qubit will sit there
     println("KaHyPar assignments: $assignments")
-    println("Data-qubit permutation: $permutation")
-    return permutation
+    println("Data-qubit mapping: $mapping")
+    return mapping
     # extract permutation from partitioning, e.g. [1,7,4,2,3,5,6] would mean that the 7th data qubit is in the first core if we have a [3,4] core assignment
 end
 
@@ -367,19 +382,24 @@ gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
 
 function gates_to_circuit(gates, n)
     # Converts gates to a circuit (same indexing), but counts gate overhead (in contrast to the below function which only constructs the circuit)
+    
     gate_counts = [0,0,0]
     #@assert n.num_shots == 1
     circuit = Vector{QuantumClifford.AbstractOperation}()  
     for gate in gates
         T = typeof(gate)
-        
-        if T <: SingleQubitGate # isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
+
+        print(T)
+        print(gate)
+        #print(supertypes(T))
+        print( "HAAA")
+        if string(T) == "Main.DQCircuitSearch.Types.HadamardGate" # T<: SingleQubitGate # isa Union{PauliXGate, PauliYGate, PauliZGate, HadamardGate, SGate} 
             #reward -= mdp.mcts_params.fitness_weights[2]
             gate_counts += [1,0,0]
             #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[qubit]) ], initial_quantum_state, num_traj = 1)
             push!(circuit, gate_to_apply(T, gate.index) ) 
 
-        elseif T <: TwoQubitGate
+        elseif string(T) == "Main.DQCircuitSearch.Types.CX_Gate"#T<: TwoQubitGate
             control = gate.control #network_specs.inv_perm[gate.control]
             target = gate.target #network_specs.inv_perm[gate.target]
             control_register = n.register_lookup_array[n.inv_perm[control]] 
@@ -401,6 +421,7 @@ function gates_to_circuit(gates, n)
             #new_quantum_state = execute_circuit([gate_to_apply(T, mdp.network_specs.inv_perm[control], mdp.network_specs.inv_perm[target]) ], initial_quantum_state, num_traj = 1)
         end
     end
+    print(circuit)
     return circuit, gate_counts
 end
 
@@ -573,7 +594,7 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
     ax_fid   = Axis(fig[3, 1], xlabel="Generation", ylabel="Fidelity")
 
     generations = 1:length(fitness_scores)
-    lines!(ax_fit, generations, fitness_scores, color=:chartreuse3, linewidth=2)
+    lines!(ax_fit, generations, fitness_scores, color=:seagreen4, linewidth=2)
 
     single_q_counts = [g[1] for g in gate_counts]
     two_q_counts    = [g[2] for g in gate_counts]
@@ -581,7 +602,7 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
 
     lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:goldenrod, linewidth=2)
     lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:steelblue,  linewidth=2)
-    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:pucrimsonrple, linewidth=2)
+    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:crimson, linewidth=2)
     axislegend(ax_gates, position=:rt) 
 
     lines!(ax_fid, generations, fidelities, color=:green, linewidth=2)
@@ -600,7 +621,7 @@ end
 function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, mcts_params::MCTSParameters, success)
     
     title_str = "Evolution of optimiser metrics for $optimiser_label"     
-    subtitle_str = "$(mcts_params.n_iterations) Iterations over depth $(mcts_params.depth)-- Optimisation Success: $(success)"
+    subtitle_str = "$(mcts_params.n_iterations) Iterations over depth $(mcts_params.depth) -- Optimisation Success: $(success)"
     
     fig = Figure(size = (800, 900))
 
@@ -608,7 +629,7 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, m
     ax_fid   = Axis(fig[2, 1], xlabel="Step", ylabel="Fidelity")
 
     generations = 1:length(fidelities)
-    lines!(ax_fid, generations, fidelities, color=:chartreuse3, linewidth=2)
+    lines!(ax_fid, generations, fidelities, color=:seagreen4, linewidth=2)
     ylims!(ax_fid, -0.05, 1.05) 
 
     tick_labels = string.(generations)

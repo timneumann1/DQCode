@@ -13,7 +13,7 @@ import Quantikz: QuantikzOp, ClassicalDecision
 export Circuit, CircuitIndividual #SimulationParameters, SimulationFidelity,
 export Gate, GateSet, SingleQubitGate, TwoQubitGate
 export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, ConditionalGate
-export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, OptimisationParameters, NoiseSpecs
+export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, NoiseSpecs
 
 # Parameter structures
 
@@ -132,7 +132,6 @@ end
 struct CodeParameters
     qec_code::AbstractCSSCode
     stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
-    stabilizer_group
     num_X_checks::Int
     logical_Zs
     target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
@@ -145,26 +144,27 @@ end
 struct NetworkSpecifications
     register_sizes::Vector{Int}        # Number of qubits in each register
     num_registers::Int
-    permutation::Vector{Int}
-    mapping::Vector{Tuple{Int, Int}}
-    inv_perm::Vector{Int}
+    mapping::Vector{Int}
+    mapping_transpositions::Vector{Tuple{Int, Int}}
+    inv_map::Vector{Int}
     register_lookup_array::Vector{Int}
     data_qubits::Vector{Int}
     comm_qubits::Vector{Int}
     num_data_qubits::Int
     num_comm_qubits_per_register::Int
     num_qubits::Int
-    comm_idx::Vector{Int}
-    comm_inv_perm_idx::Vector{Int}
+    #comm_idx::Vector{Int}
+    #comm_inv_perm_idx::Vector{Int}
 end
 
 
-struct OptimisationParameters
-    tableau_metric::String
-    gate_set::GateSet
-end
+# struct OptimisationParameters
+#     tableau_metric::String
+#     gate_set::GateSet
+# end
 
 struct GeneticParameters
+    gate_set::GateSet
     num_individuals::Int
     num_generations::Int
     max_len::Int
@@ -175,43 +175,36 @@ struct GeneticParameters
     #standard_encoding::Bool
     #warm_start::Bool
     fitness_weights::Vector{Float64}
-    decay_parameter::Float64
     #qec_code::AbstractCSSCode
-    #tableau_metric::String
+    tableau_metric::String
 end
 
 struct MCTSParameters
+    gate_set::GateSet
     depth::Int # depth that the solver traverses to maximally in each rollout
     n_iterations::Int # number of iterations the solver rolls out to choose the best next action
     max_steps::Int # Maximum number of steps (actions) that the solver takes, is equivalent to maximum circuit size
     fitness_weights::Vector{Float64}
     discount_factor::Float64 
     exploration_constant::Float64
+    tableau_metric::String
 end
 
 struct NoiseSpecs # Defining circuit-level noise
     n_samples::Int64
-    init_noise::Float64     # Initialisation noise
+    init_noise::Float64               # Initialisation noise
     idle_depolarising_noise::Float64  # idling depolarising probability
     idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
     single_q_gate_noise::Float64      # single qubit gate noise probability
     two_q_gate_noise::Float64         # two-qubit gate noise probability
     measurement_noise::Float64        # Measurement noise
-    two_q_gate_noise_diff_species::Float64         # two-qubit gate noise probability between communication and memory qubit
-    comm_qubit_init_noise::Float64 # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
-    comm_idle_depolarising_noise::Float64  # idling depolarising probability
-    single_comm_q_gate_noise::Float64 
-    comm_qubit_measurement_noise::Float64
-    classical_comm_noise::Float64
+    two_q_gate_noise_diff_species::Float64     # two-qubit gate noise probability between communication and memory qubit
+    comm_qubit_init_noise::Float64             # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
+    comm_idle_depolarising_noise::Float64      # Communication qubit idling depolarising probability
+    single_comm_q_gate_noise::Float64          # Communication qubit single gate depolarising probability
+    comm_qubit_measurement_noise::Float64      # Communication qubit measurement depolarising probability
+    classical_comm_noise::Float64              # Classical communication error
 end
-
-
-
-
-
-
-
-
 
 
 
