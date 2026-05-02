@@ -247,12 +247,12 @@ Also: Network of cleanly separated controls and targets, which we change in the 
         # Start with the first gate ik
         CX_ik = remaining_gates[1]
         i, k = affectedqubits(CX_ik)
-        if (k ∈ insertion_gate_qubits)
-            push!(singular_gates, sCNOT(i,k) )
-            print(i,k, remaining_gates, CX_ik)
-            filter!(g -> g != CX_ik , remaining_gates)
-            @goto while_loop
-        end
+        # if (k ∈ insertion_gate_qubits)
+        #     push!(singular_gates, sCNOT(i,k) )
+        #     print(i,k, remaining_gates, CX_ik)
+        #     filter!(g -> g != CX_ik , remaining_gates)
+        #     @goto while_loop
+        # end
         
         # Find all potential jk gates that share the same target
         CX_jks = filter(gate -> (affectedqubits(gate)[1] != i && affectedqubits(gate)[2] == k), remaining_gates) #findall(gate, gate.q2 ==k)
@@ -275,11 +275,11 @@ Also: Network of cleanly separated controls and targets, which we change in the 
                         
                         @assert i == i2 "Oops, something went wrong in the filtering, the indices i=$i and i2=$i2 should match"
 
-                        if (m ∈ insertion_gate_qubits)
-                            push!(singular_gates, sCNOT(i,m) )
-                            filter!(g -> g != CX_im , remaining_gates)
-                            continue
-                        end
+                        # if (m ∈ insertion_gate_qubits)
+                        #     push!(singular_gates, sCNOT(i,m) )
+                        #     filter!(g -> g != CX_im , remaining_gates)
+                        #     continue
+                        # end
                         # now we have ik + jk + im > only missing jm
                         # there can only be one such CX_km gate by the way the Gottesman circuit is constructed
                         CX_jms = filter(gate -> (affectedqubits(gate)[1] == j && affectedqubits(gate)[2] == m), remaining_gates) #findfirst(gate, gate.q1 ==j, gate.q2 ==m)
@@ -302,33 +302,45 @@ Also: Network of cleanly separated controls and targets, which we change in the 
                                 if i_register == m_register && j_register == m_register
                                     # in this special case, i and j are in the same register with m, but k is in a different one
                                     # then we want to eliminate the first two gates, while adding a gate m>k (instead of k>m)
-                                    push!(compiled_circ, sCNOT(i,m))
-                                    push!(compiled_circ, sCNOT(j,m))
-                                    push!(compiled_circ, sCNOT(m,k))
-                                    filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                                    @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$m and $j>$m, $m>$k "
-                                    push!(insertion_gate_qubits, m)
-                                    push!(insertion_gate_qubits, k)
-                                    # remaining_gates.pop(CX_ik) 
-                                    # remaining_gates.pop(CX_jk) 
-                                    # remaining_gates.pop(CX_im)
-                                    # remaining_gates.pop(CX_jm)  
-                                    @goto while_loop 
+
+                                    # But first, we need to check the contamination criteria again, on control qubit m
+                                    if (m ∈ insertion_gate_qubits)
+                                        continue
+                                    else
+                                        push!(compiled_circ, sCNOT(i,m))
+                                        push!(compiled_circ, sCNOT(j,m))
+                                        push!(compiled_circ, sCNOT(m,k))
+                                        filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
+                                        @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$m and $j>$m, $m>$k "
+                                        push!(insertion_gate_qubits, m)
+                                        push!(insertion_gate_qubits, k)
+                                        # remaining_gates.pop(CX_ik) 
+                                        # remaining_gates.pop(CX_jk) 
+                                        # remaining_gates.pop(CX_im)
+                                        # remaining_gates.pop(CX_jm)  
+                                        @goto while_loop 
+                                    end
                                 end
                             end
                             # in this case (we don't add a telegate, or we don't add an additional one at least), we proceed to add the gate and delete the other two
                             # in this case, it is always beneficial to add the new gate, since we are not introducing a telegate
                             # this strategy might not be globally optimally, but it provides a good greedy approach
-                            push!(compiled_circ, sCNOT(i,k))
-                            push!(compiled_circ, sCNOT(j,k))
-                            push!(compiled_circ, sCNOT(k,m))
-                            filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                            @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$k and $j>$k, $k>$m "
-                            push!(insertion_gate_qubits, k)
-                            push!(insertion_gate_qubits, m)
-                            # After adding the 3 gates to circuit and deleting 4 gates, we don't traverse the circuit again (one compilation pass)
 
-                            @goto while_loop 
+                            # But first, we need to check the contamination criteria again
+                            if (k ∈ insertion_gate_qubits)
+                                continue
+                            else
+                                push!(compiled_circ, sCNOT(i,k))
+                                push!(compiled_circ, sCNOT(j,k))
+                                push!(compiled_circ, sCNOT(k,m))
+                                filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
+                                @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$k and $j>$k, $k>$m "
+                                push!(insertion_gate_qubits, k)
+                                push!(insertion_gate_qubits, m)
+                                # After adding the 3 gates to circuit and deleting 4 gates, we don't traverse the circuit again (one compilation pass)
+
+                                @goto while_loop 
+                            end
                         end
                     end
                 end
