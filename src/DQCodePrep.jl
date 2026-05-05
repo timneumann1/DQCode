@@ -28,6 +28,7 @@ using QuantumClifford
 using QuantumClifford: MixedDestabilizer, Stabilizer, Tableau, stabilizerview, logicalxview, logicalzview, canonicalize_rref!, tab, AbstractOperation
 using QuantumClifford.ECC: DistanceMIPAlgorithm
 using Serialization
+using StatsBase
 
 
 using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, qc_circuit_to_qasm
@@ -146,6 +147,7 @@ function run_dqc_state_prep(exp_label::String)
     num_z_anc = 0
     num_x_anc = 0
     num_flags = 0
+    
     for reg in verification_circ.qregs
         if reg.name == "q"
             num_q = reg.size
@@ -158,7 +160,7 @@ function run_dqc_state_prep(exp_label::String)
         end
     end
     @assert num_q == network_specs.num_data_qubits
-    
+    num_ancillas = num_z_anc + num_x_anc + num_flags
     # Assume that we always add z_anc first, then x_anc, then flags in register ordering
     # num_z_anc = verification_circ.qregs[2]
     # num_x_anc = verification_circ.qregs[3]
@@ -384,6 +386,32 @@ function run_dqc_state_prep(exp_label::String)
     println("\nData Circuit: $data_circuit \n")
     println("Ver. Circuit:$quantum_clifford_verification_circ \n")
     println("Ancilla interactis: $ancilla_data_interactions")
+    #ancilla_cores = 
+
+    # create ancilla mapping list
+
+    ancilla_map = Vector{Int}(undef, num_z_anc + num_x_anc + num_flags)
+    anc_order = Dict("z_anc" => 1, "x_anc" => 2, "flag" => 3)
+    sorted_dict = sort(collect(ancilla_data_interactions); by = x -> (anc_order[x[1][1]], x[1][2]))
+    
+    for (index, (ancilla, interactions)) in enumerate(sorted_dict)
+        println("Index: $index, key $ancilla, value $interactions")
+        ancilla_map[index] = mode(interactions)
+    end
+
+    # for anc_type in ("z_anc", "x_anc", "flag")
+    #     for index in sort(collect(keys(ancilla_data_interactions)))
+    # for (index, dict_entry) in enumerate(sorted(ancilla_data_interactions)) 
+    #     interactions = dict_entry[2](anc_type, index)  
+    #     println((anc_type, index), interactions)
+    #     ancilla_map ancilla_data_interactions[(anc_type, index)] = mode( interactions )
+    # end
+
+    println("Ancilla map: $ancilla_map")
+    p = 1e-3
+    num_samples = 1e5
+    noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
+    dqc_state_prep(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
     return 42
 end
 
