@@ -10,6 +10,7 @@ using QECCore
 using Serialization
 using Quantikz: savecircuit
 using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat, AbstractOperation, AbstractSingleQubitOperator, AbstractTwoQubitOperator
+using CSV, DataFrames
 
 export encoding_circuit_gott, encoding_gott, overlap_compilation
 
@@ -152,49 +153,6 @@ an operation from op.q to perm[op.q] (instead of introducing SWAP operations)
     return encoding_circuit_orig, gate_counts
 end
 
-function encoding_gott(code_params, network_specs, basis_state, folder)
-
-    encoding_circ, gate_counts = encoding_circuit_gott(code_params.qec_code, network_specs, basis_state)
-
-    encoding_circ_compiled, gate_counts_compiled = overlap_compilation(encoding_circ, network_specs)
-
-    @info "Encoding Circuit: $encoding_circ"
-    @info "Gottesman encoding circuit length in DQC setting:: Single-qubit gates: $(gate_counts[1]), Two-qubit gates: $(gate_counts[2]), Telegates: $(gate_counts[3])"
-
-    @info "Encoding circuit compiled: $encoding_circ_compiled"
-    @info "Overlap DQC compilation circuit length in DQC setting:: Single-qubit gates: $(gate_counts_compiled[1]), Two-qubit gates: $(gate_counts_compiled[2]), Telegates: $(gate_counts_compiled[3])"
-
-
-    # ----- Verification ------
-    verification_logical_state = verify_success(encoding_circ, code_params.target_state, network_specs)
-    @info "Verification of Gottesman circuit successful: $verification_logical_state"
-
-    verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
-    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled"
-
-    # ----- Data Storage ----------
-    dir = joinpath(folder, "gottesman_encoding")
-    mkpath(dir)
-
-    serialize( joinpath(dir, "encoding_circuit.jls"), encoding_circ )
-
-    open(joinpath(dir, "encoding_gates.txt"), "w") do io
-        println(io, "# Raw gate sequence of size $(sum(gate_counts))")
-        for (i, g) in enumerate(encoding_circ)
-            println(io, i, "\t", repr(g))
-        end
-    end
-
-    save_circuit_diagram(encoding_circ, dir, "encoding_circuit.png")
-
-    open(joinpath(dir, "summary.txt"), "w") do io
-        println(io, "# Encoding successful: $verification_logical_state")
-        println(io, "# Raw gate sequence of size $(sum(gate_counts))")
-        println(io, "# Executable DQC circuit with $(gate_counts[1]) single qubit gates, $(gate_counts[2]) two qubit gates and $(gate_counts[3]) telegates ")
-    end
-
-    return encoding_circ
-end
 
 
 function overlap_compilation(circuit, network_specs)
@@ -236,6 +194,8 @@ Also: Network of cleanly separated controls and targets, which we change in the 
 
     # In the above construction of encoding circuits, we can safely push the single-qubit gates to the beginning of the circuit, and since we are working with CSS codes,
     # we only need to consider CX gates. Also, controls here are never targets, so we can safely assume that no gates are in between, and disregard order entirely (everything commutes) for the search (not the insertion, see above)
+    
+    # Only perform compilation pass once since otherwise qubits might already be contaminated
     
     singular_gates = Vector{AbstractOperation}()
 
@@ -376,15 +336,71 @@ Also: Network of cleanly separated controls and targets, which we change in the 
         end
     end
       
-
-        
-    # Then verify correctness!
-
-
     return compiled_circ, gate_counts
 
-
 end
+
+
+
+function encoding_gott(code_params, network_specs, basis_state, folder)
+
+    encoding_circ, gate_counts = encoding_circuit_gott(code_params.qec_code, network_specs, basis_state)
+
+    encoding_circ_compiled, gate_counts_compiled = overlap_compilation(encoding_circ, network_specs)
+
+    @info "Encoding Circuit: $encoding_circ"
+    @info "Gottesman encoding circuit length in DQC setting:: Single-qubit gates: $(gate_counts[1]), Two-qubit gates: $(gate_counts[2]), Telegates: $(gate_counts[3])"
+
+    @info "Encoding circuit compiled: $encoding_circ_compiled"
+    @info "Overlap DQC compilation circuit length in DQC setting:: Single-qubit gates: $(gate_counts_compiled[1]), Two-qubit gates: $(gate_counts_compiled[2]), Telegates: $(gate_counts_compiled[3])"
+
+
+    # ----- Verification ------
+    verification_logical_state = verify_success(encoding_circ, code_params.target_state, network_specs)
+    @info "Verification of Gottesman circuit successful: $verification_logical_state"
+
+    verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
+    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled"
+
+    # ----- Data Storage ----------
+    dir = joinpath(folder, "gottesman_encoding")
+    mkpath(dir)
+
+    serialize( joinpath(dir, "encoding_circuit.jls"), encoding_circ )
+    serialize( joinpath(dir, "encoding_circuit_dqc_compiled.jls"), encoding_circ_compiled )
+
+    # open(joinpath(dir, "encoding_gates.txt"), "w") do io
+    #     println(io, "# Raw gate sequence (Gottesman encoding circuit) of size $(sum(gate_counts))")
+    #     for (i, g) in enumerate(encoding_circ)
+    #         println(io, i, "\t", repr(g))
+    #     end
+
+    #     println(io, "# Raw gate sequence (DQC compiled version) of size $(sum(gate_counts_compiled))")
+    #     for (i, g) in enumerate(encoding_circ_compiled)
+    #         println(io, i, "\t", repr(g))
+    #     end
+    # end
+
+    save_circuit_diagram(encoding_circ, dir, "encoding_circuit.png")
+    save_circuit_diagram(encoding_circ_compiled, dir, "encoding_circuit_dqc_compiled.png")
+
+
+    open(joinpath(dir, "summary.txt"), "w") do io
+        println(io, "# Encoding successful: $verification_logical_state")
+        println(io, "# Raw gate sequence of size $(sum(gate_counts))")
+        println(io, "# Executable DQC circuit with $(gate_counts[1]) single qubit gates, $(gate_counts[2]) two qubit gates and $(gate_counts[3]) telegates ")
+        println(io, "\n")
+        println(io, "# DQC Compilation Encoding successful: $verification_logical_state_compiled")
+        println(io, "# Raw gate sequence of size $(sum(gate_counts_compiled))")
+        println(io, "# Executable DQC circuit with $(gate_counts_compiled[1]) single qubit gates, $(gate_counts_compiled[2]) two qubit gates and $(gate_counts_compiled[3]) telegates ")
+    end
+
+    df = DataFrame(method = ["gottesman_encoding", "dqc_compiled_encoding"], verified = [verification_logical_state, verification_logical_state_compiled], gate_counts = [gate_counts, gate_counts_compiled])
+    CSV.write(joinpath(dir, "gottesman_stats.csv"), df)
+
+    return encoding_circ, encoding_circ_compiled, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled
+end
+
 
 
 

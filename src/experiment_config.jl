@@ -26,7 +26,7 @@ function experiment_configurations()
         Steane7(),
         [4,3],
         GeneticParameters(7500, 1500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "jaccard"),
-        MCTSParameters(15, [1e6,1,5,1e1], 0.999, "jaccard", 3, 1e6, 10.0),  #[1e6, 1, 5, 1e3]
+        MCTSParameters(15, [1e6,1,5,1e2], 0.999, "jaccard", 4, 5e6, 10.0),  #[1e6, 1, 5, 1e3]
         joinpath(@__DIR__, "results", string(code_dirname(Steane7())), string([4,3]))
         )
     
@@ -36,7 +36,7 @@ function experiment_configurations()
         Shor9(),
         [3,3,3],
         GeneticParameters(7500, 1500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "jaccard"),
-        MCTSParameters(15, [1e6,1,5,1e1], 0.999, "jaccard", 3, 1e6, 10.0), #[1e6, 1, 5, 1e2]
+        MCTSParameters(15, [1e6,1,5,1e2], 0.999, "jaccard", 4, 5e6, 10.0), #[1e6, 1, 5, 1e2]
         joinpath(@__DIR__, "results", string(code_dirname(Shor9())), string([3,3,3]))
         )
 
@@ -46,7 +46,7 @@ function experiment_configurations()
         TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
         [3,3,3,3],
         GeneticParameters(15000, 1000, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 5e2], "jaccard"),
-        MCTSParameters(30, [1e6,1,5,1e4], 0.99,"jaccard", 2, 1e6, 5.0),#, 5, 1e5, 10), 
+        MCTSParameters(30, [1e6,1,5,1e4], 0.99, "jaccard", 2, 1e6, 5.0),#, 5, 1e5, 10), 
         joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([3,3,3,3]))
         )
     
