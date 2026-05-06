@@ -370,6 +370,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
                     
                 end
             elseif T <: sMRZ
+                add_noise(circuit, affectedqubits(gate), noise.measurement_noise) # the ancilla is of the same type, thus we have the same measurement noise
                 push!(circuit, gate)
                 #PauliMeasurement(pauli_string_control, classical_register_index_control)
                     # Make sure to handl measuremtn correctly (type and also affectedqubits[1])
@@ -759,6 +760,7 @@ end
 function dqc_state_prep(data_circuit, verification_circuit, num_ancillas, ancilla_map, code_params, network_specs, noise)
     println("In DQC STATE PREP NOW")
     DQC_circuit = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise)
+    #DQC_circuit = construct_DQC_executable_circuit(data_circuit, [], num_ancillas, ancilla_map, network_specs, noise)
     println( "DQC CIRCUIT::::$DQC_circuit")
 
     # ----- Verify that data circuit is still intact -------

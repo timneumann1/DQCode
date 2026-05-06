@@ -18,6 +18,7 @@ include("dqc_state_prep_sim.jl")
 #include("parameters.jl")
 
 
+
 using QECCore
 using QECCore: distance
 using .TrivariateBicycleCode
@@ -41,12 +42,23 @@ using .ExperimentConfig: experiment_configurations
 
 using PyCall
 np = pyimport("numpy")
-# logging = pyimport("logging")
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format="%(asctime)s %(name)s %(levelname)s: %(message)s"
-# )
-# logging.getLogger("mqt.qecc").setLevel(logging.INFO)
+
+# py"""
+# import random, numpy as np, z3
+# random.seed(0)
+# np.random.seed(0)
+# z3.set_param("smt.random_seed", 0)
+# z3.set_param("sat.random_seed", 0)
+# """
+
+
+
+logging = pyimport("logging")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s"
+)
+logging.getLogger("mqt.qecc").setLevel(logging.INFO)
 
 #CSSCode = pyimport("mqt.qecc").CSSCode
 mqt_synthesis = pyimport("mqt.qecc.circuit_synthesis")
@@ -58,6 +70,7 @@ qiskit = pyimport("qiskit")
 qi = pyimport("qiskit.quantum_info")
 qasm2 = pyimport("qiskit.qasm2")
 synth = pyimport("qiskit.synthesis")
+plt = pyimport("matplotlib.pyplot")
 
 #heuristic_prep_circuit         = cs.heuristic_prep_circuit
 gate_optimal_verification_circuit = mqt_synthesis.gate_optimal_verification_circuit
@@ -98,37 +111,54 @@ function run_dqc_state_prep(exp_label::String)
     qasm = qc_circuit_to_qasm(circuit)
     
     println("QASM version: $qasm")
-    qiskit_circ = qasm2.loads(qasm) # loads the string
-    print(qiskit_circ)
-
-    cnot_circ = mqt_circuits.CNOTCircuit.from_qiskit_circuit(qiskit_circ, init_all = true)
-    print(cnot_circ)
-
     
+    
+    
+    
+    # qiskit_circ = qasm2.loads(qasm) # loads the string
+    # print(qiskit_circ)
+    # #qiskit_circ.draw(output="mpl", initial_state=true, fold=-1, scale=0.4)
+    # #plt.show()
 
-    # get code from cnot circ
-    css_code = cnot_circ.get_code()
-    # and check whether the stabilisers and logicals match
-    println("X checks: $(css_code.Hx)")
-    println("Z checks: $(css_code.Hz)")
-    println("Logical X: $(css_code.Lx)")
-    println("Logical Z: $(css_code.Lz)")
-
-    # everthing is now collapsed in the Z check matrix (Z stabilisers and logical Zs), since they are equaivlent as stabilisers of the desired state
-    # and we can measrue both to obtain the correct one (of course cofrectinng for hook errors); our initial definition of logical still applies and
-    # can be used for the noiseless procedure
-
-    println(code_params.distance//2)
-    t = Int(floor(code_params.distance/2))
-    faulty_prep_circuit = mqt_state_prep.FaultyStatePrepCircuit(cnot_circ,t,t)
-    print(faulty_prep_circuit)
-    verification_circ = gate_optimal_verification_circuit(faulty_prep_circuit)
-    println(verification_circ)
+    # cnot_circ = mqt_circuits.CNOTCircuit.from_qiskit_circuit(qiskit_circ, init_all = true)
+    
+    
+    # print("CNOTCIRCUIT: $(cnot_circ.cnots)")
 
 
-    qasm_prog = qasm2.dumps(verification_circ) # dumps writes to a string
+    # # get code from cnot circ
+    # css_code = cnot_circ.get_code()
+    # # and check whether the stabilisers and logicals match
+    # println("X checks: $(css_code.Hx)")
+    # println("Z checks: $(css_code.Hz)")
+    # println("Logical X: $(css_code.Lx)")
+    # println("Logical Z: $(css_code.Lz)")
+
+    # # everthing is now collapsed in the Z check matrix (Z stabilisers and logical Zs), since they are equaivlent as stabilisers of the desired state
+    # # and we can measrue both to obtain the correct one (of course cofrectinng for hook errors); our initial definition of logical still applies and
+    # # can be used for the noiseless procedure
+
+    # println(code_params.distance//2)
+    # t = Int(floor(code_params.distance/2))
+    # faulty_prep_circuit = mqt_state_prep.FaultyStatePrepCircuit(cnot_circ,t,t)
+    # println("\n\n\n\n\n FAULT circuit $(faulty_prep_circuit.circ.cnots)\n\n\n")
+
+    verification_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $qasm`)
+    #verification_circ_qasm = gate_optimal_verification_circuit(faulty_prep_circuit)#, min_timeout=600,max_timeout=3600)
+    print("Verification QASM: \n$verification_circ_qasm")
+    verification_circ = qasm2.loads(verification_circ_qasm) 
+
+    println("Verification Cirucit: $verification_circ")
+    #println("DAAATA: $(verification_circ.data)")
+
+
+    #verification_circ.draw(output="mpl", initial_state=true, fold=-1, scale=0.4)
+    #plt.show()
+
+
+    #qasm_prog = qasm2.dumps(verification_circ) # dumps writes to a string
     # qasm program could be reordered but should still be intact:
-    println("Final QASM Program orig + verification: $qasm_prog")
+    #println("Final QASM Program orig + verification: $qasm_prog")
 
     #verification_qasm = copy(qasm_prog)
 
@@ -156,16 +186,17 @@ function run_dqc_state_prep(exp_label::String)
         elseif reg.name == "x_anc"
             num_x_anc = reg.size
         elseif reg.name == "flag"
-            num_flags = reg.size
+            num_flags = reg.size # this is an upper bound, as set in MQT QECC
         end
     end
     @assert num_q == network_specs.num_data_qubits
-    num_ancillas = num_z_anc + num_x_anc + num_flags
+    #num_ancillas = num_z_anc + num_x_anc + num_flags
     # Assume that we always add z_anc first, then x_anc, then flags in register ordering
     # num_z_anc = verification_circ.qregs[2]
     # num_x_anc = verification_circ.qregs[3]
     # num_flags = verification_circ.qregs[4]
     #print(num_q, num_z_anc, num_x_anc, num_flags)
+    
     for instruction in verification_circ.data
         #println(verification_circ.data)
         gate = instruction.operation.name
@@ -201,6 +232,11 @@ function run_dqc_state_prep(exp_label::String)
             target_reg_name = String(target_info.registers[1][1].name)
             target = Int(target_info.index)
 
+            # target_reg_name holds the name of the register
+            # target_index_reg holds the index WITHIN this reigster
+
+            # the bitinfo index refers to num_data qubits (not comm qubut which are indexed in between in our architecture, but excluded in qskit) + 
+            # whatever index in the 3 ancilla registers we have
             if control_reg_name == "q" && target_reg_name == "q"
                 continue
             elseif control_reg_name == "q" 
@@ -215,38 +251,52 @@ function run_dqc_state_prep(exp_label::String)
                 key = (target_reg_name,target_index_reg+1)
                 push!(get!(ancilla_data_interactions, key, Int[]), network_specs.register_lookup_array[network_specs.inv_map[control+1]])
                 #ancilla_data_interactions[] = network_specs.register_lookup_array[network_specs.inv_map[control+1]]
-                #println("Target: $target, network_specs.num_comm_qubits: $(network_specs.num_comm_qubits)")
+                println("Target: $target, network_specs.num_comm_qubits: $(network_specs.num_comm_qubits)")
                 push!(quantum_clifford_verification_circ, sCNOT(control+1,target+network_specs.num_comm_qubits+1))
             elseif target_reg_name == "q" 
                 
                 if control_reg_name == "z_anc"
                     control_index_reg = control-network_specs.num_data_qubits
                 elseif control_reg_name == "x_anc"
-                    control_index_reg = control-network_specs.num_data_qubits-z_anc#num_q + num_z_anc + control
+                    control_index_reg = control-network_specs.num_data_qubits-num_z_anc#num_q + num_z_anc + control
                 elseif control_reg_name == "flag"
-                    control_index_reg =  control-network_specs.num_data_qubits-z_anc-x_anc# num_q + num_z_anc + num_x_anc + control
+                    control_index_reg =  control-network_specs.num_data_qubits-num_z_anc-num_x_anc# num_q + num_z_anc + num_x_anc + control
                 end
                 key = (control_reg_name,control_index_reg+1)
                 push!(get!(ancilla_data_interactions, key, Int[]), network_specs.register_lookup_array[network_specs.inv_map[target+1]])
                 #ancilla_data_interactions[(control_reg_name,control_index_reg+1)] = network_specs.register_lookup_array[network_specs.inv_map[target+1]]
                 push!(quantum_clifford_verification_circ, sCNOT(control+network_specs.num_comm_qubits+1,target+1))
             else # both are ancilla qubits
-                # if control_reg_name == "z_anc"
-                #     control_index = num_q + control
-                # elseif control_reg_name == "x_anc"
-                #     control_index = num_q + num_z_anc + control
-                # elseif control_reg_name == "flag"
-                #     control_index = num_q + num_z_anc + num_x_anc + control
-                # end
-                # if target_reg_name == "z_anc"
-                #     target_index = num_q + target
-                # elseif target_reg_name == "x_anc"
-                #     target_index = num_q + num_z_anc + index
-                # elseif target_reg_name == "flag"
-                #     target_index = num_q + num_z_anc + num_x_anc + index
-                # end
-                
+                if control_reg_name == "z_anc"
+                    control_index_reg = control-network_specs.num_data_qubits
+                elseif control_reg_name == "x_anc"
+                    control_index_reg = control-network_specs.num_data_qubits-num_z_anc
+                elseif control_reg_name == "flag"
+                    control_index_reg = control-network_specs.num_data_qubits-num_z_anc-num_x_anc
+                end
+                if target_reg_name == "z_anc"
+                    target_index_reg = target-network_specs.num_data_qubits
+                elseif target_reg_name == "x_anc"
+                    target_index_reg = target-network_specs.num_data_qubits-num_z_anc
+                elseif target_reg_name == "flag"
+                    target_index_reg = target-network_specs.num_data_qubits-num_z_anc-num_x_anc
+                end
+                control_key = (control_reg_name,control_index_reg+1)
+                target_key = (target_reg_name,target_index_reg+1)
+                # If both qubits are ancilla qubits, we would still like to record information about their mapping, so we simply map the current mode of the counterpart ancilla
+                control_interactions = get!(ancilla_data_interactions, control_key, Int[])
+                control_mode = isempty(control_interactions) ? 1 : mode(control_interactions)
+
+                target_interactions = get!(ancilla_data_interactions, target_key, Int[])
+                target_mode = isempty(target_interactions) ? 1 : mode(control_interactions)
+
+                push!(get!(ancilla_data_interactions, control_key, Int[]), target_mode )
+                push!(get!(ancilla_data_interactions, target_key, Int[]), control_mode )
+
                 push!(quantum_clifford_verification_circ, sCNOT(control+network_specs.num_comm_qubits+1,target+network_specs.num_comm_qubits+1))
+                    
+                    #                push!(get!(ancilla_data_interactions, key, Int[]), network_specs.register_lookup_array[network_specs.inv_map[target+1]])
+
             end
 
         elseif gate=="measure" 
@@ -382,7 +432,7 @@ function run_dqc_state_prep(exp_label::String)
     # pass data_circuit,quantum_clifford_verification_circ,ancilla_data_interactions to exectuable, where data qubits will be executed, then 
     # verificaion will be appended baed on the ancilla_data_interactions dict, then unmapping
 
-    println("\n\n\nqasm: $qasm_prog\n")
+    #println("\n\n\nqasm: $qasm_prog\n")
     println("\nData Circuit: $data_circuit \n")
     println("Ver. Circuit:$quantum_clifford_verification_circ \n")
     println("Ancilla interactis: $ancilla_data_interactions")
@@ -390,15 +440,23 @@ function run_dqc_state_prep(exp_label::String)
 
     # create ancilla mapping list
 
-    ancilla_map = Vector{Int}(undef, num_z_anc + num_x_anc + num_flags)
+    # TODO: For the flags that were not part of any interaction, discard them and reduce the number of flags accordinglt!
+    # NOOOOT NECESSART: Since the flag qubits are appended in the end anyways
+    # Also reduce the number of num_ancillas correspodnllgy
+
+    ancilla_map = Vector{Int}()# DONT initialie with fixed number since num_flags is an upper boundundef, num_z_anc + num_x_anc + num_flags)
+    #println(num_z_anc, num_x_anc , num_flags)
     anc_order = Dict("z_anc" => 1, "x_anc" => 2, "flag" => 3)
     sorted_dict = sort(collect(ancilla_data_interactions); by = x -> (anc_order[x[1][1]], x[1][2]))
     
     for (index, (ancilla, interactions)) in enumerate(sorted_dict)
         println("Index: $index, key $ancilla, value $interactions")
-        ancilla_map[index] = mode(interactions)
+        #ancilla_map[index] = mode(interactions)
+        push!(ancilla_map, mode(interactions))
     end
 
+    num_ancillas = length(ancilla_map) # collects all ancillas that have been used in some interaction
+    print("num_ancillas is $num_ancillas, where there are $num_z_anc z ancillas and $num_x_anc x ancillas")
     # for anc_type in ("z_anc", "x_anc", "flag")
     #     for index in sort(collect(keys(ancilla_data_interactions)))
     # for (index, dict_entry) in enumerate(sorted(ancilla_data_interactions)) 
@@ -408,8 +466,8 @@ function run_dqc_state_prep(exp_label::String)
     # end
 
     println("Ancilla map: $ancilla_map")
-    p = 1e-3
-    num_samples = 1e5
+    p = 1e-4
+    num_samples = 1e6
     noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
     dqc_state_prep(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
     return 42
