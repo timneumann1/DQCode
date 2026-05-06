@@ -5,13 +5,14 @@ module Types
 using QuantumClifford
 
 # types for simulation
-using QuantumClifford: AbstractOperation
+using QuantumClifford: AbstractOperation#, AbstractCliffordOperator
 using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
 export Circuit, CircuitIndividual #SimulationParameters, SimulationFidelity,
-export Gate, GateSet, SingleQubitGate, TwoQubitGate
+#export GateSet
+#export Gate, GateSet, SingleQubitGate, TwoQubitGate
 export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, ConditionalGate
 export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, NoiseSpecs
 
@@ -38,67 +39,67 @@ export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters,
 
 # Gate Types
 
-struct GateSet
-    single_qubit_gates::Vector{Type}
-    two_qubit_gates::Vector{Type}
-end
+# struct GateSet
+#     single_qubit_gates::Vector{DataType}
+#     two_qubit_gates::Vector{DataType}
+# end
 
-abstract type Gate end
-abstract type SingleQubitGate <: Gate end
-abstract type TwoQubitGate <: Gate end
+# abstract type Gate end
+# abstract type SingleQubitGate <: Gate end
+# abstract type TwoQubitGate <: Gate end
 
-# single-qubit gates
-struct IdentityGate <: SingleQubitGate 
-    index::Int
-end
+# # single-qubit gates
+# struct IdentityGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct PauliXGate <: SingleQubitGate
-    index::Int
-end
+# struct PauliXGate <: SingleQubitGate
+#     index::Int
+# end
 
-struct PauliYGate <: SingleQubitGate
-    index::Int
-end
+# struct PauliYGate <: SingleQubitGate
+#     index::Int
+# end
 
-struct PauliZGate <: SingleQubitGate 
-    index::Int
-end
+# struct PauliZGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct HadamardGate <: SingleQubitGate 
-    index::Int
-end
+# struct HadamardGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct SGate <: SingleQubitGate 
-    index::Int
-end
+# struct SGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct InvSGate <: SingleQubitGate 
-    index::Int
-end
+# struct InvSGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct SqrtXGate <: SingleQubitGate 
-    index::Int
-end
+# struct SqrtXGate <: SingleQubitGate 
+#     index::Int
+# end
 
-struct InvSqrtXGate <: SingleQubitGate 
-    index::Int
-end
+# struct InvSqrtXGate <: SingleQubitGate 
+#     index::Int
+# end
 
-# two-qubit gates (store the counterpart of the operation)
-struct CX_Gate <: TwoQubitGate
-    control::Int
-    target::Int
-end
+# # two-qubit gates (store the counterpart of the operation)
+# struct CX_Gate <: TwoQubitGate
+#     control::Int
+#     target::Int
+# end
 
-struct CZ_Gate <: TwoQubitGate
-    control::Int
-    target::Int
-end
+# struct CZ_Gate <: TwoQubitGate
+#     control::Int
+#     target::Int
+# end
 
-struct SWAP_Gate <: TwoQubitGate
-    qubit_1::Int
-    qubit_2::Int
-end
+# struct SWAP_Gate <: TwoQubitGate
+#     qubit_1::Int
+#     qubit_2::Int
+# end
 
 struct ConditionalGate <: AbstractOperation
     truegate::AbstractOperation
@@ -108,15 +109,17 @@ end
 
 # Genetic Algorithm Types
 
-mutable struct CircuitIndividual
-    gates::Vector{Gate}   
-end
+# mutable struct CircuitIndividual
+#     #gates::Vector{Gate}   
+#     gates::Vector{AbstractOperation}
+# end
 
-function CircuitIndividual(num_gates::Int)
-    @assert num_gates > 0
-    gates = Gate[IdentityGate(1) for _ in 1:num_gates]
-    return CircuitIndividual(gates)
-end
+# function CircuitIndividual(num_gates::Int)
+#     @assert num_gates > 0
+#     #gates = Gate[IdentityGate(1) for _ in 1:num_gates]
+#     gates = [sId1(1) for _ in 1:num_gates]
+#     return CircuitIndividual(gates)
+# end
 
 # mutable struct Circuit
 #     gates::Matrix{Gate}
@@ -131,7 +134,7 @@ end
 
 struct CodeParameters
     qec_code::AbstractCSSCode
-    stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
+    #stabilizers::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
     num_X_checks::Int
     logical_Zs
     target_state::Stabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}
@@ -151,8 +154,9 @@ struct NetworkSpecifications
     data_qubits::Vector{Int}
     comm_qubits::Vector{Int}
     num_data_qubits::Int
+    num_comm_qubits::Int
     num_comm_qubits_per_register::Int
-    num_qubits::Int
+    num_data_and_comm_qubits::Int
     #comm_idx::Vector{Int}
     #comm_inv_perm_idx::Vector{Int}
 end
@@ -164,7 +168,7 @@ end
 # end
 
 struct GeneticParameters
-    gate_set::GateSet
+    #gate_set::GateSet
     num_individuals::Int
     num_generations::Int
     max_len::Int
@@ -180,14 +184,14 @@ struct GeneticParameters
 end
 
 struct MCTSParameters
-    gate_set::GateSet
-    depth::Int # depth that the solver traverses to maximally in each rollout
-    n_iterations::Int # number of iterations the solver rolls out to choose the best next action
+    #gate_set::GateSet
     max_steps::Int # Maximum number of steps (actions) that the solver takes, is equivalent to maximum circuit size
     fitness_weights::Vector{Float64}
     discount_factor::Float64 
-    exploration_constant::Float64
     tableau_metric::String
+    depth::Int # depth that the solver traverses to maximally in each rollout
+    n_iterations::Int # number of iterations the solver rolls out to choose the best next action
+    exploration_constant::Float64
 end
 
 struct NoiseSpecs # Defining circuit-level noise

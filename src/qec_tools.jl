@@ -1,6 +1,6 @@
 module QECTools
 
-# from https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/decoder_pipeline.jl
+# adapted from https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl
 
 using ..Types
 using ..Helper
@@ -21,12 +21,13 @@ function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, b
     num_data_qubits = nqubits(p)
     @assert num_data_qubits == network_specs.num_data_qubits
     for qubit in 1:num_data_qubits
+        # for the perfect ancillary measurement, qubits are back in their correct position already
         if p[qubit] == (1,0)
-            push!(circuit, sXCX(network_specs.comm_idx[qubit], ancillary_index)) # X-controlled X
+            push!(circuit, sXCX(qubit, ancillary_index)) # X-controlled X     
         elseif p[qubit] == (0,1)
-            push!(circuit, sCNOT(network_specs.comm_idx[qubit], ancillary_index)) # Z-controlled X
+            push!(circuit, sCNOT(qubit, ancillary_index)) # Z-controlled X
         elseif p[qubit] == (1,1)
-            push!(circuit, sYCX(network_specs.comm_idx[qubit], ancillary_index)) # Y-controlled X
+            push!(circuit, sYCX(qubit, ancillary_index)) # Y-controlled X
         end
     end
     p.phase[] == 0 || push!(circuit, sX(ancillary_index))
@@ -45,6 +46,8 @@ function syndrome_circuit(parity_check_tableau, ancillary_index, bit_index, netw
         ancillaries +=1
         bits +=1
     end
+
+    print("We consumed $bits bits for the nosiefre ancilla")
 
     return syndrome_circ, ancillaries, bit_index:bit_index+bits-1
 end
