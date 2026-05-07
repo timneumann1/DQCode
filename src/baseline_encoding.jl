@@ -1,5 +1,4 @@
-module BaselineRuns
-
+module BaselineEncoding
 
 using QuantumClifford
 using PyCall
@@ -17,7 +16,7 @@ synth_clifford_bm = synth.synth_clifford_bm
 
 function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
     """
-    
+    Since we are working with CSS codes, we can assume that any stabiliser that contains an X ONLY contains X, and no other stabiliser contins X
     accepts stabilizer like
 
         + X_X_X_X
@@ -46,8 +45,45 @@ function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
     ["+XI", "+XX"],
 
 """
-    hx = 
-    return hx
+
+    nrows = length(stab)
+    ncols = nqubits(stab)
+    
+    if string
+        # Return string form like ["+XI", "+XX"]
+        hx = String[]
+        for i in 1:nrows
+            row_str = "+"
+            for j in 1:ncols
+                pauli = stab[i][j]
+                if pauli == (true, false)  # Check if X component is set at qubit j
+                    row_str *= "X"
+                else
+                    @assert pauli == (false, false)
+                    row_str *= "I"
+                end
+            end
+            push!(hx, row_str)
+        end
+        return hx
+    else
+        # Return bit matrix as numpy int8 array
+        hx = zeros(Int8, nrows, ncols)
+        for i in 1:nrows
+            for j in 1:ncols
+                pauli = stab[i][j]
+                
+                if pauli == (true, false) 
+                    hx[i, j] = 1
+                else
+                    @assert pauli == (false, false)
+                end
+            end
+        end
+        # Convert to numpy array for compatibility with downstream Python code
+        return np.array(hx, dtype=np.int8)
+    end
+
 end
 
 function run_mqt_baseline(exp_label::String)
@@ -159,18 +195,18 @@ function run_qiskit_baseline(exp_label::String)
     stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
     
     hx = code_to_x_stabs(stabiliser, string =true)
-
+    println("stabiliser $stabiliser transformed into string $hx")
     # pass stabilizerview + logicalz view, or maybe just the x checks?
 
     cliff = Clifford(hx) #INSERT HERE: ["+IZ", "+XI", "+XX", "+ZZ"]
 
-    circ = synth_clifford_bm(cliff)
+    qiskit_encoding_circ = synth_clifford_bm(cliff)
     println(circ)
-    println(circ.draw(output="text"))
+    #println(circ.draw(output="text"))
 
-    qasm_prog = qasm2.dumps(circ)
+    #qasm_prog = qasm2.dumps(circ)
     
-    qiskit_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
+    #qiskit_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
     
     # Build QuanutmClifford circuit from QASM
 
