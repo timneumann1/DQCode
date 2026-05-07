@@ -1,0 +1,328 @@
+module BaselineRuns
+
+
+using QuantumClifford
+using PyCall
+#using Helper.code_to_x_stabs
+
+np = pyimport("numpy")
+qiskit = pyimport("qiskit")
+qi = pyimport("qiskit.quantum_info")
+qasm2 = pyimport("qiskit.qasm2")
+synth = pyimport("qiskit.synthesis")
+plt = pyimport("matplotlib.pyplot")
+Clifford = qi.Clifford
+synth_clifford_bm = synth.synth_clifford_bm
+
+
+function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
+    """
+    
+    accepts stabilizer like
+
+        + X_X_X_X
+        + _XX__XX
+        + ___XXXX
+        + Z_ZZ_Z_
+        + ZZ__ZZ_
+        + ZZ_Z__Z
+
+    and (depending on string Bool) returns hx check matrix 
+    
+    in bit form (dtype np.int8) like
+
+        hx = np.array([
+        [0,0,1,1,0,0,1,1,0,0,0,0],
+        [1,0,0,0,1,0,0,1,1,0,0,0],
+        [0,1,0,0,0,1,1,0,1,0,0,0],
+        [1,0,0,0,0,1,0,0,0,1,1,0],
+        [0,1,0,1,0,0,0,0,0,0,1,1],
+        [0,0,1,0,1,0,0,0,0,1,0,1],
+    ], dtype=np.int8)
+
+
+    or in string form like
+    
+    ["+XI", "+XX"],
+
+"""
+    hx = 
+    return hx
+end
+
+function run_mqt_baseline(exp_label::String)
+    Random.seed!(42) 
+    configs = experiment_configurations()
+
+    # data_circuit = Vector{AbstractOperation}()
+    # verification_qasm = ""
+    cfg = ""
+
+    if haskey(configs, exp_label)
+        cfg = configs[exp_label]
+        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+
+    #print(cfg.folder)
+    network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+    code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+    stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
+    hx = code_to_x_stabs(stabiliser)
+
+    # pass H_x matrix of code as npt.NDArray[np.int8] 
+
+    mqt_encoding_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $hx`)
+
+    mqt_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
+    
+    # Build QuanutmClifford circuit from QASM
+
+    quantum_clifford_encoding_circ = Vector{AbstractOperation}()
+    num_q = 0
+    for reg in mqt_encoding_circ.qregs
+        if reg.name == "q"
+            num_q = reg.size
+        else
+            @error("Unknown register type encountered in Qiskit circuit")
+        end
+    end
+    @assert num_q == network_specs.num_data_qubits
+
+    for instruction in verification_circ.data
+        #println(verification_circ.data)
+        gate = instruction.operation.name
+        
+        if gate == "h"
+            qubits = instruction.qubits
+            bit_info = verification_circ.find_bit(qubits[1])
+            # reg_name = String(bit_info.registers[1][1].name)
+            # if reg_name == "q"
+            #     continue
+            # end
+            index = Int(bit_info.index)
+            
+            #println(gate, index, reg_name)
+            # qc_index = 0 
+            # if reg_name == "z_anc"
+            #     qc_index = num_q + index
+            # elseif reg_name == "x_anc"
+            #     qc_index = num_q + num_z_anc + index
+            # elseif reg_name == "flag"
+            #     qc_index = num_q + num_z_anc + num_x_anc + index
+            # end
+
+            push!(quantum_clifford_encoding_circ, sHadamard(index+1))
+
+        elseif gate == "cx"
+            qubits = instruction.qubits
+            control_info = verification_circ.find_bit(qubits[1])
+            #control_reg_name = String(control_info.registers[1][1].name)
+            control = Int(control_info.index)
+            target_info = verification_circ.find_bit(qubits[2])
+            #target_reg_name = String(target_info.registers[1][1].name)
+            target = Int(target_info.index)
+            push!(quantum_clifford_encoding_circ, sCNOT(control+1,target+1))
+        end
+    end
+
+    gcounts = gate_counts(quantum_clifford_encoding_circ, network_specs)
+
+    return mqt_encoding_circ, gcounts
+
+end
+
+
+function run_qiskit_baseline(exp_label::String)
+    Random.seed!(42) 
+    configs = experiment_configurations()
+
+    # data_circuit = Vector{AbstractOperation}()
+    # verification_qasm = ""
+    cfg = ""
+
+    if haskey(configs, exp_label)
+        cfg = configs[exp_label]
+        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+
+    #print(cfg.folder)
+    network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+    code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+    stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
+    
+    hx = code_to_x_stabs(stabiliser, string =true)
+
+    # pass stabilizerview + logicalz view, or maybe just the x checks?
+
+    cliff = Clifford(hx) #INSERT HERE: ["+IZ", "+XI", "+XX", "+ZZ"]
+
+    circ = synth_clifford_bm(cliff)
+    println(circ)
+    println(circ.draw(output="text"))
+
+    qasm_prog = qasm2.dumps(circ)
+    
+    qiskit_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
+    
+    # Build QuanutmClifford circuit from QASM
+
+    quantum_clifford_encoding_circ = Vector{AbstractOperation}()
+    num_q = 0
+    for reg in qiskit_encoding_circ.qregs
+        if reg.name == "q"
+            num_q = reg.size
+        else
+            @error("Unknown register type encountered in Qiskit circuit")
+        end
+    end
+    @assert num_q == network_specs.num_data_qubits
+
+    for instruction in qiskit_encoding_circ.data
+        #println(verification_circ.data)
+        gate = instruction.operation.name
+        
+        if gate == "h"
+            qubits = instruction.qubits
+            bit_info = qiskit_encoding_circ.find_bit(qubits[1])
+            # reg_name = String(bit_info.registers[1][1].name)
+            # if reg_name == "q"
+            #     continue
+            # end
+            index = Int(bit_info.index)
+            
+            #println(gate, index, reg_name)
+            # qc_index = 0 
+            # if reg_name == "z_anc"
+            #     qc_index = num_q + index
+            # elseif reg_name == "x_anc"
+            #     qc_index = num_q + num_z_anc + index
+            # elseif reg_name == "flag"
+            #     qc_index = num_q + num_z_anc + num_x_anc + index
+            # end
+
+            push!(quantum_clifford_encoding_circ, sHadamard(index+1))
+
+        elseif gate == "cx"
+            qubits = instruction.qubits
+            control_info = qiskit_encoding_circ.find_bit(qubits[1])
+            #control_reg_name = String(control_info.registers[1][1].name)
+            control = Int(control_info.index)
+            target_info = qiskit_encoding_circ.find_bit(qubits[2])
+            #target_reg_name = String(target_info.registers[1][1].name)
+            target = Int(target_info.index)
+            push!(quantum_clifford_encoding_circ, sCNOT(control+1,target+1))
+        end
+    end
+
+    gcounts = gate_counts(quantum_clifford_encoding_circ, network_specs)
+
+    return mqt_encoding_circ, gcounts
+
+end 
+
+
+
+
+
+end
+#using PyCall
+
+# np = pyimport("numpy")
+# logging = pyimport("logging")
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s %(name)s %(levelname)s: %(message)s"
+# )
+# logging.getLogger("mqt.qecc").setLevel(logging.INFO)
+
+# CSSCode = pyimport("mqt.qecc").CSSCode
+# cs = pyimport("mqt.qecc.circuit_synthesis")
+# # sim = pyimport("mqt.qecc.simulation")
+# # noise = pyimport("mqt.qecc.noise")
+
+# qiskit = pyimport("qiskit")
+# qi = pyimport("qiskit.quantum_info")
+# qasm2 = pyimport("qiskit.qasm2")
+# synth = pyimport("qiskit.synthesis")
+
+# heuristic_prep_circuit         = cs.heuristic_prep_circuit
+# gate_optimal_verification_circuit = cs.gate_optimal_verification_circuit
+# VerificationNDFTStatePrepSimulator = cs.VerificationNDFTStatePrepSimulator
+# CircuitLevelNoiseIdlingParallel    = cs.CircuitLevelNoiseIdlingParallel
+
+
+# Define matrices — note PyCall needs explicit int8 type
+# hx = np.array([
+#     [0,0,1,1,0,0,1,1,0,0,0,0],
+#     [1,0,0,0,1,0,0,1,1,0,0,0],
+#     [0,1,0,0,0,1,1,0,1,0,0,0],
+#     [1,0,0,0,0,1,0,0,0,1,1,0],
+#     [0,1,0,1,0,0,0,0,0,0,1,1],
+#     [0,0,1,0,1,0,0,0,0,1,0,1],
+# ], dtype=np.int8)
+
+# hz = np.array([
+#     [1,0,1,0,0,0,0,1,0,1,0,0],
+#     [1,1,0,0,0,0,0,0,1,0,1,0],
+#     [0,1,1,0,0,0,1,0,0,0,0,1],
+#     [0,0,0,1,0,1,1,0,0,0,1,0],
+#     [0,0,0,1,1,0,0,1,0,0,0,1],
+#     [0,0,0,0,1,1,0,0,1,1,0,0],
+# ], dtype=np.int8)
+
+# code = CSSCode(hx,hz,3)
+
+# # code.Lx = np.array([
+#     [0,0,0,0,0,1,0,0,1,0,1,0],
+#     [0,0,0,0,0,1,1,1,0,1,0,1],
+# ])
+# code.Lz = np.array([
+#     [1,0,1,1,1,0,0,0,0,0,1,0],
+#     [0,0,1,1,0,0,0,0,0,0,0,1],
+# ])
+
+
+
+# println(code.n)
+
+# non_ft_sp = heuristic_prep_circuit(code, zero_state=true)
+# println(non_ft_sp)
+
+# plt = pyimport("matplotlib.pyplot")
+# #non_ft_sp.draw(output="mpl", initial_state=true, fold=-1, scale=0.4)
+
+
+
+# ft_sp = gate_optimal_verification_circuit(non_ft_sp, verify_x_first = true)
+# print(ft_sp)
+# fig = ft_sp[:draw](
+#     output="mpl",
+#     initial_state=true,
+#     fold=-1,
+#     scale=0.4
+# )
+# plt.show()
+# qasm_prog = qasm2.dumps(ft_sp)
+# print(qasm_prog)
+
+# p = 1e-3
+# noise = CircuitLevelNoiseIdlingParallel(
+#     p_tqg=p, p_sqg=p, p_init=p, p_meas=p, p_idle=p/100
+# )
+
+# non_ft_sim = VerificationNDFTStatePrepSimulator(non_ft_sp.circ, code=code, zero_state=true)
+# ft_sim     = VerificationNDFTStatePrepSimulator(ft_sp,           code=code, zero_state=true)
+
+# pl_non_ft, ra_non_ft = non_ft_sim.logical_error_rate(noise, min_errors=10)[1:2]
+# pl_ft,     ra_ft     = ft_sim.logical_error_rate(noise,     min_errors=10)[1:2]
+
+# println("Non-FT logical error rate: $pl_non_ft")
+# println("FT logical error rate:     $pl_ft")
