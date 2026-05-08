@@ -1,8 +1,30 @@
+"""
+Qiskit BM baseline: https://github.com/Qiskit/qiskit/blob/stable/2.4/qiskit/synthesis/clifford/clifford_decompose_bm.py#L25-L48 
+"""
+
 module BaselineEncoding
 
+#include("DQCircuitSearch.jl")
+include("types.jl")
+include("trivariate_bicycle_code.jl")
+include("helper.jl")
+include("experiment_config.jl")
+
 using QuantumClifford
+using QuantumClifford: AbstractOperation
 using PyCall
+using JSON
+using CSV, DataFrames
+
 #using Helper.code_to_x_stabs
+
+
+
+using .Types
+using .ExperimentConfig: experiment_configurations
+using Serialization
+using .Helper
+using .Helper: gate_counts, verify_success
 
 np = pyimport("numpy")
 qiskit = pyimport("qiskit")
@@ -11,10 +33,152 @@ qasm2 = pyimport("qiskit.qasm2")
 synth = pyimport("qiskit.synthesis")
 plt = pyimport("matplotlib.pyplot")
 Clifford = qi.Clifford
-synth_clifford_bm = synth.synth_clifford_bm
+synth_clifford_full = synth.synth_clifford_full
 
 
-function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
+export run_qiskit_baseline, run_mqt_baseline
+
+function stab_to_str(destab::Stabilizer, stab::Stabilizer, logical_x::Stabilizer, logical_z::Stabilizer)
+
+    """
+      Since we are working with CSS codes, we can assume that any stabiliser that contains an X ONLY contains X, and no other stabiliser contins X
+    accepts stabilizer like
+
+        + X_X_X_X
+        + _XX__XX
+        + ___XXXX
+        + Z_ZZ_Z_
+        + ZZ__ZZ_
+        + ZZ_Z__Z
+        + ZZZZZZZ
+
+    and (depending on string Bool) returns hx check matrix in string form like
+    
+    ["XIXIXIX", "IXXIIXX", "IIIXXXX", "ZIZZIZI", "ZZIIZZI", "ZZIZIIZ", "ZZZZZZ],
+    """
+
+    #nrows = length(stab) + length(logicals)
+    ncols = nqubits(stab)
+
+    # Return string form like ["+XI", "+XX"]
+    clifford = String[]
+
+    function row_string(row, phase)
+        #println(ta,b(row).phases )
+        if phase == 0x00
+            row_str = "+"
+        elseif phase == 0x02
+            row_str = "-"
+        end
+
+        for j in ncols:-1:1 # qiskit ordering is reverse
+            pauli = row[j]
+            if pauli == (true, false)  # Check if X component is set at qubit j
+                row_str *= "X"
+                #x_row = true
+            elseif pauli == (false, true)
+                row_str *= "Z"
+            elseif pauli == (true, true)
+                row_str *= "Y"
+            else
+        #          @assert pauli == (false, false) || (pauli == (false, true) && !x_row)# occursin("X", row_str) ) # Pauli is either an identity or a Pauli-Z (in the latter case the row string should not contain any Xs)
+                row_str *= "I"
+            end
+        end
+        return row_str
+    end
+
+    for i in 1:length(destab)
+        print(destab[i][1])
+        row = row_string(destab[i], tab(destab).phases[i])
+        push!(clifford, row)
+    end
+
+     for i in 1:length(logical_x)
+        row = row_string(logical_x[i], tab(logical_x).phases[i])
+        push!(clifford, row)
+    end
+
+    for i in 1:length(stab)
+        row = row_string(stab[i], tab(stab).phases[i])
+        push!(clifford, row)
+    end
+
+     for i in 1:length(logical_z)
+        row = row_string(logical_z[i], tab(logical_z).phases[i])
+        push!(clifford, row)
+    end
+
+    # for i in 1:length(logical_x)
+    #     row_str = ""
+    #     for j in 1:ncols
+            
+    #         pauli = logical_x[i][j]
+    #         if pauli == (true, false)  # Check if X component is set at qubit j
+    #             row_str *= "X"
+    #             x_row = true
+    #         elseif pauli == (false, true)
+    #             row_str *= "Z"
+    #         elseif pauli == (true, true)
+    #             row_str *= "Y"
+    #         else
+    #              @assert pauli == (false, false) || (pauli == (false, true) && !x_row)# occursin("X", row_str) ) # Pauli is either an identity or a Pauli-Z (in the latter case the row string should not contain any Xs)
+    #             row_str *= "I"
+    #         end
+    #     end
+    #     if x_row
+    #     push!(clifford, row_str)
+    # end
+
+    # for i in 1:length(stab)
+    #     #x_row = false
+    #     row_str = ""
+
+    #     for j in 1:ncols
+    #         pauli = stab[i][j]
+    #         if pauli == (true, false)  # Check if X component is set at qubit j
+    #             row_str *= "X"
+    #             #x_row = true
+    #         elseif pauli == (false, true)
+    #             row_str *= "Z"
+    #         elseif pauli == (true, true)
+    #             row_str *= "Y"
+    #         else
+    #     #          @assert pauli == (false, false) || (pauli == (false, true) && !x_row)# occursin("X", row_str) ) # Pauli is either an identity or a Pauli-Z (in the latter case the row string should not contain any Xs)
+    #             row_str *= "I"
+    #         end
+    #     end
+    #     #if x_row
+    #     push!(clifford, row_str)
+    #     #end
+    # end
+
+    # for i in 1:length(logical_z)
+    #     row_str = ""
+    #     for j in 1:ncols
+            
+    #         pauli = logical_z[i][j]
+    #         if pauli == (true, false)  # Check if X component is set at qubit j
+    #             row_str *= "X"
+    #             #x_row = true
+    #         elseif pauli == (false, true)
+    #             row_str *= "Z"
+    #         elseif pauli == (true, true)
+    #             row_str *= "Y"
+    #         else
+    #     #          @assert pauli == (false, false) || (pauli == (false, true) && !x_row)# occursin("X", row_str) ) # Pauli is either an identity or a Pauli-Z (in the latter case the row string should not contain any Xs)
+    #             row_str *= "I"
+    #         end
+    #     end
+    #     #if x_row
+    #     push!(clifford, row_str)
+    # end
+
+    return clifford
+
+end
+
+function stab_to_hx(stab::Stabilizer)
     """
     Since we are working with CSS codes, we can assume that any stabiliser that contains an X ONLY contains X, and no other stabiliser contins X
     accepts stabilizer like
@@ -26,7 +190,7 @@ function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
         + ZZ__ZZ_
         + ZZ_Z__Z
 
-    and (depending on string Bool) returns hx check matrix 
+    and returns hx check matrix 
     
     in bit form (dtype np.int8) like
 
@@ -39,79 +203,73 @@ function code_to_x_stabs(stab::Stabilizer; string::Bool = false)
         [0,0,1,0,1,0,0,0,0,1,0,1],
     ], dtype=np.int8)
 
-
-    or in string form like
-    
-    ["+XI", "+XX"],
-
-"""
+    """
 
     nrows = length(stab)
     ncols = nqubits(stab)
-    
-    if string
-        # Return string form like ["+XI", "+XX"]
-        hx = String[]
-        for i in 1:nrows
-            row_str = "+"
-            for j in 1:ncols
-                pauli = stab[i][j]
-                if pauli == (true, false)  # Check if X component is set at qubit j
-                    row_str *= "X"
-                else
-                    @assert pauli == (false, false)
-                    row_str *= "I"
-                end
-            end
-            push!(hx, row_str)
-        end
-        return hx
-    else
-        # Return bit matrix as numpy int8 array
-        hx = zeros(Int8, nrows, ncols)
-        for i in 1:nrows
-            for j in 1:ncols
-                pauli = stab[i][j]
-                
-                if pauli == (true, false) 
-                    hx[i, j] = 1
-                else
-                    @assert pauli == (false, false)
-                end
+
+    # Return bit matrix as numpy int8 array
+    hx = zeros(Int8, 0, ncols)
+    for i in 1:nrows
+        row = zeros(Int8, ncols)
+        x_row = false
+        
+        for j in 1:ncols
+            pauli = stab[i][j]
+            
+            if pauli == (true, false) 
+                row[j] = 1
+                x_row = true
+            else
+                @assert pauli == (false, false) || (pauli == (false, true) && !x_row)
             end
         end
-        # Convert to numpy array for compatibility with downstream Python code
-        return np.array(hx, dtype=np.int8)
+        if x_row
+            hx = vcat(hx, reshape(row, 1, ncols))
+        end
     end
+    
+    # Convert to numpy array for compatibility with downstream Python code
+    return np.array(hx, dtype=np.int8)
+    
 
 end
 
-function run_mqt_baseline(exp_label::String)
-    Random.seed!(42) 
-    configs = experiment_configurations()
+function run_mqt_baseline(code_params, network_specs, folder)
+   # Random.seed!(42) 
+    # configs = experiment_configurations()
 
-    # data_circuit = Vector{AbstractOperation}()
-    # verification_qasm = ""
-    cfg = ""
+    # # data_circuit = Vector{AbstractOperation}()
+    # # verification_qasm = ""
+    # cfg = ""
 
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
-        end
-    else
-        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
-    end
+    # if haskey(configs, exp_label)
+    #     cfg = configs[exp_label]
+    #     if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+    #         error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+    #     end
+    # else
+    #     error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    # end
 
     #print(cfg.folder)
-    network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-    code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+    #network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+    #code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
     stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
-    hx = code_to_x_stabs(stabiliser)
+    if any(phases(stabiliser) .== 0x02) 
+        error("Baseline encoding currently only implemented for all-positive phases")
+    end
+    hx = stab_to_hx(stabiliser)
+    println("Converted $stabiliser to $hx")
 
+
+    #hx_jl = Matrix{Int8}(PyArray(hx))              # convert to Julia matrix
+    #hx_rows = [collect(hx_jl[i, :]) for i in 1:size(hx_jl, 1)]
+    #hx_json = JSON.json(hx_rows)
     # pass H_x matrix of code as npt.NDArray[np.int8] 
+    hx_json = JSON.json(hx) # for passing the check matrix to Python library
 
-    mqt_encoding_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $hx`)
+    mqt_encoding_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $hx_json $(code_params.distance)`)
 
     mqt_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
     
@@ -128,13 +286,15 @@ function run_mqt_baseline(exp_label::String)
     end
     @assert num_q == network_specs.num_data_qubits
 
-    for instruction in verification_circ.data
+    # The MQT library return Hadamard and CNOT gates only
+
+    for instruction in mqt_encoding_circ.data
         #println(verification_circ.data)
         gate = instruction.operation.name
         
         if gate == "h"
             qubits = instruction.qubits
-            bit_info = verification_circ.find_bit(qubits[1])
+            bit_info = mqt_encoding_circ.find_bit(qubits[1])
             # reg_name = String(bit_info.registers[1][1].name)
             # if reg_name == "q"
             #     continue
@@ -155,54 +315,104 @@ function run_mqt_baseline(exp_label::String)
 
         elseif gate == "cx"
             qubits = instruction.qubits
-            control_info = verification_circ.find_bit(qubits[1])
+            control_info = mqt_encoding_circ.find_bit(qubits[1])
             #control_reg_name = String(control_info.registers[1][1].name)
             control = Int(control_info.index)
-            target_info = verification_circ.find_bit(qubits[2])
+            target_info = mqt_encoding_circ.find_bit(qubits[2])
             #target_reg_name = String(target_info.registers[1][1].name)
             target = Int(target_info.index)
             push!(quantum_clifford_encoding_circ, sCNOT(control+1,target+1))
+        else
+            error("Unsupported gate type in MQT Encoding circuit: $gate")
         end
     end
 
+    verification_logical_state = verify_success(quantum_clifford_encoding_circ, code_params.target_state, network_specs)
+    @info "Verification of MQT encoding circuit successful: $verification_logical_state"
+
     gcounts = gate_counts(quantum_clifford_encoding_circ, network_specs)
+
+    println("DQC gate counts for MQT encoding is $gcounts")
+
+
+
+    # ----- Data Storage ----------
+    dir = joinpath(folder, "mqt_encoding")
+    mkpath(dir)
+
+    serialize( joinpath(dir, "mqt_encoding_circuit.jls"), quantum_clifford_encoding_circ )
+    #serialize( joinpath(dir, "encoding_circuit_dqc_compiled.jls"), encoding_circ_compiled )
+
+    # open(joinpath(dir, "encoding_gates.txt"), "w") do io
+    #     println(io, "# Raw gate sequence (Gottesman encoding circuit) of size $(sum(gate_counts))")
+    #     for (i, g) in enumerate(encoding_circ)
+    #         println(io, i, "\t", repr(g))
+    #     end
+
+    #     println(io, "# Raw gate sequence (DQC compiled version) of size $(sum(gate_counts_compiled))")
+    #     for (i, g) in enumerate(encoding_circ_compiled)
+    #         println(io, i, "\t", repr(g))
+    #     end
+    # end
+
+    save_circuit_diagram(quantum_clifford_encoding_circ, dir, "mqt_encoding_circuit.png")
+    #save_circuit_diagram(encoding_circ_compiled, dir, "encoding_circuit_dqc_compiled.png")
+
+
+    open(joinpath(dir, "summary.txt"), "w") do io
+        println(io, "# Encoding successful: $verification_logical_state")
+        println(io, "# Raw gate sequence of size $(sum(gcounts))")
+        println(io, "# Executable DQC circuit with $(gcounts[1]) single qubit gates, $(gcounts[2]) two qubit gates and $(gcounts[3]) telegates ")
+        # println(io, "\n")
+        # println(io, "# DQC Compilation Encoding successful: $verification_logical_state_compiled")
+        # println(io, "# Raw gate sequence of size $(sum(gate_counts_compiled))")
+        # println(io, "# Executable DQC circuit with $(gate_counts_compiled[1]) single qubit gates, $(gate_counts_compiled[2]) two qubit gates and $(gate_counts_compiled[3]) telegates ")
+    end
+
+    df = DataFrame(method = ["mqt_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
+    CSV.write(joinpath(dir, "mqt_encoding_stats.csv"), df)
 
     return mqt_encoding_circ, gcounts
 
 end
 
 
-function run_qiskit_baseline(exp_label::String)
-    Random.seed!(42) 
-    configs = experiment_configurations()
+function run_qiskit_baseline(code_params, network_specs, folder)
+    #Random.seed!(42) 
+    # configs = experiment_configurations()
 
-    # data_circuit = Vector{AbstractOperation}()
-    # verification_qasm = ""
-    cfg = ""
+    # # data_circuit = Vector{AbstractOperation}()
+    # # verification_qasm = ""
+    # cfg = ""
 
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
-        end
-    else
-        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
-    end
+    # if haskey(configs, exp_label)
+    #     cfg = configs[exp_label]
+    #     if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+    #         error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+    #     end
+    # else
+    #     error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    # end
 
-    #print(cfg.folder)
-    network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-    code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+    # #print(cfg.folder)
+    # network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+    # code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+    destabiliser = destabilizerview(MixedDestabilizer(code_params.qec_code))
+    logical_x = logicalxview(MixedDestabilizer(code_params.qec_code))
     stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
-    
-    hx = code_to_x_stabs(stabiliser, string =true)
-    println("stabiliser $stabiliser transformed into string $hx")
+    logical_z = logicalzview(MixedDestabilizer(code_params.qec_code))
+    stab_str = stab_to_str(destabiliser, stabiliser, logical_x, logical_z)
+    println("destab: $destabiliser, stabiliser $stabiliser and logicalx $logical_x, logicalz:$logical_z transformed into string $stab_str")
     # pass stabilizerview + logicalz view, or maybe just the x checks?
 
-    cliff = Clifford(hx) #INSERT HERE: ["+IZ", "+XI", "+XX", "+ZZ"]
-
-    qiskit_encoding_circ = synth_clifford_bm(cliff)
-    println(circ)
-    #println(circ.draw(output="text"))
+    #if any(phases(destabiliser) .== 0x02) || any(phases(stabiliser) .== 0x02) || any(phases(logical_x) .== 0x02) || any(phases(logical_z) .== 0x02) 
+    #    error("Baseline encoding currently only implemented for all-positive phases")
+    #end
+    cliff = Clifford(stab_str) #INSERT HERE: ["+IZ", "+XI", "+XX", "+ZZ"]
+    #println("Clifford is $cliff")
+    qiskit_encoding_circ = synth_clifford_full(cliff, "greedy") # "ag", "greedy"
+    #println(qiskit_encoding_circ)
+    println(qiskit_encoding_circ.draw(output="text"))
 
     #qasm_prog = qasm2.dumps(circ)
     
@@ -221,10 +431,13 @@ function run_qiskit_baseline(exp_label::String)
     end
     @assert num_q == network_specs.num_data_qubits
 
+
+    # TODO: EXTEND COMPILATION AND CHANGE GATE COUNTING FUNCTION by mutliple dispatch gate_count
+
     for instruction in qiskit_encoding_circ.data
-        #println(verification_circ.data)
+        #println(qiskit_encoding_circ.data)
         gate = instruction.operation.name
-        
+       # println("Gate is $gate")
         if gate == "h"
             qubits = instruction.qubits
             bit_info = qiskit_encoding_circ.find_bit(qubits[1])
@@ -234,7 +447,7 @@ function run_qiskit_baseline(exp_label::String)
             # end
             index = Int(bit_info.index)
             
-            #println(gate, index, reg_name)
+            #println(gate, index)
             # qc_index = 0 
             # if reg_name == "z_anc"
             #     qc_index = num_q + index
@@ -255,12 +468,69 @@ function run_qiskit_baseline(exp_label::String)
             #target_reg_name = String(target_info.registers[1][1].name)
             target = Int(target_info.index)
             push!(quantum_clifford_encoding_circ, sCNOT(control+1,target+1))
+          #  println(gate, control, target)
+        elseif gate == "swap"
+            qubits = instruction.qubits
+            control_info = qiskit_encoding_circ.find_bit(qubits[1])
+            control = Int(control_info.index)
+            target_info = qiskit_encoding_circ.find_bit(qubits[2])
+            target = Int(target_info.index)
+            push!(quantum_clifford_encoding_circ, sSWAP(control+1,target+1))
+           # println(gate, control, target)
+        else
+            @error("Unknown register type encountered in Qiskit circuit")
         end
     end
 
-    gcounts = gate_counts(quantum_clifford_encoding_circ, network_specs)
+    println("Qiskit encoding circuit is $quantum_clifford_encoding_circ")
 
-    return mqt_encoding_circ, gcounts
+    verification_logical_state = verify_success(quantum_clifford_encoding_circ, code_params.target_state, network_specs)
+    @info "Verification of Qiskit Greedy Clifford compilation encoding circuit successful: $verification_logical_state"
+
+    gcounts = gate_counts(quantum_clifford_encoding_circ, network_specs)
+    println("DQC gate counts for Qiskit encoding is $gcounts")
+
+
+
+
+    # ----- Data Storage ----------
+    dir = joinpath(folder, "qiskit_encoding")
+    print("Directory is $dir")
+    mkpath(dir)
+
+    serialize( joinpath(dir, "qiskit_encoding_circuit.jls"), quantum_clifford_encoding_circ )
+#    serialize( joinpath(dir, "encoding_circuit_dqc_compiled.jls"), encoding_circ_compiled )
+
+    # open(joinpath(dir, "encoding_gates.txt"), "w") do io
+    #     println(io, "# Raw gate sequence (Gottesman encoding circuit) of size $(sum(gate_counts))")
+    #     for (i, g) in enumerate(encoding_circ)
+    #         println(io, i, "\t", repr(g))
+    #     end
+
+    #     println(io, "# Raw gate sequence (DQC compiled version) of size $(sum(gate_counts_compiled))")
+    #     for (i, g) in enumerate(encoding_circ_compiled)
+    #         println(io, i, "\t", repr(g))
+    #     end
+    # end
+
+    save_circuit_diagram(quantum_clifford_encoding_circ, dir, "qiskit_encoding_circuit.png")
+    #save_circuit_diagram(encoding_circ_compiled, dir, "encoding_circuit_dqc_compiled.png")
+
+
+    open(joinpath(dir, "summary.txt"), "w") do io
+        println(io, "# Encoding successful: $verification_logical_state")
+        println(io, "# Raw gate sequence of size $(sum(gcounts))")
+        println(io, "# Executable DQC circuit with $(gcounts[1]) single qubit gates, $(gcounts[2]) two qubit gates and $(gcounts[3]) telegates ")
+       # println(io, "\n")
+        #println(io, "# DQC Compilation Encoding successful: $verification_logical_state_compiled")
+        #println(io, "# Raw gate sequence of size $(sum(gate_counts_compiled))")
+        #println(io, "# Executable DQC circuit with $(gate_counts_compiled[1]) single qubit gates, $(gate_counts_compiled[2]) two qubit gates and $(gate_counts_compiled[3]) telegates ")
+    end
+
+    df = DataFrame(method = ["qiskit_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
+    CSV.write(joinpath(dir, "qiskit_encoding_stats.csv"), df)
+
+    return qiskit_encoding_circ, gcounts
 
 end 
 

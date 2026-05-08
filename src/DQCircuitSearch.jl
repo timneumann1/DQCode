@@ -5,7 +5,9 @@ include("trivariate_bicycle_code.jl")
 include("helper.jl")
 include("experiment_config.jl")
 #include("circsim.jl")
+include("baseline_encoding.jl")
 include("encoding_gott.jl")
+
 #include("plots.jl")
 #include("dtsimulation.jl")
 
@@ -21,6 +23,7 @@ using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transposit
 using .ExperimentConfig: experiment_configurations#distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set#, noise_model, n_shots
 using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
+using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
 
 using Logging
@@ -182,6 +185,85 @@ function code_setup(qec_code)
 
 end
 
+
+# -------------------------------------
+# ------------ BASELINE ---------------
+# -------------------------------------
+
+
+function baseline_encoding_qiskit(exp_label::String)
+    # this function orchestrates a baseline run, gathering code and networking parameters, and then
+    # It saves the results in {QEC_code}>{Network Architecture}>{qiskit}
+    Random.seed!(42) 
+    configs = experiment_configurations()
+
+    if haskey(configs, exp_label)
+        cfg = configs[exp_label]
+        @info "Loading experiment configuration for $exp_label configuration from $(cfg.folder)" 
+
+        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+
+        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+
+        # gottesman, +reichardt, + genetic
+
+        qiskit_encoding_circ, gcounts = run_qiskit_baseline(code_params, network_specs, cfg.folder)
+
+        ## apply GENETIC SEARCH ON COMPILED VERSION
+
+        #verification_ga, gate_counts_ga = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit, cfg.folder)#, label = "DQC_Compiled_Gottesman")
+        
+        #df = DataFrame(method = ["Gottesman", "dqc_compiled", "GA"], verfied = [verification_logical_state, verification_logical_state_compiled, verification_ga],gate_counts = [gate_counts, gate_counts_compiled, gate_counts_ga] )
+       # CSV.write(joinpath(cfg.folder, "gottesman_stats.csv"), df)
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+    
+    return 42
+
+end
+
+function baseline_encoding_mqt(exp_label::String)
+    # this function orchestrates a baseline run, gathering code and networking parameters, and then
+    # It saves the results in {QEC_code}>{Network Architecture}>{qiskit}
+    Random.seed!(42) 
+    configs = experiment_configurations()
+
+    if haskey(configs, exp_label)
+        cfg = configs[exp_label]
+        @info "Loading experiment configuration for $exp_label configuration from $(cfg.folder)" 
+
+        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+
+        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+
+        # gottesman, +reichardt, + genetic
+
+        mqt_encoding_circ, gcounts = run_mqt_baseline(code_params, network_specs, cfg.folder)
+
+        ## apply GENETIC SEARCH ON COMPILED VERSION
+
+        #verification_ga, gate_counts_ga = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit, cfg.folder)#, label = "DQC_Compiled_Gottesman")
+        
+        #df = DataFrame(method = ["Gottesman", "dqc_compiled", "GA"], verfied = [verification_logical_state, verification_logical_state_compiled, verification_ga],gate_counts = [gate_counts, gate_counts_compiled, gate_counts_ga] )
+       # CSV.write(joinpath(cfg.folder, "gottesman_stats.csv"), df)
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+    
+    return 42
+
+end
+
+
+
+
 # -------------------------------------
 # ------------ OPTIMISATION -----------
 # -------------------------------------
@@ -200,6 +282,7 @@ end
 #         error("This configuration label $exp_label was not found. Please add the respective data to the configuration file")
 #     end
 # end
+
 
 function circuit_search_gott(exp_label::String)
     # this function orchestrates an experiment, gathering code and networking parameters, and then

@@ -41,7 +41,7 @@ using .DQCLogicalStatePrepSimulator
 using .ExperimentConfig: experiment_configurations
 
 using PyCall
-np = pyimport("numpy")
+#np = pyimport("numpy")
 
 # py"""
 # import random, numpy as np, z3
@@ -53,29 +53,29 @@ np = pyimport("numpy")
 
 
 
-logging = pyimport("logging")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s: %(message)s"
-)
-logging.getLogger("mqt.qecc").setLevel(logging.INFO)
+# logging = pyimport("logging")
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s %(name)s %(levelname)s: %(message)s"
+# )
+# logging.getLogger("mqt.qecc").setLevel(logging.INFO)
 
-#CSSCode = pyimport("mqt.qecc").CSSCode
-mqt_synthesis = pyimport("mqt.qecc.circuit_synthesis")
+# #CSSCode = pyimport("mqt.qecc").CSSCode
+# mqt_synthesis = pyimport("mqt.qecc.circuit_synthesis")
 
-# sim = pyimport("mqt.qecc.simulation")
-# noise = pyimport("mqt.qecc.noise")
+# # sim = pyimport("mqt.qecc.simulation")
+# # noise = pyimport("mqt.qecc.noise")
 
 qiskit = pyimport("qiskit")
 qi = pyimport("qiskit.quantum_info")
 qasm2 = pyimport("qiskit.qasm2")
-synth = pyimport("qiskit.synthesis")
+#synth = pyimport("qiskit.synthesis")
 plt = pyimport("matplotlib.pyplot")
 
-#heuristic_prep_circuit         = cs.heuristic_prep_circuit
-gate_optimal_verification_circuit = mqt_synthesis.gate_optimal_verification_circuit
-mqt_circuits = mqt_synthesis.circuits# pyimport("mqt.qecc.circuits")
-mqt_state_prep = mqt_synthesis.state_prep
+# #heuristic_prep_circuit         = cs.heuristic_prep_circuit
+# gate_optimal_verification_circuit = mqt_synthesis.gate_optimal_verification_circuit
+# mqt_circuits = mqt_synthesis.circuits# pyimport("mqt.qecc.circuits")
+# mqt_state_prep = mqt_synthesis.state_prep
 #VerificationNDFTStatePrepSimulator = cs.VerificationNDFTStatePrepSimulator
 #CircuitLevelNoiseIdlingParallel    = cs.CircuitLevelNoiseIdlingParallel
 
@@ -111,6 +111,9 @@ function run_dqc_state_prep(exp_label::String)
     qasm = qc_circuit_to_qasm(circuit)
     
     println("QASM version: $qasm")
+
+    # Procedure: We pass a qasm string with the optimised encoding circuit, and get back a qasm string with the verification (in MQT QECC, the result was a qiskit circuit, which was then converted to qasm in order to make the output stream usable, and then 
+    # converted to qiskit here again)
     
     
     
@@ -143,7 +146,7 @@ function run_dqc_state_prep(exp_label::String)
     # faulty_prep_circuit = mqt_state_prep.FaultyStatePrepCircuit(cnot_circ,t,t)
     # println("\n\n\n\n\n FAULT circuit $(faulty_prep_circuit.circ.cnots)\n\n\n")
 
-    verification_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $qasm`)
+    verification_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/verification_circuit.py $qasm $(code_params.distance)`)
     #verification_circ_qasm = gate_optimal_verification_circuit(faulty_prep_circuit)#, min_timeout=600,max_timeout=3600)
     print("Verification QASM: \n$verification_circ_qasm")
     verification_circ = qasm2.loads(verification_circ_qasm) 
@@ -468,7 +471,23 @@ function run_dqc_state_prep(exp_label::String)
     println("Ancilla map: $ancilla_map")
     p = 1e-4
     num_samples = 1e6
-    noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
+    #noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
+    #noise_model = NoiseSpecs(num_samples,1e-4,1e-4,1e-3,1e-4,1e-3,1e-3,1e-3,1e-1,1e-1,1e-4,1e-2,0)
+    tele_p = 1e-2
+    noise_model = NoiseSpecs(num_samples,p,p,tele_p,p,p,p,p,tele_p,tele_p,tele_p,tele_p,0)
+    # init_noise::Float64               # Initialisation noise
+    # idle_depolarising_noise::Float64  # idling depolarising probability
+    # idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
+    # single_q_gate_noise::Float64      # single qubit gate noise probability
+    # two_q_gate_noise::Float64         # two-qubit gate noise probability
+    # measurement_noise::Float64        # Measurement noise
+    # two_q_gate_noise_diff_species::Float64     # two-qubit gate noise probability between communication and memory qubit
+    # comm_qubit_init_noise::Float64             # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
+    # comm_idle_depolarising_noise::Float64      # Communication qubit idling depolarising probability
+    # single_comm_q_gate_noise::Float64          # Communication qubit single gate depolarising probability
+    # comm_qubit_measurement_noise::Float64      # Communication qubit measurement depolarising probability
+    # classical_comm_noise::Float64              # Classical communication error
+
     dqc_state_prep(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
     return 42
 end

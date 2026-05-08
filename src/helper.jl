@@ -510,7 +510,7 @@ function gate_counts(circuit, n)
             #push!(encoding_circuit_orig, T(perm[op.q]))
             gate_counts += [1,0,0]
         elseif T<: AbstractTwoQubitOperator
-
+            #println("Gate type is $T")
             control_register = n.register_lookup_array[n.inv_map[op.q1]] 
             target_register = n.register_lookup_array[n.inv_map[op.q2]]
             
@@ -665,7 +665,7 @@ function verify_success(circuit, initial_state, target_state, n)
     end
 end
 
-# AS USED IN GENETIC, MCTS and GOTTESMAN
+# AS USED IN GENETIC, MCTS and GOTTESMAN as well as mqt and qiskit baseline encoding
 function verify_success(circuit, target_state, n)#; comm_setting=false)
     verification_circuit = copy(circuit)
     #if comm_setting
@@ -794,8 +794,6 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, m
     outpath = joinpath(dir, "Optimisation_Evolution.png")
     save(outpath, fig)
 end
-
-
 
 
 
