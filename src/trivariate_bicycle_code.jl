@@ -25,6 +25,7 @@ struct TrivariateBicycleViaCirculantMat <: AbstractCSSCode
                 var ∈ [:x, :y, :z] || throw(ArgumentError("Matrix $mat contains invalid variable $var (must be :x or :y or :z)"))
                 pow >= 0 || throw(ArgumentError("Matrix $mat contains negative power $pow"))
                 max_pow = var == :x ? (l-1) : (var == :y ? (m-1) : (z_period-1))
+                # x^l = 1, so x is l-dimensional,  y is m-dimensional
                 pow <= max_pow || throw(ArgumentError("Power $pow in matrix $mat exceeds maximum $max_pow for $var"))
             end
         end

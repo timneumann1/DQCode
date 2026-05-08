@@ -785,8 +785,8 @@ function dqc_state_prep(data_circuit, verification_circuit, num_ancillas, ancill
 
     # ----- For the noiseless decoding ------
     css_lut_decoder = CSSTableDecoder(code_params.qec_code, error_weight = 1)
-    #println("X Lookup Table: $(css_lut_decoder.tabledecoderx.lookup_table)")
-    #println("Z Lookup Table: $(css_lut_decoder.tabledecoderz.lookup_table)")
+    println("X Lookup Table: $(css_lut_decoder.tabledecoderx.lookup_table)")
+    println("Z Lookup Table: $(css_lut_decoder.tabledecoderz.lookup_table)")
     H = parity_checks(css_lut_decoder)
     println("PARITY CHECKS: $H")
     # Build perfect syndrome circuit, with ancillas being appended to DQC cores (consisting of data qubits) and comm_qubits register
