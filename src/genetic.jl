@@ -230,6 +230,7 @@ function genetic_search(code_params, network_specs, genetic_params, warm_start_g
 
     #----------------------------- Evolution --------------------------------
     p = Progress(genetic_params.num_generations + 1; desc = "Genetic search", showspeed = true)
+    
     # the evolution of fitness values is monotonously (potentially not strictly) increasing
     for gen in 0:genetic_params.num_generations
         # ----- Population Evaluation ----------
