@@ -2,55 +2,55 @@ module QECTools
 
 # adapted from https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl
 
-using ..Types
-using ..Helper
+# using ..Types
+# using ..Helper
 
-using QuantumClifford
-using QuantumClifford: AbstractOperation
-using QECCore
-using QuantumClifford.ECC: AbstractSyndromeDecoder, faults_matrix, CSSTableDecoder, ClassicalTableDecoder, create_lookup_table
-using Combinatorics: combinations
+# using QuantumClifford
+# using QuantumClifford: AbstractOperation
+# using QECCore
+# using QuantumClifford.ECC: AbstractSyndromeDecoder, faults_matrix, CSSTableDecoder, ClassicalTableDecoder, create_lookup_table
+# using Combinatorics: combinations
 
-import QuantumClifford.ECC: parity_checks, decode
-export parity_checks
+# import QuantumClifford.ECC: parity_checks, decode
+# export parity_checks
 
-#export ClassicalTableDecoder, CSSTableDecoder
+# #export ClassicalTableDecoder, CSSTableDecoder
 
-function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, bit_index, network_specs)
-    circuit = AbstractOperation[]
-    num_data_qubits = nqubits(p)
-    @assert num_data_qubits == network_specs.num_data_qubits
-    for qubit in 1:num_data_qubits
-        # for the perfect ancillary measurement, qubits are back in their correct position already
-        if p[qubit] == (1,0)
-            push!(circuit, sXCX(qubit, ancillary_index)) # X-controlled X     
-        elseif p[qubit] == (0,1)
-            push!(circuit, sCNOT(qubit, ancillary_index)) # Z-controlled X
-        elseif p[qubit] == (1,1)
-            push!(circuit, sYCX(qubit, ancillary_index)) # Y-controlled X
-        end
-    end
-    p.phase[] == 0 || push!(circuit, sX(ancillary_index))
-    mz = sMRZ(ancillary_index, bit_index)
-    push!(circuit, mz)
+# function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, bit_index, network_specs)
+#     circuit = AbstractOperation[]
+#     num_data_qubits = nqubits(p)
+#     @assert num_data_qubits == network_specs.num_data_qubits
+#     for qubit in 1:num_data_qubits
+#         # for the perfect ancillary measurement, qubits are back in their correct position already
+#         if p[qubit] == (1,0)
+#             push!(circuit, sXCX(qubit, ancillary_index)) # X-controlled X     
+#         elseif p[qubit] == (0,1)
+#             push!(circuit, sCNOT(qubit, ancillary_index)) # Z-controlled X
+#         elseif p[qubit] == (1,1)
+#             push!(circuit, sYCX(qubit, ancillary_index)) # Y-controlled X
+#         end
+#     end
+#     p.phase[] == 0 || push!(circuit, sX(ancillary_index))
+#     mz = sMRZ(ancillary_index, bit_index)
+#     push!(circuit, mz)
 
-    return circuit
-end
+#     return circuit
+# end
 
-function syndrome_circuit(parity_check_tableau, ancillary_index, bit_index, network_specs)
-    syndrome_circ = AbstractOperation[]
-    ancillaries = 0
-    bits = 0
-    for check in parity_check_tableau
-        append!(syndrome_circ, perfect_ancillary_paulimeasurement(check, ancillary_index+ancillaries, bit_index+bits, network_specs))
-        ancillaries +=1
-        bits +=1
-    end
+# function syndrome_circuit(parity_check_tableau, ancillary_index, bit_index, network_specs)
+#     syndrome_circ = AbstractOperation[]
+#     ancillaries = 0
+#     bits = 0
+#     for check in parity_check_tableau
+#         append!(syndrome_circ, perfect_ancillary_paulimeasurement(check, ancillary_index+ancillaries, bit_index+bits, network_specs))
+#         ancillaries +=1
+#         bits +=1
+#     end
 
-    print("We consumed $bits bits for the nosiefre ancilla")
+#     print("We consumed $bits bits for the nosiefre ancilla")
 
-    return syndrome_circ, ancillaries, bit_index:bit_index+bits-1
-end
+#     return syndrome_circ, ancillaries, bit_index:bit_index+bits-1
+# end
 
 # function physical_ECC_circuit(H, setup::NaiveSyndromeECCSetup)
 #     syndrome_circ, n_anc, syndrome_bits = syndrome_circuit(H)
@@ -128,10 +128,7 @@ end
 #     lookup_table
 # end
 
-function decode(d::ClassicalTableDecoder, syndrome_sample::Vector{Bool})
-    d.lookup_buffer .= syndrome_sample
-    return get(d.lookup_table, d.lookup_buffer, nothing)
-end
+
 
 
 # struct CSSTableDecoder <: AbstractSyndromeDecoder
@@ -175,6 +172,21 @@ end
 # end
 
 # parity_checks(d::CSSTableDecoder) = d.H
+
+
+
+
+
+
+
+
+
+
+
+function decode(d::ClassicalTableDecoder, syndrome_sample::Vector{Bool})
+    d.lookup_buffer .= syndrome_sample
+    return get(d.lookup_table, d.lookup_buffer, nothing)
+end
 
 function decode(d::CSSTableDecoder, syndrome_sample::Vector{Bool})
     row_x = @view syndrome_sample[1:d.cx]

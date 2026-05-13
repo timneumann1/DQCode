@@ -189,6 +189,7 @@ struct MCTSParameters
     fitness_weights::Vector{Float64}
     discount_factor::Float64 
     tableau_metric::String
+    reuse_tree::Bool
     depth::Int # depth that the solver traverses to maximally in each rollout
     n_iterations::Int # number of iterations the solver rolls out to choose the best next action
     exploration_constant::Float64

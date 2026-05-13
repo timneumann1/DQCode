@@ -34,8 +34,8 @@ function Base.hash(s::CircuitState, h::UInt)
 end
 function Base.:(==)(s1::CircuitState, s2::CircuitState)
     #s1.bit_matrix == s2.bit_matrix # only comparing bit matrices is not sufficient since two circuits can have the same action on the zero state, but not the same when another gate is appended!
-    #length(s1.gates) == length(s2.gates) && all(s1.gates .== s2.gates)
-    s1.circuit == s2.circuit
+    length(s1.circuit) == length(s2.circuit) && all(s1.circuit .== s2.circuit)
+    #s1.bit_matrix == s2.bit_matrix
 end
 
 #Base.hash(g::HadamardGate, h::UInt) = hash((:H, g.index), h)
@@ -134,7 +134,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::AbstractOpera
     #print("Action is $action")
     # sp stands for s', the next state; it is the circuit obtained by appending the gate (= action) to the current state s ( = circuit)
 
-    reward = 0 # (1e-8)*rand(rng)
+    reward = 0#(1e-8)*rand(rng)
 
     initial_quantum_state = copy(state.quantum_state)
     gate_counts = copy(state.gate_counts)
@@ -189,7 +189,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::AbstractOpera
     #println(tab_distance)
     fidelity = 1 - tab_distance # 1 is perfect alignment, here we are in the noiseless setting (one shot)
     #circuit_size(quantum_clifford_circuit) #  length(quantum_clifford_circuit)
-    reward += mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity)# - sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
+    reward += mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity) #- sum(mdp.mcts_params.fitness_weights[2:4] .* gate_counts)    # via the discount factor, large depth will be penalised
 
     #reward += mdp.mcts_params.fitness_weights[1]*(fidelity-state.fidelity)
 
@@ -302,7 +302,7 @@ function monte_carlo_tree_search(code_params, network_specs, mcts_params, folder
         depth = mcts_params.depth,# mdp.mcts_params.depth, # similar to above
         exploration_constant = mcts_params.exploration_constant,#mdp.mcts_params.exploration_constant, # should be increased if search space is not explored well
         rng = Random.GLOBAL_RNG,
-        reuse_tree = false,
+        reuse_tree = mcts_params.reuse_tree,
         enable_tree_vis = false,
         estimate_value = 0.0# estimate_value_f # RolloutEstimator(RandomSolver(Random.GLOBAL_RNG,))#0.0
     )

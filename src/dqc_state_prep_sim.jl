@@ -1,17 +1,61 @@
+"""
+Adapted from https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl
+and https://github.com/QuantumSavory/QuantumClifford.jl/blob/2664eba07a461441ea051a17cad7c725f9576176/src/ecc/decoder_pipeline.jl
+"""
+
 module DQCLogicalStatePrepSimulator
 
 using ..Types
 using ..Helper
-using ..QECTools
+#using ..QECTools
 
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, continue_stat, AbstractSingleQubitOperator, AbstractResetMeasurement, AbstractTwoQubitOperator, AbstractOperation, AbstractStabilizer, AbstractNoise, apply_single_x!, apply_single_y!, apply_single_z! #, sX, SY, SZ
 using QECCore
-using QuantumClifford.ECC: DecoderCorrectionGate, CSSTableDecoder, decode
+using QuantumClifford.ECC: DecoderCorrectionGate, CSSTableDecoder, decode,  AbstractSyndromeDecoder, faults_matrix, ClassicalTableDecoder, create_lookup_table, parity_checks, decode
+using Combinatorics: combinations
 
 import QuantumClifford: apply!, affectedqubits, applynoise! # we want to extend this with ConditionalGate
 export add_telegate, add_noise, construct_DQC_executable_circuit
 export dqc_state_prep
+
+
+function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, bit_index, network_specs)
+    circuit = AbstractOperation[]
+    num_data_qubits = nqubits(p)
+    @assert num_data_qubits == network_specs.num_data_qubits
+    for qubit in 1:num_data_qubits
+        # for the perfect ancillary measurement, qubits are back in their correct position already
+        if p[qubit] == (1,0)
+            push!(circuit, sXCX(qubit, ancillary_index)) # X-controlled X     
+        elseif p[qubit] == (0,1)
+            push!(circuit, sCNOT(qubit, ancillary_index)) # Z-controlled X
+        elseif p[qubit] == (1,1)
+            push!(circuit, sYCX(qubit, ancillary_index)) # Y-controlled X
+        end
+    end
+    p.phase[] == 0 || push!(circuit, sX(ancillary_index))
+    mz = sMRZ(ancillary_index, bit_index)
+    push!(circuit, mz)
+
+    return circuit
+end
+
+function syndrome_circuit(parity_check_tableau, ancillary_index, bit_index, network_specs)
+    syndrome_circ = AbstractOperation[]
+    ancillaries = 0
+    bits = 0
+    for check in parity_check_tableau
+        append!(syndrome_circ, perfect_ancillary_paulimeasurement(check, ancillary_index+ancillaries, bit_index+bits, network_specs))
+        ancillaries +=1
+        bits +=1
+    end
+
+    print("We consumed $bits bits for the nosiefre ancilla")
+
+    return syndrome_circ, ancillaries, bit_index:bit_index+bits-1
+end
+
 
 
 #We can also use NoisyGate: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/docs/src/noisycircuits_ops.md
@@ -754,9 +798,6 @@ end
 
 
 
-
-
-
 function dqc_state_prep(data_circuit, verification_circuit, num_ancillas, ancilla_map, code_params, network_specs, noise)
     println("In DQC STATE PREP NOW")
     DQC_circuit = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise)
@@ -791,10 +832,10 @@ function dqc_state_prep(data_circuit, verification_circuit, num_ancillas, ancill
     println("PARITY CHECKS: $H")
     # Build perfect syndrome circuit, with ancillas being appended to DQC cores (consisting of data qubits) and comm_qubits register
     # and bit string measurements being written into classical register n.num_registers*(n.num_registers-1) + #verification classical registers + 1
-    noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = QECTools.syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, network_specs.num_comm_qubits + num_ancillas +1, network_specs)
+    noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, network_specs.num_comm_qubits + num_ancillas +1, network_specs)
 
-    noisefree_logical_Z_circ, num_noisefree_logical_Z_ancillas, noisefree_logical_Z_bits = QECTools.syndrome_circuit(code_params.logical_Zs, network_specs.num_data_and_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + 1, last(noisefree_syndrome_bits)+1, network_specs )
-
+    noisefree_logical_Z_circ, num_noisefree_logical_Z_ancillas, noisefree_logical_Z_bits = syndrome_circuit(code_params.logical_Zs, network_specs.num_data_and_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + 1, last(noisefree_syndrome_bits)+1, network_specs )
+    # prior: QECTools.
     total_number_qubits = network_specs.num_data_and_comm_qubits + num_ancillas +  num_noisefree_syndrome_ancillas + num_noisefree_logical_Z_ancillas
     total_number_classical_regs = network_specs.num_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + num_noisefree_logical_Z_ancillas
 
@@ -924,7 +965,7 @@ function dqc_state_prep(data_circuit, verification_circuit, num_ancillas, ancill
     logical_error_rate = logical_failures/(noise.n_samples-discarded_runs)
     println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/noise.n_samples) ")
     println("Over $(noise.n_samples) runs, there were $discarded_runs discarded runs -> acceptance ratio: $acceptance_ratio, for the kept runs the the logical error rate (after decoding) is $logical_error_rate")
-    return logical_error_rate
+    return logical_error_rate, acceptance_ratio
 end
 
 

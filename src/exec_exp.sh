@@ -38,14 +38,14 @@ end
 
 # --- MQT Encoding ---
 for exp_label in [
-    "steane_4_3",
-    "shor_3_3_3",
-    "trivariate_3_3_3_3",
-    #"trivariate_4_4_4",
-    #"trivariate_6_6",
-    #"bivariate_3_3_3_3_3_3",
-    #"bivariate_6_6_6",
-    #"bivariate_9_9",
+    #"steane_4_3",
+    #"shor_3_3_3",
+    # "trivariate_3_3_3_3",
+    # "trivariate_4_4_4",
+    # "trivariate_6_6",
+    # "bivariate_3_3_3_3_3_3",
+    # "bivariate_6_6_6",
+    # "bivariate_9_9",
 ]
     DQCircuitSearch.baseline_encoding_mqt(exp_label)
 end
@@ -54,19 +54,19 @@ end
 for exp_label in [
     #"steane_4_3",
     #"shor_3_3_3",
-    #"trivariate_3_3_3_3",
-    #"trivariate_4_4_4",
-    #"trivariate_6_6",
-    #"bivariate_3_3_3_3_3_3",
-    #"bivariate_6_6_6",
-    #"bivariate_9_9",
+    "trivariate_3_3_3_3",
+    "trivariate_4_4_4",
+    "trivariate_6_6",
+    "bivariate_3_3_3_3_3_3",
+    "bivariate_6_6_6",
+    "bivariate_9_9",
 ]
     DQCircuitSearch.circuit_search_gott(exp_label)
 end
 
 # --- Monte Carlo Tree Search ---
 for exp_label in [
-    # "steane_4_3",
+    "steane_4_3",
     # "shor_3_3_3",
     # "trivariate_3_3_3_3",
     # "trivariate_4_4_4",

@@ -12,7 +12,7 @@ include("experiment_config.jl")
 #include("dtsimulation.jl")
 #include("genetic.jl")
 #include("mcts.jl")
-include("qec_tools.jl")
+#include("qec_tools.jl")
 include("dqc_state_prep_sim.jl")
 #include("deep_q.jl")
 #include("parameters.jl")
@@ -35,10 +35,12 @@ using StatsBase
 using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, qc_circuit_to_qasm
 using .Types
 
-using .QECTools
+#using .QECTools
 using .DQCLogicalStatePrepSimulator
 
 using .ExperimentConfig: experiment_configurations
+
+using CSV, DataFrames
 
 using PyCall
 #np = pyimport("numpy")
@@ -115,39 +117,14 @@ function run_dqc_state_prep(exp_label::String)
     # Procedure: We pass a qasm string with the optimised encoding circuit, and get back a qasm string with the verification (in MQT QECC, the result was a qiskit circuit, which was then converted to qasm in order to make the output stream usable, and then 
     # converted to qiskit here again)
     
-    
-    
-    
-    # qiskit_circ = qasm2.loads(qasm) # loads the string
-    # print(qiskit_circ)
-    # #qiskit_circ.draw(output="mpl", initial_state=true, fold=-1, scale=0.4)
-    # #plt.show()
 
-    # cnot_circ = mqt_circuits.CNOTCircuit.from_qiskit_circuit(qiskit_circ, init_all = true)
-    
-    
-    # print("CNOTCIRCUIT: $(cnot_circ.cnots)")
-
-
-    # # get code from cnot circ
-    # css_code = cnot_circ.get_code()
-    # # and check whether the stabilisers and logicals match
-    # println("X checks: $(css_code.Hx)")
-    # println("Z checks: $(css_code.Hz)")
-    # println("Logical X: $(css_code.Lx)")
-    # println("Logical Z: $(css_code.Lz)")
 
     # # everthing is now collapsed in the Z check matrix (Z stabilisers and logical Zs), since they are equaivlent as stabilisers of the desired state
     # # and we can measrue both to obtain the correct one (of course cofrectinng for hook errors); our initial definition of logical still applies and
     # # can be used for the noiseless procedure
 
-    # println(code_params.distance//2)
-    # t = Int(floor(code_params.distance/2))
-    # faulty_prep_circuit = mqt_state_prep.FaultyStatePrepCircuit(cnot_circ,t,t)
-    # println("\n\n\n\n\n FAULT circuit $(faulty_prep_circuit.circ.cnots)\n\n\n")
 
     verification_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/verification_circuit.py $qasm $(code_params.distance)`)
-    #verification_circ_qasm = gate_optimal_verification_circuit(faulty_prep_circuit)#, min_timeout=600,max_timeout=3600)
     print("Verification QASM: \n$verification_circ_qasm")
     verification_circ = qasm2.loads(verification_circ_qasm) 
 
@@ -311,111 +288,17 @@ function run_dqc_state_prep(exp_label::String)
             @assert reg_name != "q" # only ancillas will be measured
     
             index = Int(bit_info.index)
-            #println("INDEX $index")
-            #println(gate, control, target)
-            # q_index = 0 
-            # b_index = 0
-            # if reg_name == "z_anc"
-            #     q_index = num_q + index
-            #     b_index = network_specs.num_comm_qubits + index
-            #     println("\n\n\n\n\n The b index is $b_index = $index ")
-            # elseif reg_name == "x_anc"
-            #     q_index = num_q + num_z_anc + index
-            #     b_index = network_specs.num_comm_qubits + num_z_anc + index
-            # elseif reg_name == "flag"
-            #     q_index = num_q + num_z_anc + num_x_anc +  index
-            #     b_index = network_specs.num_comm_qubits + num_z_anc + num_x_anc + index
-            # end
+           
             push!(quantum_clifford_verification_circ, sMRZ(index+network_specs.num_comm_qubits+1, index-network_specs.num_data_qubits+network_specs.num_comm_qubits+1))
             
         end
         
         
     end
-    #     see whether z, x anc or flag is part of it and if yes which
-    #         determine core of qubit that maps to iff cx is the gate: n.register_lookup_array[n.inv_map[op.q1]]
-    #         add entry to dictionary
-    #     add QC operation sCNOT between unmpapped q1 and num_data_and_comm_qubits + i
-    #     elseif operation is h
-    #                 add QC operation H to num_data_and_comm_qubits + i
-    #             elseif operation is measure
-    #                 add QC operation sMZ from num_data_and_comm_qubits + i to num_comm_qubits + i
-    #             end
 
 
     
 
-        # core_mapping of size num_z_anc+num_x_anc + num_flag # ancillas will be listed lexicographical after data and comm qubits, but we store the core that the ancilla is actually mapped to (for telegates)
-
-        #     choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping
-
-        
-
-    
-    # for i in 1:num_z 
-    #     cores_addressed
-    #     for line in verification_qasm
-    #         if anc in line with index in line
-    #             if operation is cx
-    #                 determine core of qubit that maps to iff cx is the gate: n.register_lookup_array[n.inv_map[op.q1]] 
-    #                 add core to list
-    #                 add QC operation sCNOT between unmpapped q1 and num_data_and_comm_qubits + i
-    #             elseif operation is h
-    #                 add QC operation H to num_data_and_comm_qubits + i
-    #             elseif operation is measure
-    #                 add QC operation sMZ from num_data_and_comm_qubits + i to num_comm_qubits + i
-    #             end
-    #         end
-    #     end
-    #     choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping
-    # end
-            
-    # for i in 1:num_x
-    #     cores_addressed
-    #     for line in verification_qasm
-    #         if anc in line with index in line
-    #             if operation is cx
-    #                 determine core of qubit that maps to iff cx is the gate: n.register_lookup_array[n.inv_map[op.q1]] 
-    #                 add core to list
-    #                 add QC operation sCNOT between unmpapped q1 and num_data_and_comm_qubits + num_z_anc + i
-    #             elseif operation is h
-    #                 add QC operation H to num_data_and_comm_qubits +  num_z_anc +_i
-    #             elseif operation is measure
-    #                 add QC operation sMZ from num_data_and_comm_qubits + i to num_comm_qubits + num_z_anc + i
-    #             end
-    #             end
-    #         end
-    #     end
-    #     choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping
-    # end
-           
-
-    # for i in 1:num_flag
-    #     for line in verification_qasm
-    #         if anc in line with index in line
-    #             if operation is cx
-    #                 note down core of the ancilla that flag interacts with
-    #                 if z_anc
-    #                     add sCNOT from num_data_and_comm_qubits + index of z_anc to num_data_and_comm_qubits + num_z_anc + x_anc  + i
-    #                 elseif x_anc
-    #                     add sCNOT from num_data_and_comm_qubits + num_z_anc index of x_anc to num_data_and_comm_qubits + num_z_anc + x_anc  + i
-    #                 end
-    #             elseif if operation is h
-    #                 add H to num_data_and_comm_qubits + num_z_anc + num_x_anc + i 
-    #             elseif operation is measure
-    #                 add QC operation sMZ from num_data_and_comm_qubits + num_z_anc + i to num_comm_qubits + num_z_anc + num_x_anc + i
-    #             end
-    #         end
-    #     end
-    #     determine ancilla that interacts with it (should onlt be one) and add it to the same core in core_mapping
-    #     if lenght(cores) >1 
-    #         throw error
-    #     else
-    #         core_mapping - core[1]
-    # end
-
-
-        
     # provide data_circuit and verifation_circuit to dqc_state_prep (separetely is ok)
     # Data qubits should continue to experience dephasing, but anciall qubits should only be initialised right before they are used
     # dqc_circ =  DQCLogicalStatePrepSimulator.dqc_state_prep(data_circuit, quantum_clifford_verification_circ, code_params, network_specs, noise_model)
@@ -423,6 +306,8 @@ function run_dqc_state_prep(exp_label::String)
 
     # determine the best placement for the ancilla qubits, noting which cnots have to be applied to them, and noting the index of the measueretn (on which we
     #later base the discarding)
+        #     choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping
+
     # Then, we add the verfication part in the DQC setting (on the mapped data qubits, which are afain in normal ordering, such that we don't
     # need to consider inv_map for indices. However, we do need )
     # determine mapping of ancillas
@@ -430,7 +315,6 @@ function run_dqc_state_prep(exp_label::String)
     # add idling during verification as well
 
     # this all before uncomputing, then uncompute and do the noisefree stabiliser gadget
-
 
     # pass data_circuit,quantum_clifford_verification_circ,ancilla_data_interactions to exectuable, where data qubits will be executed, then 
     # verificaion will be appended baed on the ancilla_data_interactions dict, then unmapping
@@ -469,12 +353,39 @@ function run_dqc_state_prep(exp_label::String)
     # end
 
     println("Ancilla map: $ancilla_map")
-    p = 1e-4
+
+    # TODO: save data circuit and verification circuit in noise folder
+    # TODO: Add noise sweep here
+
+
+    p = 1e-3
     num_samples = 1e6
     #noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
     #noise_model = NoiseSpecs(num_samples,1e-4,1e-4,1e-3,1e-4,1e-3,1e-3,1e-3,1e-1,1e-1,1e-4,1e-2,0)
-    tele_p = 1e-2
-    noise_model = NoiseSpecs(num_samples,p,p,tele_p,p,p,p,p,tele_p,tele_p,tele_p,tele_p,0)
+    telegate_error_rates = vcat(0:1e-5:1e-3,2e-3:5e-4:1e-2,2e-2:1e-2:1e-1 )#vcat(0:1e-4:2e-2,2e-2:1e-2:10e-2 ) #[1e-4, 1e-3, 1e-2, 1e-1]
+    logical_error_rates = []
+    acceptance_ratios = []
+
+
+    #for tele_p in telegate_error_rates
+    for p in telegate_error_rates
+   
+        #tele_p = 1e-2
+        noise_model = NoiseSpecs(num_samples,p,p,p,p,p,p,p,p,p,p,p,p)
+        #noise_model = NoiseSpecs(num_samples,p,p,tele_p,p,p,p,p,tele_p,tele_p,tele_p,tele_p,0)
+        logical_error_rate, acceptance_ratio = dqc_state_prep(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
+        push!(logical_error_rates, logical_error_rate)
+        push!(acceptance_ratios, acceptance_ratio)
+    end
+
+    # Determine slope<-> exponent
+
+    #power_exp, power_interc = ... # https://github.com/JuliaExtremes/RatingCurves.jl/blob/82512c19f89624443892e24e8fbde3f5b7c00c12/docs/src/tutorial/rcfit.md
+    
+    # Log Log plot
+    #log_log_plot(telegate_error_rates, logical_error_rate, acceptance_ratio, power_exp, power_interc)
+
+
     # init_noise::Float64               # Initialisation noise
     # idle_depolarising_noise::Float64  # idling depolarising probability
     # idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
@@ -488,7 +399,9 @@ function run_dqc_state_prep(exp_label::String)
     # comm_qubit_measurement_noise::Float64      # Communication qubit measurement depolarising probability
     # classical_comm_noise::Float64              # Classical communication error
 
-    dqc_state_prep(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
+
+    df = DataFrame(intra_core_rate = fill(p, length(telegate_error_rates)), telegate_error_rates = collect(telegate_error_rates), logical_error_rates = logical_error_rates, acceptance_ratios = acceptance_ratios)
+    CSV.write(joinpath(cfg.folder, "error_rates.csv"), df)
     return 42
 end
 

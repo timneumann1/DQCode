@@ -24,3 +24,5 @@ the MQT installation already contains qiskit so this comes out of box
 To run MQT installation, follow the intallation procedure: install uv via the strange command, fork my repo/their repo, make sure Python is installed, then uv sync
 uv sync --python 3.13
 for visuals: uv pip install pylatexenc
+
+Need to build qiskit with PyCall -> reference to installation
