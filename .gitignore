@@ -1,4 +1,4 @@
 .CondaPkg
 .DS_store
-statprof/
-scr/plots/circuits/
+.github
+data/

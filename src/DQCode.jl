@@ -1,4 +1,4 @@
-module DQCircuitSearch
+module DQCode
 
 include("types.jl")
 include("trivariate_bicycle_code.jl")
@@ -19,7 +19,7 @@ include("mcts.jl")
 
 using .Types
 using .TrivariateBicycleCode
-using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit
+using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt
 using .ExperimentConfig: experiment_configurations#distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set#, noise_model, n_shots
 using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
@@ -42,6 +42,9 @@ using HiGHS
 using JuMP
 using DataFrames, CSV
 
+
+#export create_code_network_data, network_setup, code_setup
+
 # -------------------------------------
 # ------------ SETUP ------------------
 # -------------------------------------
@@ -49,30 +52,24 @@ using DataFrames, CSV
 function create_code_network_data(exp_label::String)
      
     # Creates all code and network data for specified experiment from the config file
-    # We don't need to set a random seed since the only probabilistic component (hypergraph partitioning) already
-    # has a seed itself
     configs = experiment_configurations()
-    #print(configs)
-    #print(configs["trivariate_3_3_3_3"])
     if haskey(configs, exp_label)
-    #for (exp_label, cfg) in experiment_configurations()
+        # Retrieve configuration
         cfg = configs[exp_label]
-        @info "Writing experiment configuration for $exp_label configuration to $(cfg.folder)"
-        network_specs = network_setup(cfg.code, cfg.qpu_sizes)
-        code_params = code_setup(cfg.code)
-        mkpath(cfg.folder)
-        serialize( joinpath(cfg.folder, "network_specs.jls"), network_specs )
-        serialize( joinpath(cfg.folder, "code_params.jls"), code_params )
-        open(joinpath(cfg.folder, "network_specs.txt"), "w") do io
-            for fn in fieldnames(typeof(network_specs))
-                println(io, fn, " = ", repr(getfield(network_specs, fn)))
-            end
-        end
-        open(joinpath(cfg.folder, "code_params.txt"), "w") do io
-            for fn in fieldnames(typeof(code_params))
-                println(io, fn, " = ", repr(getfield(code_params, fn)))
-            end
-        end
+
+        # Create networking specifications and code parameters
+        network_specs = _network_setup(cfg.code, cfg.qpu_sizes)
+        code_params = _code_setup(cfg.code)    
+
+        # Save data to data/ folder
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
+        mkpath(folder)
+        @info "Writing experiment configuration for $exp_label configuration to data/ folder"
+        serialize( joinpath(folder, "network_specs.jls"), network_specs )
+        serialize( joinpath(folder, "code_params.jls"), code_params )        
+        save_txt(folder, "network_specs.txt", network_specs)
+        save_txt(folder, "code_params.txt", code_params)
+
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file.")
     end
@@ -80,10 +77,9 @@ end
 
 # ---------- Quantum Network ----------
 
-function network_setup(qec_code, register_sizes)
+function _network_setup(qec_code, register_sizes)
     # No need to set a seed since the only prob. part is the hypergraph partitioning, which has its own seed (already defined in the config file) -> a good reason to execute all the different code-architecture pieces separately (all will be reprodcuble, indpendet of order of execution)
     @assert sum(register_sizes) == code_n(qec_code) "$(code_n(qec_code))"
-    #println("Stabilizers of $qec_code: $(Stabilizer(qec_code))")
     mapping = data_qubit_partitioning(register_sizes, Stabilizer(qec_code))
     # Note: Whereas for partitioning, we use the original stabiliser formalism (used in QEC cycles), 
     # for optimisation, we use the canonical form again for commensurability -- the target state is identical since 
@@ -91,7 +87,6 @@ function network_setup(qec_code, register_sizes)
     # mapping contains the permutation that indicates for each position, which qubit will be there.
     mapping_transpositions = perm_to_transpositions(deepcopy(mapping))  
     inv_map = invperm(mapping)
-    #num_registers = length(networking_params.register_sizes)
     register_lookup_array, num_data_qubits, num_comm_qubits_per_register = create_lookup_array(register_sizes)
     @assert num_data_qubits == code_n(qec_code)
     num_comm_qubits = num_comm_qubits_per_register * length(register_sizes)
@@ -99,13 +94,6 @@ function network_setup(qec_code, register_sizes)
     data_qubits = collect(1:num_data_qubits)
     data_and_comm_qubits = collect(1:num_data_and_comm_qubits)
     comm_qubits = setdiff(data_and_comm_qubits, data_qubits)
-    #dqc_idx = [ ( index + num_comm_qubits_per_register * (register_lookup_array[index]-1) ) for index in 1:num_data_qubits]
-    #@assert dqc_idx == dqc_data_idx # both arrays are capturing the same mapping (data_qubits stores)
-    #comm_inv_perm_idx = [ (inv_perm[index] + num_comm_qubits_per_register * (register_lookup_array[inv_perm[index]]-1) ) for index in 1:num_data_qubits]
-
-    #@info "Number of qubits is $num_qubits, number of comm. qubits per register is $num_comm_qubits_per_register"
-    #println("Lookup Array: $register_lookup_array")
-    #println("Data qubits: $data_qubits")
 
     network_specs = NetworkSpecifications(
         register_sizes, #register sizes of Type-II architecture (here: only fewn memory qubits per core), CircuitSim automatically adds comm. qubits (ancillas are only added in DTS)
@@ -129,7 +117,7 @@ end
 
 # ---------- QEC Code ----------
 
-function code_setup(qec_code)
+function _code_setup(qec_code)
 
     code = MixedDestabilizer(qec_code)
 
@@ -137,7 +125,7 @@ function code_setup(qec_code)
     target_canon = canonicalize!(copy(target_state))
     # can change to rref as well??
     num_X_checks = count(any( tableau_to_bitmatrix(tab(target_canon)) .== 1, dims = 2))# count how many rows contain X stabiliser (clean for CSS codes) #count(i -> tableau_to_bitmatrix(tab(target_canon))[i,i]==1, 1:size(target_canon,1))
-    @info "Number of X checks is $num_X_checks"
+    #@info "Number of X checks is $num_X_checks"
     target_canon_rref = canonicalize_rref!(copy(target_state))
     target_tableau = tab(target_canon_rref[1])
     target_bit_matrix = tableau_to_bitmatrix(target_tableau)
@@ -149,9 +137,9 @@ function code_setup(qec_code)
     code_distance = 0
     try
         code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
-        @info "QEC code: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
+        @info "Setup complete: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
     catch err
-        @info "QEC code: $(qec_code):\n[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
+        @info "Setup complete: $(qec_code):\n[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
         @warn "Code distance computation failed: setting d = 0" err
     end
         
