@@ -174,7 +174,7 @@ function baseline_encoding_qiskit(exp_label::String)
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
     
-    return 42
+    return dir
 
 end
 
@@ -210,113 +210,100 @@ function baseline_encoding_mqt(exp_label::String, mqt_path:: String, prep_method
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
     
-    return 42
+    return dir
 
 end
 
 
-# -------------------------------------
-# ------------ OPTIMISATION -----------
-# -------------------------------------
-# function run_gottesman_encoding(exp_label::String)
-#     configs = experiment_configurations()
-#     if haskey(configs, exp_label)
-#         cfg = configs[exp_label]
-#         if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
-#             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data() first.")
-#         end
-#         network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-#         code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
-#         encoding_gott(code_params, network_specs, cfg.folder)
-#         return 42
-#     else
-#         error("This configuration label $exp_label was not found. Please add the respective data to the configuration file")
-#     end
-# end
+# -----------------------------------------
+# ------- ENCODING OPTIMISATION -----------
+# -----------------------------------------
 
-
-function circuit_search_gott(exp_label::String)
+function circuit_search_gott_ga(exp_label::String)
     # this function orchestrates an experiment, gathering code and networking parameters, and then
-    # initialising the baseline, GA, (multiple) MCTS, and baseline>GA, MCTS>GA runs 
+    # initialising the Gottesman encoding warmstart Genetic Algorithm 
     # It saves the results in {QEC_code}>{Network Architecture}>{Optimiser}
     Random.seed!(42) 
     configs = experiment_configurations()
 
     if haskey(configs, exp_label)
         cfg = configs[exp_label]
-        @info "Loading experiment configuration for $exp_label configuration from $(cfg.folder)" 
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
 
-        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
 
-        # gottesman, +reichardt, + genetic
+        # Gottesman standard encoding + DQC compilation
+        gottesman_encoding_circuit, dqc_compiled_encoding_circuit, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled = encoding_gott(code_params, network_specs, zeros(code_params.k))
 
-        gottesman_encoding_circuit, dqc_compiled_encoding_circuit, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled = encoding_gott(code_params, network_specs, zeros(code_params.k), cfg.folder)
+        # Warmstart GA with DQC-compiled circuit
 
-        # apply GENETIC SEARCH ON COMPILED VERSION
-
-        verification_ga, gate_counts_ga = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit, cfg.folder)#, label = "DQC_Compiled_Gottesman")
+        GA_encoding_circuit, verification_ga, gate_counts_ga, fitness_evolution, fidelity_evolution, gate_count_evolution = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit)
         
+        # ----- Data Storage ----------
+        dir = joinpath(folder, "warmstart_ga")
+        mkpath(dir)
+
+        serialize( joinpath(dir, "gott_encoding_circuit.jls"), gottesman_encoding_circuit )
+        serialize( joinpath(dir, "gott_circuit_dqc_compiled.jls"), dqc_compiled_encoding_circuit )
+        serialize(joinpath(dir, "GA_circuit.jls"), GA_encoding_circuit)
+        save_txt(dir, "genetic_algorithm_parameters.txt", cfg.genetic_params)
+
+        save_circuit_diagram(gottesman_encoding_circuit, dir, "gott_encoding_circuit.png")
+        save_circuit_diagram(dqc_compiled_encoding_circuit, dir, "gott_circuit_dqc_compiled.png")
+        save_circuit_diagram(GA_encoding_circuit, dir, "GA_circuit.png")
+
+
         df = DataFrame(method = ["Gottesman", "dqc_compiled", "GA"], verfied = [verification_logical_state, verification_logical_state_compiled, verification_ga],gate_counts = [gate_counts, gate_counts_compiled, gate_counts_ga] )
-        CSV.write(joinpath(cfg.folder, "gottesman_stats.csv"), df)
+        CSV.write(joinpath(dir, "warm_start_ga_stats.csv"), df)
+
+        df_ga = DataFrame(
+        fitness_evolution   = fitness_evolution,
+        fidelity_evolution  = fidelity_evolution,
+        single_count = [gc[1] for gc in gate_count_evolution],
+        two_qubit_count = [gc[2] for gc in gate_count_evolution],
+        telegate_count = [gc[3] for gc in gate_count_evolution]
+        )
+
+        CSV.write(joinpath(dir, "genetic_evolution.csv"), df_ga)
+
+
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
     
-    return 42
+    return dir
 
 end
 
 
-function circuit_search_MCTS(exp_label::String)#, num_MCTS_runs::Int)
+function circuit_search_mcts(exp_label::String)
 
     Random.seed!(42) 
     configs = experiment_configurations()
     
     if haskey(configs, exp_label)
         cfg = configs[exp_label]
-        
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
+
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
-        #println(cfg.folder)
         network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
         code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
 
-        #sweep over depth, num iterations and exploration constant
-        # for each combination (5^3), perform 10 runs, storing the results for saving
-        #depths = [2, 3, 4, 5]# 8, 16]
-        #num_iterations = [Int(1e4), Int(1e5), Int(1e6)]
-        #exploration_constants = [3.5, 5.0, 10.0]
-
-        #results_df = DataFrame(#depth = Vector{Int64}(), exploration_constants = Vector{Float64}(),
-                               #run = Vector{Int64}(),
-        #                       gate_counts = Vector{Vector{Int64}}(), verified = Vector{Bool}() )
-
-        #for d in depths, c in exploration_constants
+    
         folder_exp = joinpath(cfg.folder, "MCTS")#, string(d, "_", c)) 
         mkpath(folder_exp)
-            #cfg.mcts_params.depth = d
-            #cfg.mcts_params.num_iterations = niter
-            #cfg.mcts_params.exploration_constant = c
-
-            #MCTS_stats_per_comb = Vector{Tuple{Vector{Int64}, Bool}}()
-            #for run in 1:num_MCTS_runs
-                #Setting a random seed means we will get the same results when running this again, but we can (and will) still get differnt resuts for each of the num_MCTS_runs runs
-        verification_MCTS_logical_state, MCTS_gate_counts = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params, folder_exp)
-        #push!(results_df, (d,c, MCTS_gate_counts, verification_logical_state))
-                #push!(MCTS_stats_per_comb, (MCTS_gate_counts, verification_logical_state) )
-            #end
+        verification_MCTS_logical_state, MCTS_gate_counts = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params)
+       
 
         df = DataFrame(method = ["MCTS"], verified = [verification_MCTS_logical_state], gate_counts = [MCTS_gate_counts])
-        #df = DataFrame(run = 1:num_MCTS_runs, gate_counts = [stats[1] for stats in MCTS_stats_per_comb], verified = [stats[2] for stats in MCTS_stats_per_comb] )
-        #CSV.write(joinpath(folder_exp, "MCTS_$(d)_$(niter)_$(c)_stats.csv"), df)
-        #end
-        #mkpath(joinpath(cfg.folder, "MCTS"))
+        
         CSV.write(joinpath(cfg.folder, "MCTS_stats.csv"), df)
         return 42
     else

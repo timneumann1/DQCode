@@ -271,7 +271,7 @@ Also: Network of cleanly separated controls and targets, which we change in the 
                                         push!(compiled_circ, sCNOT(j,m))
                                         push!(compiled_circ, sCNOT(m,k))
                                         filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                                        @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$m and $j>$m, $m>$k "
+                                        #@info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$m and $j>$m, $m>$k "
                                         push!(insertion_gate_qubits, m)
                                         push!(insertion_gate_qubits, k)
                                         # remaining_gates.pop(CX_ik) 
@@ -294,7 +294,7 @@ Also: Network of cleanly separated controls and targets, which we change in the 
                                 push!(compiled_circ, sCNOT(j,k))
                                 push!(compiled_circ, sCNOT(k,m))
                                 filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                                @info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$k and $j>$k, $k>$m "
+                                #@info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$k and $j>$k, $k>$m "
                                 push!(insertion_gate_qubits, k)
                                 push!(insertion_gate_qubits, m)
                                 # After adding the 3 gates to circuit and deleting 4 gates, we don't traverse the circuit again (one compilation pass)
@@ -341,18 +341,17 @@ Also: Network of cleanly separated controls and targets, which we change in the 
 end
 
 
-
-function encoding_gott(code_params, network_specs, basis_state, folder)
+function encoding_gott(code_params, network_specs, basis_state)
 
     encoding_circ, gate_counts = encoding_circuit_gott(code_params.qec_code, network_specs, basis_state)
 
     encoding_circ_compiled, gate_counts_compiled = overlap_compilation(encoding_circ, network_specs)
 
-    @info "Encoding Circuit: $encoding_circ"
-    @info "Gottesman encoding circuit length in DQC setting:: Single-qubit gates: $(gate_counts[1]), Two-qubit gates: $(gate_counts[2]), Telegates: $(gate_counts[3])"
+    # @info "Encoding Circuit: $encoding_circ"
+    # @info "Gottesman encoding circuit length in DQC setting:: Single-qubit gates: $(gate_counts[1]), Two-qubit gates: $(gate_counts[2]), Telegates: $(gate_counts[3])"
 
-    @info "Encoding circuit compiled: $encoding_circ_compiled"
-    @info "Overlap DQC compilation circuit length in DQC setting:: Single-qubit gates: $(gate_counts_compiled[1]), Two-qubit gates: $(gate_counts_compiled[2]), Telegates: $(gate_counts_compiled[3])"
+    # @info "Encoding circuit compiled: $encoding_circ_compiled"
+    # @info "Overlap DQC compilation circuit length in DQC setting:: Single-qubit gates: $(gate_counts_compiled[1]), Two-qubit gates: $(gate_counts_compiled[2]), Telegates: $(gate_counts_compiled[3])"
 
 
     # ----- Verification ------
@@ -362,50 +361,8 @@ function encoding_gott(code_params, network_specs, basis_state, folder)
     verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
     @info "Verification of Compiled circuit successful: $verification_logical_state_compiled"
 
-    # ----- Data Storage ----------
-    dir = joinpath(folder, "gottesman_encoding")
-    mkpath(dir)
-
-    serialize( joinpath(dir, "encoding_circuit.jls"), encoding_circ )
-    serialize( joinpath(dir, "encoding_circuit_dqc_compiled.jls"), encoding_circ_compiled )
-
-    # open(joinpath(dir, "encoding_gates.txt"), "w") do io
-    #     println(io, "# Raw gate sequence (Gottesman encoding circuit) of size $(sum(gate_counts))")
-    #     for (i, g) in enumerate(encoding_circ)
-    #         println(io, i, "\t", repr(g))
-    #     end
-
-    #     println(io, "# Raw gate sequence (DQC compiled version) of size $(sum(gate_counts_compiled))")
-    #     for (i, g) in enumerate(encoding_circ_compiled)
-    #         println(io, i, "\t", repr(g))
-    #     end
-    # end
-
-    save_circuit_diagram(encoding_circ, dir, "encoding_circuit.png")
-    save_circuit_diagram(encoding_circ_compiled, dir, "encoding_circuit_dqc_compiled.png")
-
-
-    open(joinpath(dir, "summary.txt"), "w") do io
-        println(io, "# Encoding successful: $verification_logical_state")
-        println(io, "# Raw gate sequence of size $(sum(gate_counts))")
-        println(io, "# Executable DQC circuit with $(gate_counts[1]) single qubit gates, $(gate_counts[2]) two qubit gates and $(gate_counts[3]) telegates ")
-        println(io, "\n")
-        println(io, "# DQC Compilation Encoding successful: $verification_logical_state_compiled")
-        println(io, "# Raw gate sequence of size $(sum(gate_counts_compiled))")
-        println(io, "# Executable DQC circuit with $(gate_counts_compiled[1]) single qubit gates, $(gate_counts_compiled[2]) two qubit gates and $(gate_counts_compiled[3]) telegates ")
-    end
-
-    df = DataFrame(method = ["gottesman_encoding", "dqc_compiled_encoding"], verified = [verification_logical_state, verification_logical_state_compiled], gate_counts = [gate_counts, gate_counts_compiled])
-    CSV.write(joinpath(dir, "gottesman_stats.csv"), df)
-
     return encoding_circ, encoding_circ_compiled, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled
 end
-
-
-
-
-
-
 
 
 end

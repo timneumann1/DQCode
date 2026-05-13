@@ -1,14 +1,11 @@
 module ExperimentConfig
 
-#using QuantumClifford
-using ..Types
-#using ..Helper
-#using QECCore
-using QECCore: Steane7, Shor9, distance
+using ..Types: GeneticParameters, MCTSParameters
+using QECCore: Steane7, Shor9, AbstractCSSCode, BivariateBicycleViaCirculantMat#, distance
 using ..TrivariateBicycleCode
 
-const DATA_ROOT = get(ENV, "DQC_DATA_ROOT", joinpath(@__DIR__, "..", "data", "results"))
-
+# This file indicates the code-network configurations we are investigating, with code and gpu_sizes indicating the differnet setups,
+# and the parameters being used as defaults for the circuit search (can be changed in scripts)
 
 export experiment_configurations
 
@@ -19,7 +16,6 @@ function experiment_configurations()
         qpu_sizes::Vector{Int},
         genetic_params::GeneticParameters, 
         mcts_params::MCTSParameters, 
-        folder::String
     }
     configs = Dict{ConfigKeyType, ConfigValueType}()
 
@@ -31,7 +27,6 @@ function experiment_configurations()
         GeneticParameters(7500, 1500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "jaccard"),
         #MCTSParameters(15, [1e6,1,5,2e3], 0.999, "jaccard", false, 5, 5e5, 5.0),
         MCTSParameters(15, [1e6,1, 5, 2.5e4], 0.999, "jaccard", true, 3, 5e4, 10.0), #treereuse  #[1e6, 1, 5, 1e3] #1e6,1,5,1e5], 0.85, "jaccard", 10, 5e4, 1.5),
-        joinpath(@__DIR__, "results", string(code_dirname(Steane7())), string([4,3]))
         )
     
     # ------- Shor9 - [3,3,3] ---------
@@ -42,7 +37,6 @@ function experiment_configurations()
         GeneticParameters(7500, 1500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 1e2], "jaccard"),
         MCTSParameters(15, [1e6,1,5,1e2], 0.9, "jaccard", true, 5, 1e5, 3.5),
         #MCTSParameters(15, [1e6,1,5,1e2], 0.999, "jaccard", 4, 5e4, 10.0), #[1e6, 1, 5, 1e2]
-        joinpath(@__DIR__, "results", string(code_dirname(Shor9())), string([3,3,3]))
         )
 
     # ------- Trivariate Bicycle - [3,3,3,3] ---------
@@ -53,7 +47,7 @@ function experiment_configurations()
         GeneticParameters(25000, 2500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 5e2], "jaccard"), # changed from 15 to 25000 individuals, and from 1000 to 2500 iterations
         MCTSParameters(30, [1e6,1,5,1e4], 0.99, "jaccard", false, 3, 5e4, 10.0),#, 5, 1e5, 10), 
         #MCTSParameters(30, [1e6,1,5,1e4], 0.99, "jaccard", 2, 5e4, 5.0),#, 5, 1e5, 10), # tree reuse
-        joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([3,3,3,3]))
+        #joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([3,3,3,3]))
         )
     
     # # ------- Trivariate Bicycle - [4,4,4] ---------
@@ -65,7 +59,7 @@ function experiment_configurations()
         #GeneticParameters(15000, 1000, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 8e2], "jaccard"),
         MCTSParameters(30, [1e6,1,5,2.5e4], 0.999,"jaccard", false, 3, 5e4, 10.0),
         #MCTSParameters(30, [1e6,1,5,2e4], 0.99,"jaccard", true, 2, 5e4, 5.0),#tree reuse
-        joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([4,4,4]))
+        #joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([4,4,4]))
         )
 
     # # ------- Trivariate Bicycle - [6,6] ---------
@@ -76,7 +70,7 @@ function experiment_configurations()
         GeneticParameters(25000, 2500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 5e2], "jaccard"),
         #MCTSParameters(30, [1e6,1,5,1e4], 0.999,"jaccard", false, 4, 5e4, 10.0),
         MCTSParameters(30, [1e6,1,5,4e4], 0.99,"jaccard", true, 2, 5e4, 5.0), # reuse tree
-        joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([6,6]))
+        #joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([6,6]))
         )
 
     # ------- Quantum Reed-Muller - [3,3,3,3,3] ---------
@@ -108,7 +102,7 @@ function experiment_configurations()
         GeneticParameters(25000, 5000, 100, 0.85, 5, 0.5, 1, [5e4, 1, 10, 1e3], "jaccard"), # changed from 15 to 25000 and from 3e4 to 5e4
         MCTSParameters(70, [1e6,1,5,5e3], 0.999, "jaccard", false, 3, 5e4, 10.0), # 3, 5e6, 10 # don't reuse tree
         #MCTSParameters(70, [1e6,1,5,6e3], 0.999, "jaccard", true, 3, 5e4, 10.0),
-        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([3,3,3,3,3,3]))
+        #joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([3,3,3,3,3,3]))
         )
     
     # # # ------- Bivariate Bicycle [[18,4,4]] - [6,6,6] ---------
@@ -119,7 +113,7 @@ function experiment_configurations()
         GeneticParameters(25000, 5000, 100, 0.85, 5, 0.5, 1, [5e4, 1, 10, 1e3], "jaccard"), # changed from 15 to 25000 and from 4e4 to 5e4
         MCTSParameters(70, [1e6,1,5,2e3], 0.999, "jaccard", false, 3, 5e4, 10.0), # don't reuse tree version
         #MCTSParameters(70, [1e6,1,5,1e4], 0.999, "jaccard", 2, 5e4, 10.0), # reuse tree version
-        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([6,6,6]))
+        #joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([6,6,6]))
         )
 
     # # # ------- Bivariate Bicycle [[18,4,4]] - [9,9] ---------
@@ -130,7 +124,7 @@ function experiment_configurations()
         GeneticParameters(25000, 5000, 100, 0.85, 5, 0.5, 1, [5e4, 1, 10, 1e3], "jaccard"),
         MCTSParameters(85, [1e6,1,5,1e3], 0.999, "jaccard", false, 3, 5e4, 10.0), # dob;t reuse
         #MCTSParameters(85, [1e6,1,5,6e3], 0.999, "jaccard", 2, 5e4, 10.0), # reuse
-        joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([9,9]))
+        #joinpath(@__DIR__, "results", string(code_dirname(BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]))), string([9,9]))
         )
     
     # # # ------- Bivariate Bicycle [[36,4,6]] - [6,6,6,6,6,6] ---------
@@ -140,7 +134,7 @@ function experiment_configurations()
         [6,6,6,6,6,6],
         GeneticParameters(5000, 5000, 100, 0.85, 5, 0.5, 1, [5e4, 1, 10, 1e3], "jaccard"),
         MCTSParameters(70, [1e5, 1, 5, 1e2], 0.999, "jaccard", false, 3, 1e6, 10.0),
-        joinpath(@__DIR__, "results", string(code_dirname( BivariateBicycleViaCirculantMat(3, 6, [(:x, 1), (:y, 2), (:y, 3)], [(:x, 0), (:y, 1), (:x, 2)]) )), string([6,6,6,6,6,6]))
+        #joinpath(@__DIR__, "results", string(code_dirname( BivariateBicycleViaCirculantMat(3, 6, [(:x, 1), (:y, 2), (:y, 3)], [(:x, 0), (:y, 1), (:x, 2)]) )), string([6,6,6,6,6,6]))
         )
 
     # # ------- Bivariate Bicycle - [[144,12,12]] ---------
