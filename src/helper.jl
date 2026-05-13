@@ -12,7 +12,7 @@ using CairoMakie
 export create_lookup_array, comm_qubits_array, perm_to_transpositions, transpositions_to_perm
 export data_qubit_partitioning, circuit_size, tableau_distance, tableau_to_bitmatrix
 export execute_circuit, gate_to_apply, gate_counts, verify_success, save_circuit_diagram
-export next_run_dir, code_dirname
+export next_run_dir, code_dirname, save_txt
 export compare_states
 export plot_evolution
 
@@ -411,7 +411,7 @@ function data_qubit_partitioning(capacities, stabilizers)
     nqubits = size(stabilizers, 2)
     @assert sum(capacities) == nqubits "Register capacities must sum to code length."
     
-    println("Stabilizers: $stabilizers")
+    #println("Stabilizers: $stabilizers")
     # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
     I = Int[]
     J = Int[]
@@ -432,7 +432,7 @@ function data_qubit_partitioning(capacities, stabilizers)
                 push!(J, e)
             end
         end
-        println("Support of stabilizer $r is $support\n")
+        #println("Support of stabilizer $r is $support\n")
     end
 
     if e == 0
@@ -441,7 +441,7 @@ function data_qubit_partitioning(capacities, stabilizers)
     end
 
     # apply KaHyPa to partition the graph
-    println("Hyperedges:\nI:$I \nJ:$J")
+    #println("Hyperedges:\nI:$I \nJ:$J")
     A = sparse(I, J, ones(Int, length(I)), nqubits, e)
     h = KaHyPar.HyperGraph(A)
     #println("Hypergraph:: $h")
@@ -465,8 +465,8 @@ function data_qubit_partitioning(capacities, stabilizers)
     #assignments = _repair_partition_capacities(assignments, capacities)
     #println("Partitioning is $assignments")
     block_sizes = [count(==(b), assignments) for b in 1:k]
-    println("Actual block sizes: $block_sizes")
-    println("Required capacities: $capacities")
+    #println("Actual block sizes: $block_sizes")
+    #println("Required capacities: $capacities")
     if block_sizes != capacities
         error("KaHyPar failed to satisfy the capacity constraint with correct block sizes, please change the capacities or alter the mapping manually")
     end
@@ -479,8 +479,8 @@ function data_qubit_partitioning(capacities, stabilizers)
     @assert sort(mapping) == collect(1:nqubits)
 
     # mapping here indicates for each position, which qubit will sit there
-    println("KaHyPar assignments: $assignments")
-    println("Data-qubit mapping: $mapping")
+    #println("KaHyPar assignments: $assignments")
+    #println("Data-qubit mapping: $mapping")
     return mapping
     # extract permutation from partitioning, e.g. [1,7,4,2,3,5,6] would mean that the 7th data qubit is in the first core if we have a [3,4] core assignment
 end
@@ -497,11 +497,12 @@ end
 # gate_to_apply(::Type{CZ_Gate}, i::Int, j::Int) = sCPHASE(i,j)
 
 
-### NEEDS TO BE REWRITTEN TO ONLY COUNT GATES!!! preiously: gates_to_circuit
+
 function gate_counts(circuit, n)
     # Converts gates to a circuit (same indexing), but counts gate overhead (in contrast to the below function which only constructs the circuit)
     
-    
+    mapping = copy(n.inv_map)
+
     gate_counts = [0,0,0]
 
     for op in circuit
@@ -511,16 +512,22 @@ function gate_counts(circuit, n)
             gate_counts += [1,0,0]
         elseif T<: AbstractTwoQubitOperator
             #println("Gate type is $T")
-            control_register = n.register_lookup_array[n.inv_map[op.q1]] 
-            target_register = n.register_lookup_array[n.inv_map[op.q2]]
+            control_register = n.register_lookup_array[mapping[op.q1]] 
+            target_register = n.register_lookup_array[mapping[op.q2]]
             
             #push!(encoding_circuit_orig, T(p_control, p_target))
             if control_register == target_register
                 # the above is equivalent to network_specs.register_lookup_array[findfirst(==(p_target), network_specs.permutation)]
                 gate_counts += [0,1,0]
             else
-                gate_counts += [0,0,1]
+                if T == sSWAP
+                    gate_counts += [0,0,3] # a SWAP can be decomposed as three CNOT gates, each of which needs to be performed inter-core
+                else 
+                    gate_counts += [0,0,1]
+                end
             end
+            # For a SWAP gate, we assume that the SWAP operation is actually performed (qubit teleportation), after which we update the mapping
+            
         else
             error("Unsupported gate type in gates_to_circuit: $T")
         end
@@ -795,6 +802,14 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, m
     save(outpath, fig)
 end
 
+
+function save_txt(folder, title, obj)
+    open(joinpath(folder, title), "w") do io
+        for fn in fieldnames(typeof(obj))
+            println(io, fn, " = ", repr(getfield(obj, fn)))
+        end
+    end
+end
 
 
 end

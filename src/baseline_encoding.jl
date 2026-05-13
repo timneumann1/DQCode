@@ -153,26 +153,22 @@ function stab_to_hx(stab::Stabilizer)
 
 end
 
-function run_mqt_baseline(code_params, network_specs, folder)
+function run_mqt_baseline(code_params, network_specs, mqt_path, prep_method)
    
     stabiliser = stabilizerview(MixedDestabilizer(code_params.qec_code))
     if any(phases(stabiliser) .== 0x02) 
         error("Baseline encoding currently only implemented for all-positive phases")
     end
     hx = stab_to_hx(stabiliser)
-    #println("Converted $stabiliser to $hx")
-
 
     hx_json = JSON.json(hx) # for passing the check matrix to Python library
 
-    print(@__DIR__)
-    print(PyCall.python)
-#    mqt_encoding_circ_qasm = readchomp(`/Users/tim/Tim/projects/mqt/qecc/.venv/bin/python3 /Users/tim/Tim/projects/mqt/qecc/scripts/state_encoding.py $hx_json $(code_params.distance)`)
-
+    python_bin = joinpath(mqt_path, ".venv/bin/python3")
+    script_path =  joinpath(mqt_path, "scripts/state_encoding.py")
+    mqt_encoding_circ_qasm = readchomp(`$(python_bin) $(script_path) $hx_json $(code_params.distance) $(prep_method)`)    
     mqt_encoding_circ = qasm2.loads(mqt_encoding_circ_qasm) 
     
     # Build QuanutmClifford circuit from QASM
-
     quantum_clifford_encoding_circ = Vector{QuantumClifford.AbstractOperation}()
     num_q = 0
     for reg in mqt_encoding_circ.qregs
@@ -184,40 +180,20 @@ function run_mqt_baseline(code_params, network_specs, folder)
     end
     @assert num_q == network_specs.num_data_qubits
 
-    # The MQT library return Hadamard and CNOT gates only
-
+    # The MQT library returns Hadamard and CNOT gates only
     for instruction in mqt_encoding_circ.data
-        #println(verification_circ.data)
-        gate = instruction.operation.name
-        
+        gate = instruction.operation.name        
         if gate == "h"
             qubits = instruction.qubits
             bit_info = mqt_encoding_circ.find_bit(qubits[1])
-            # reg_name = String(bit_info.registers[1][1].name)
-            # if reg_name == "q"
-            #     continue
-            # end
             index = Int(bit_info.index)
-            
-            #println(gate, index, reg_name)
-            # qc_index = 0 
-            # if reg_name == "z_anc"
-            #     qc_index = num_q + index
-            # elseif reg_name == "x_anc"
-            #     qc_index = num_q + num_z_anc + index
-            # elseif reg_name == "flag"
-            #     qc_index = num_q + num_z_anc + num_x_anc + index
-            # end
-
             push!(quantum_clifford_encoding_circ, sHadamard(index+1))
 
         elseif gate == "cx"
             qubits = instruction.qubits
             control_info = mqt_encoding_circ.find_bit(qubits[1])
-            #control_reg_name = String(control_info.registers[1][1].name)
             control = Int(control_info.index)
             target_info = mqt_encoding_circ.find_bit(qubits[2])
-            #target_reg_name = String(target_info.registers[1][1].name)
             target = Int(target_info.index)
             push!(quantum_clifford_encoding_circ, sCNOT(control+1,target+1))
         else
@@ -230,52 +206,12 @@ function run_mqt_baseline(code_params, network_specs, folder)
 
     gcounts = Helper.gate_counts(quantum_clifford_encoding_circ, network_specs)
 
-    #println("DQC gate counts for MQT encoding is $gcounts")
-
-
-
-    # ----- Data Storage ----------
-    dir = joinpath(folder, "mqt_encoding")
-    mkpath(dir)
-
-    serialize( joinpath(dir, "mqt_encoding_circuit.jls"), quantum_clifford_encoding_circ )
-    #serialize( joinpath(dir, "encoding_circuit_dqc_compiled.jls"), encoding_circ_compiled )
-
-    # open(joinpath(dir, "encoding_gates.txt"), "w") do io
-    #     println(io, "# Raw gate sequence (Gottesman encoding circuit) of size $(sum(gate_counts))")
-    #     for (i, g) in enumerate(encoding_circ)
-    #         println(io, i, "\t", repr(g))
-    #     end
-
-    #     println(io, "# Raw gate sequence (DQC compiled version) of size $(sum(gate_counts_compiled))")
-    #     for (i, g) in enumerate(encoding_circ_compiled)
-    #         println(io, i, "\t", repr(g))
-    #     end
-    # end
-
-    save_circuit_diagram(quantum_clifford_encoding_circ, dir, "mqt_encoding_circuit.png")
-    #save_circuit_diagram(encoding_circ_compiled, dir, "encoding_circuit_dqc_compiled.png")
-
-
-    # open(joinpath(dir, "summary.txt"), "w") do io
-    #     println(io, "# Encoding successful: $verification_logical_state")
-    #     println(io, "# Raw gate sequence of size $(sum(gcounts))")
-    #     println(io, "# Executable DQC circuit with $(gcounts[1]) single qubit gates, $(gcounts[2]) two qubit gates and $(gcounts[3]) telegates ")
-    #     # println(io, "\n")
-    #     # println(io, "# DQC Compilation Encoding successful: $verification_logical_state_compiled")
-    #     # println(io, "# Raw gate sequence of size $(sum(gate_counts_compiled))")
-    #     # println(io, "# Executable DQC circuit with $(gate_counts_compiled[1]) single qubit gates, $(gate_counts_compiled[2]) two qubit gates and $(gate_counts_compiled[3]) telegates ")
-    # end
-
-    df = DataFrame(method = ["mqt_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
-    CSV.write(joinpath(dir, "mqt_encoding_stats.csv"), df)
-
-    return mqt_encoding_circ, gcounts
+    return quantum_clifford_encoding_circ, gcounts, verification_logical_state
 
 end
 
 
-function run_qiskit_baseline(code_params, network_specs, folder)
+function run_qiskit_baseline(code_params, network_specs)
    
     destabiliser = destabilizerview(MixedDestabilizer(code_params.qec_code))
     logical_x = logicalxview(MixedDestabilizer(code_params.qec_code))
@@ -333,16 +269,7 @@ function run_qiskit_baseline(code_params, network_specs, folder)
     gcounts = Helper.gate_counts(quantum_clifford_encoding_circ, network_specs)
     @info "DQC gate counts for Qiskit encoding is $gcounts"
 
-
-    # ----- Data Storage ----------
-    dir = joinpath(folder, "qiskit_encoding")
-    mkpath(dir)
-    serialize( joinpath(dir, "qiskit_encoding_circuit.jls"), quantum_clifford_encoding_circ )
-    save_circuit_diagram(quantum_clifford_encoding_circ, dir, "qiskit_encoding_circuit.png")
-    df = DataFrame(method = ["qiskit_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
-    CSV.write(joinpath(dir, "qiskit_encoding_stats.csv"), df)
-
-    return qiskit_encoding_circ, gcounts
+    return quantum_clifford_encoding_circ, gcounts, verification_logical_state
 
 end 
 

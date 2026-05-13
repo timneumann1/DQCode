@@ -9,14 +9,14 @@ using .DQCode
 
 # --- one-time data generation ---
 for exp_label in [
-    "steane_4_3",
-    "shor_3_3_3",
-    "trivariate_3_3_3_3",
-    "trivariate_4_4_4",
-    "trivariate_6_6",
-    "bivariate_3_3_3_3_3_3",
-    "bivariate_6_6_6",
-    "bivariate_9_9",
+    # "steane_4_3",
+    # "shor_3_3_3",
+    # "trivariate_3_3_3_3",
+    # "trivariate_4_4_4",
+    # "trivariate_6_6",
+    # "bivariate_3_3_3_3_3_3",
+    # "bivariate_6_6_6",
+    # "bivariate_9_9",
 ]
     DQCode.create_code_network_data(exp_label)
 end
@@ -39,6 +39,12 @@ end
 for exp_label in [
     #"steane_4_3",
     #"shor_3_3_3",
+]
+    DQCode.baseline_encoding_mqt(exp_label, DQCode.MQT_PATH, "optimal") 
+end
+
+# --- MQT Encoding ---
+for exp_label in [
     # "trivariate_3_3_3_3",
     # "trivariate_4_4_4",
     # "trivariate_6_6",
@@ -46,8 +52,9 @@ for exp_label in [
     # "bivariate_6_6_6",
     # "bivariate_9_9",
 ]
-    DQCode.baseline_encoding_mqt(exp_label)
+    DQCode.baseline_encoding_mqt(exp_label, DQCode.MQT_PATH, "heuristic") 
 end
+
 
 # --- Gottesman baseline (+ GA inside circuit_search_gott) ---
 for exp_label in [

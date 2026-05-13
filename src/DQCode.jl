@@ -4,46 +4,32 @@ include("types.jl")
 include("trivariate_bicycle_code.jl")
 include("helper.jl")
 include("experiment_config.jl")
-#include("circsim.jl")
 include("baseline_encoding.jl")
 include("encoding_gott.jl")
-
-#include("plots.jl")
-#include("dtsimulation.jl")
-
 include("genetic.jl")
 include("mcts.jl")
 
-#include("qec_tools.jl")
-#include("dqc_state_prep_sim.jl")
-
 using .Types
 using .TrivariateBicycleCode
-using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt
+using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt, save_circuit_diagram
 using .ExperimentConfig: experiment_configurations#distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set#, noise_model, n_shots
 using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
 using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
 
-using Logging
-using Serialization
-using Random
-
-# setting the seed yields reproducibility among runs of the entire code, but within one 10 iteration execution of the MCTS solver, e.g.
-# we will obtain different results (but everytime the same different ones)
-# thus, we set one 'global' seed for each experiment function we are implemting 
 using QECCore
-using QECCore: distance
 using QuantumClifford
 using QuantumClifford: MixedDestabilizer, Stabilizer, Tableau, stabilizerview, logicalxview, logicalzview, canonicalize_rref!, tab, AbstractOperation
 using QuantumClifford.ECC: DistanceMIPAlgorithm
 using HiGHS
 using JuMP
 using DataFrames, CSV
+using Logging
+using Serialization
+using Random
 
-
-#export create_code_network_data, network_setup, code_setup
+const MQT_PATH = "/Users/tim/Tim/projects/mqt/qecc/"
 
 # -------------------------------------
 # ------------ SETUP ------------------
@@ -123,44 +109,22 @@ function _code_setup(qec_code)
 
     target_state = vcat(stabilizerview(code), logicalzview(code))
     target_canon = canonicalize!(copy(target_state))
-    # can change to rref as well??
     num_X_checks = count(any( tableau_to_bitmatrix(tab(target_canon)) .== 1, dims = 2))# count how many rows contain X stabiliser (clean for CSS codes) #count(i -> tableau_to_bitmatrix(tab(target_canon))[i,i]==1, 1:size(target_canon,1))
-    #@info "Number of X checks is $num_X_checks"
     target_canon_rref = canonicalize_rref!(copy(target_state))
     target_tableau = tab(target_canon_rref[1])
     target_bit_matrix = tableau_to_bitmatrix(target_tableau)
-
-    #stabilizer_generators = [copy(p) for p in stabilizerview(code)]
     logical_Zs  = logicalzview(code)
-
-    #if code_n(qec_code) < 20
     code_distance = 0
     try
-        code_distance = distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
+        code_distance = QECCore.distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
         @info "Setup complete: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
     catch err
         @info "Setup complete: $(qec_code):\n[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
         @warn "Code distance computation failed: setting d = 0" err
     end
         
-    # stabilizer_group = [stabilizer_generators[1] * stabilizer_generators[1]] # start with the identity element of the stabilizer group
-
-    # for gen in stabilizer_generators
-    #     new_elements = [s * gen for s in stabilizer_group]
-    #     append!(stabilizer_group, new_elements)
-    # end
-
-    # @assert length(Set(stabilizer_group)) == 2^(code_n(qec_code)-code_k(qec_code)) "Stabilizer group does not have the correct size of 2^|stabilizer_generators|"
-    
-
-    #print("CODE STABILISERS LOW WEIGHT: \n$(Stabilizer(qec_code))\n")
-    #println("Logical Z operators are \n$(logicalzview(code))\n")
-    #println("Logical X operators are \n$(logicalxview(code))\n")
-    #println("\nTarget state:$target_state\n")
-    
     code_params = CodeParameters(
         qec_code,
-        #stabilizerview(code),# Stabilizer(qec_code),
         num_X_checks,
         logical_Zs,
         target_state,
@@ -174,38 +138,38 @@ function _code_setup(qec_code)
 end
 
 
-# -------------------------------------
-# ------------ BASELINE ---------------
-# -------------------------------------
+# ----------------------------------------------
+# ------------ BASELINE ENCODING ---------------
+# ----------------------------------------------
 
 
 function baseline_encoding_qiskit(exp_label::String)
     # this function orchestrates a baseline run, gathering code and networking parameters, and then
-    # It saves the results in {QEC_code}>{Network Architecture}>{qiskit}
+    # saves the results to data/{QEC_code}>{Network Architecture}>{qiskit}
     Random.seed!(42) 
     configs = experiment_configurations()
 
     if haskey(configs, exp_label)
         cfg = configs[exp_label]
-        @info "Loading experiment configuration for $exp_label configuration from $(cfg.folder)" 
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
 
-        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
 
-        # gottesman, +reichardt, + genetic
+        encoding_circ, gcounts, verification_logical_state = run_qiskit_baseline(code_params, network_specs)
 
-        qiskit_encoding_circ, gcounts = run_qiskit_baseline(code_params, network_specs, cfg.folder)
-
-        ## apply GENETIC SEARCH ON COMPILED VERSION
-
-        #verification_ga, gate_counts_ga = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit, cfg.folder)#, label = "DQC_Compiled_Gottesman")
-        
-        #df = DataFrame(method = ["Gottesman", "dqc_compiled", "GA"], verfied = [verification_logical_state, verification_logical_state_compiled, verification_ga],gate_counts = [gate_counts, gate_counts_compiled, gate_counts_ga] )
-       # CSV.write(joinpath(cfg.folder, "gottesman_stats.csv"), df)
+        # Save data to data/ folder
+        dir = joinpath(folder, "qiskit_encoding")
+        mkpath(dir)
+        @info "Saving results to $dir ..."
+        serialize( joinpath(dir, "qiskit_encoding_circuit.jls"), encoding_circ )
+        save_circuit_diagram(encoding_circ, dir, "qiskit_encoding_circuit.png")
+        df = DataFrame(method = ["qiskit_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
+        CSV.write(joinpath(dir, "qiskit_encoding_stats.csv"), df)
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
@@ -214,33 +178,34 @@ function baseline_encoding_qiskit(exp_label::String)
 
 end
 
-function baseline_encoding_mqt(exp_label::String)
+function baseline_encoding_mqt(exp_label::String, mqt_path:: String, prep_method::String)
     # this function orchestrates a baseline run, gathering code and networking parameters, and then
-    # It saves the results in {QEC_code}>{Network Architecture}>{qiskit}
+    # saves the results to data/{QEC_code}>{Network Architecture}>{qiskit}
     Random.seed!(42) 
     configs = experiment_configurations()
 
     if haskey(configs, exp_label)
         cfg = configs[exp_label]
-        @info "Loading experiment configuration for $exp_label configuration from $(cfg.folder)" 
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
-        if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
 
-        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
 
-        # gottesman, +reichardt, + genetic
+        encoding_circ, gcounts, verification_logical_state = run_mqt_baseline(code_params, network_specs, mqt_path, prep_method)
 
-        mqt_encoding_circ, gcounts = run_mqt_baseline(code_params, network_specs, cfg.folder)
+        # Save data to data/ folder
+        dir = joinpath(folder, "mqt_encoding")
+        mkpath(dir)
+        @info "Saving results to $dir ..."
+        serialize( joinpath(dir, "mqt_encoding_circuit.jls"), encoding_circ )
+        save_circuit_diagram(encoding_circ, dir, "mqt_encoding_circuit.png")
+        df = DataFrame(method = ["mqt_encoding"], verified = [verification_logical_state], gate_counts = [gcounts])
+        CSV.write(joinpath(dir, "mqt_encoding_stats.csv"), df)
 
-        ## apply GENETIC SEARCH ON COMPILED VERSION
-
-        #verification_ga, gate_counts_ga = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit, cfg.folder)#, label = "DQC_Compiled_Gottesman")
-        
-        #df = DataFrame(method = ["Gottesman", "dqc_compiled", "GA"], verfied = [verification_logical_state, verification_logical_state_compiled, verification_ga],gate_counts = [gate_counts, gate_counts_compiled, gate_counts_ga] )
-       # CSV.write(joinpath(cfg.folder, "gottesman_stats.csv"), df)
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
@@ -248,8 +213,6 @@ function baseline_encoding_mqt(exp_label::String)
     return 42
 
 end
-
-
 
 
 # -------------------------------------
