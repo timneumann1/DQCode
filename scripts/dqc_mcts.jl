@@ -1,0 +1,8 @@
+include(joinpath(@__DIR__, "..", "src", "DQCode.jl"))
+using .DQCode: circuit_search_mcts
+
+exp_label = "trivariate_6_6" # available configurations are stored and can be adapted in src/experiment/config.jl
+
+# Initialise the Monte Carlo Tree Search
+DQCode.circuit_search_mcts(exp_label)
+

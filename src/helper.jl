@@ -728,9 +728,9 @@ function next_run_dir(base_dir::AbstractString)
     return run_dir
 end
 
-function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, gate_counts, genetic_params::GeneticParameters, success)
+function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, gate_counts, genetic_params::GeneticParameters)
     title_str = "Evolution of optimiser metrics for $optimiser_label"     
-    subtitle_str = "$(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations -- Optimisation Success: $(success)"
+    subtitle_str = "$(genetic_params.num_individuals) individuals over $(genetic_params.num_generations) generations"
     
     fig = Figure(size = (800, 900))
 
@@ -763,10 +763,10 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
     save(outpath, fig)
 end
 
-function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, mcts_params::MCTSParameters, success)
+function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts, mcts_params::MCTSParameters)
     
     title_str = "Evolution of optimiser metrics for $optimiser_label"     
-    subtitle_str = "$(mcts_params.n_iterations) Iterations over depth $(mcts_params.depth), exploration_constant $(mcts_params.exploration_constant) -- Optimisation Success: $(success)"
+    subtitle_str = "$(mcts_params.n_iterations) Iterations over depth $(mcts_params.depth), exploration_constant $(mcts_params.exploration_constant)"
     
     fig = Figure(size = (800, 900))
 

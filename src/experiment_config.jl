@@ -56,10 +56,8 @@ function experiment_configurations()
         TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]),
         [4,4,4],
         GeneticParameters(25000, 2500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 5e2], "jaccard"), #working version for 596 had 15000 ind and 2500 iter
-        #GeneticParameters(15000, 1000, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 8e2], "jaccard"),
         MCTSParameters(30, [1e6,1,5,2.5e4], 0.999,"jaccard", false, 3, 5e4, 10.0),
         #MCTSParameters(30, [1e6,1,5,2e4], 0.99,"jaccard", true, 2, 5e4, 5.0),#tree reuse
-        #joinpath(@__DIR__, "results", string(code_dirname(TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]))), string([4,4,4]))
         )
 
     # # ------- Trivariate Bicycle - [6,6] ---------

@@ -8,15 +8,17 @@ include("baseline_encoding.jl")
 include("encoding_gott.jl")
 include("genetic.jl")
 include("mcts.jl")
+include("dqc_simulator.jl")
 
 using .Types
 using .TrivariateBicycleCode
-using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt, save_circuit_diagram
+using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt, save_circuit_diagram, qc_circuit_to_qasm
 using .ExperimentConfig: experiment_configurations#distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set#, noise_model, n_shots
 using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
 using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
+using .DQCodeSimulator: dqc_encoding_simulation
 
 using QECCore
 using QuantumClifford
@@ -219,6 +221,8 @@ end
 # ------- ENCODING OPTIMISATION -----------
 # -----------------------------------------
 
+# ---------- Genetic Algorithm ------------
+
 function circuit_search_gott_ga(exp_label::String)
     # this function orchestrates an experiment, gathering code and networking parameters, and then
     # initialising the Gottesman encoding warmstart Genetic Algorithm 
@@ -262,24 +266,24 @@ function circuit_search_gott_ga(exp_label::String)
         CSV.write(joinpath(dir, "warm_start_ga_stats.csv"), df)
 
         df_ga = DataFrame(
-        fitness_evolution   = fitness_evolution,
-        fidelity_evolution  = fidelity_evolution,
-        single_count = [gc[1] for gc in gate_count_evolution],
-        two_qubit_count = [gc[2] for gc in gate_count_evolution],
-        telegate_count = [gc[3] for gc in gate_count_evolution]
+            fitness_evolution   = fitness_evolution,
+            fidelity_evolution  = fidelity_evolution,
+            single_count = [gc[1] for gc in gate_count_evolution],
+            two_qubit_count = [gc[2] for gc in gate_count_evolution],
+            telegate_count = [gc[3] for gc in gate_count_evolution]
         )
 
         CSV.write(joinpath(dir, "genetic_evolution.csv"), df_ga)
 
-
+        return dir
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
     
-    return dir
 
 end
 
+# ---------- Monte Carlo Tree Search ----------
 
 function circuit_search_mcts(exp_label::String)
 
@@ -297,83 +301,75 @@ function circuit_search_mcts(exp_label::String)
         code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
 
     
-        folder_exp = joinpath(cfg.folder, "MCTS")#, string(d, "_", c)) 
-        mkpath(folder_exp)
-        verification_MCTS_logical_state, MCTS_gate_counts = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params)
+        MCTS_circuit, verification_MCTS_logical_state, MCTS_gate_counts, fidelity_evolution, gate_count_evolution, reward_evolution = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params)
        
+        # ----- Data Storage ----------
+        dir = joinpath(folder, "mcts")
+        mkpath(dir)
+
+        serialize( joinpath(dir, "MCTS_circuit.jls"), MCTS_circuit )
+        save_circuit_diagram(MCTS_circuit, dir, "MCTS_circuit.png")
+        save_txt(dir, "mcts_parameters.txt", cfg.mcts_params)
+
+        df_evol = DataFrame(
+            fidelity_evolution = fidelity_evolution, 
+            gate_count_evolution = gate_count_evolution,
+            reward_evolution = reward_evolution
+        )
+
+        CSV.write(joinpath(MCTS_dir, "mcts_evolution.csv"), df_evol)
 
         df = DataFrame(method = ["MCTS"], verified = [verification_MCTS_logical_state], gate_counts = [MCTS_gate_counts])
-        
-        CSV.write(joinpath(cfg.folder, "MCTS_stats.csv"), df)
-        return 42
+        CSV.write(joinpath(cfg.folder, "mcts_stats.csv"), df)
+
+        return dir
     else
         error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data() first.")
     end
 
 end
-        # best_MCTS_gates = Vector{Gate}() 
-        # best_MCTS_telegate_count = typemax(Int)
-        # best_MCTS_dir = ""
-
-        # # LOG INTERMEDITATE GATES
-        # # Sweep parameters and do statistics (probably better outsource) DONT NEED THE BEST ONE ANYMORE!
-        # #three paramters: exploration constant, num_iterations, w
-        # for _ in 1:num_MCTS_runs
-        #     MCTS_gates, verification_logical_state, MCTS_gate_counts, MCTS_dir = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params, cfg.folder)
-        #     push!(MCTS_gate_counts_per_run, MCTS_gate_counts )
-        #     if isempty(best_MCTS_gates)
-        #         best_MCTS_gates = MCTS_gates
-        #         best_MCTS_telegate_count = MCTS_gate_counts[3]
-        #         best_MCTS_dir = MCTS_dir
-        #     elseif verification_logical_state && telegate_count < best_MCTS_telegate_count
-        #         best_MCTS_gates = MCTS_gates
-        #         best_MCTS_telegate_count = MCTS_gate_counts[3]
-        #     end
-        # end
 
 
-          # don't do MCTS + GA
-        # if !isempty(best_MCTS_gates)
-        #     genetic_search(code_params, network_specs, cfg.genetic_params, cfg.folder, warm_start = true, warm_start_gates = best_MCTS_gates, MCTS_dir = best_MCTS_dir, label = "MCTS")
-        # else
-        #     @info "None of the $num_MCTS_runs MCTS runs was successful, please repeat the experiment."
-        # end
+# -----------------------------------------
+# ---------- DQC Execution ----------------
+# -----------------------------------------
 
-# ---------- Optimiser Runs ----------
+function dqc_simulation(exp_label::String, mqt_path::String)
+    Random.seed!(42) 
+    configs = experiment_configurations()
+    
+    if haskey(configs, exp_label)
+        cfg = configs[exp_label]
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
 
-# function run_genetic_search(exp_label::String)
-#     configs = experiment_configurations()
-#     if haskey(configs, exp_label)
-#         cfg = configs[exp_label]
-#         if !isfile(joinpath(cfg.folder, "network_specs.jls")) || !isfile(joinpath(cfg.folder, "code_params.jls"))
-#             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data() first.")
-#         end
-#         network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-#         code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
-#         #genetic_search(code_params, network_specs, cfg.genetic_params, cfg.folder)
+        circ_path = "$(folder)/warmstart_GA/GA_circuit.jls" 
+        encoding_circuit = deserialize(circ_path)
 
-#         ########################
+        
+        # Where to define the noise?
+        # What to retrieve back?
 
-#         #baseline_gates = baseline_encoding(code_params, network_specs, cfg.folder)
-#         #genetic_search(code_params, network_specs, cfg.genetic_params, cfg.folder, warm_start = true, warm_start_gates = baseline_gates, label = "Baseline")
-
-#         MCTS_gates, verification_logical_state, telegate_count, MCTS_dir = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params, cfg.folder)
-#         #MCTS_gates = deserialize( joinpath(folder, "MCTS_gates.jls"))
-#         genetic_search(code_params, network_specs, cfg.genetic_params, cfg.folder, warm_start = true, warm_start_gates = MCTS_gates, MCTS_dir = MCTS_dir, label = "MCTS")
-
-#         ##############
+        dqc_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
 
 
-#         return 42
-#     else
-#         error("This configuration label $exp_label was not found. Please add the respective data to the configuration file")
-#     end
-# end
+        # ----- Data Storage ----------
+        dir = joinpath(folder, "simulation")
+        mkpath(dir)
 
+        #...
+        
 
-# using .Circuit_Plots: plot_gate_teleportation
-# export plot_gate_teleportation
+        return dir
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+end
 
 
 end
