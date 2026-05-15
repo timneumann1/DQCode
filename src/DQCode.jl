@@ -345,26 +345,20 @@ function dqc_simulation(exp_label::String, mqt_path::String)
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
-        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
 
         circ_path = "$(folder)/warmstart_GA/GA_circuit.jls" 
         encoding_circuit = deserialize(circ_path)
 
-        
-        # Where to define the noise?
-        # What to retrieve back?
-
-        dqc_ft_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
-
+        data = dqc_ft_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
 
         # ----- Data Storage ----------
         dir = joinpath(folder, "simulation")
         mkpath(dir)
 
-        #...
-        
-
+        df = DataFrame(data)
+        CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
         return dir
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")

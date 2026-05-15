@@ -195,22 +195,14 @@ struct MCTSParameters
     exploration_constant::Float64
 end
 
-struct NoiseSpecs # Defining circuit-level noise
-    n_samples::Int64
-    init_noise::Float64               # Initialisation noise
-    idle_depolarising_noise::Float64  # idling depolarising probability
-    idle_depolarising_noise_tele::Float64 # idle depolarising probability under telegate
-    single_q_gate_noise::Float64      # single qubit gate noise probability
-    two_q_gate_noise::Float64         # two-qubit gate noise probability
-    measurement_noise::Float64        # Measurement noise
-    two_q_gate_noise_diff_species::Float64     # two-qubit gate noise probability between communication and memory qubit
-    comm_qubit_init_noise::Float64             # Communication qubit init noise, de facto two qubit depolarising noise to mimic the imperfect creation of Bell pairs
-    comm_idle_depolarising_noise::Float64      # Communication qubit idling depolarising probability
-    single_comm_q_gate_noise::Float64          # Communication qubit single gate depolarising probability
-    comm_qubit_measurement_noise::Float64      # Communication qubit measurement depolarising probability
-    classical_comm_noise::Float64              # Classical communication error
-end
 
+ struct NoiseSpecs # Defining circuit-level noise
+    n_samples::Int64
+    p::Float64 # Captures memory initialisation, memory/comm single- and two-qubit gates, depth-1 decoherence and measurement noise
+    #p_idle_telegate_layer::Float64 # Idle error probability for layer that includes a telegate (accounting for longer/probabilistic creation time)
+    p_mixed::Float64 # Captures two-qubit gate noise between species
+    p_bell::Float64 # Captures Bell states initialisation of communication qubits via photonic interconnects
+ end
 
 
 # Plotting 

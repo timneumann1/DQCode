@@ -15,6 +15,7 @@ export execute_circuit, gate_to_apply, gate_counts, verify_success, save_circuit
 export next_run_dir, code_dirname, save_txt
 export compare_states
 export plot_evolution
+export qc_circuit_to_qasm
 
 # lookup arrays needs to be created only once before executing the genetic search
 #TODO: replace with cleaner version
@@ -229,7 +230,7 @@ function qc_circuit_to_qasm(circ::Vector{AbstractOperation})
         end
     end
 
-    return return join(qasm_code, "\n")
+    return join(qasm_code, "\n")
 end
 
 function qasm_to_qc_circuit(qasm::String) 
