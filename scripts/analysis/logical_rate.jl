@@ -1,50 +1,27 @@
-using CairoMakie#, LaTeXStrings
+using CairoMakie, LaTeXStrings
 using LsqFit
 using CSV, DataFrames
+using Statistics
 
 
-function power_law_fit(physical_noise, logical_noise)
+function log_log_plot(df)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
 
-
-    m(t,p) = p[1] .* t .^p[2]# exp.(p[2] * t)
-    p0 = [1.0, 2.0]
-    fit = curve_fit(m, physical_noise, logical_noise, p0)
-    a, b = fit.param
-    σ_a, σ_b = stderror(fit)
-
-    println("Assuming power law scaling p_log = a p_phys^b")
-    println("a = $(round(a, digits=4)) ± $(round(σ_a, digits=4))")
-    println("b = $(round(b, digits=3)) ± $(round(σ_b, digits=3))")
-    return a, b
-end
-
-function log_log_plot(data_path)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
-
-    # read from file
+    # ---------------------- Pre-Processing ----------------------
+    ps_all = sort(unique(Float64.(df.p)))
+    p_range = range(minimum(ps_all), maximum(ps_all), length=300)
+    p_bells = sort(unique(Float64.(df.p_bell)))
+    # for 3 telegate noises: filter by a certain p_bell noise and add data to te plot
+    p_bells_plot = [minimum(p_bells), p_bells[Int(floor(end/2))], maximum(p_bells)]
+   # print(p_bells_plot)
     
-    df = CSV.read(data_path, DataFrame)
-    local_error_rates = Float64.(df.p)
-    error_rates_bell = Float64.(df.p_bell)#[3:60]#end]#50]
-    logical_error_rates = Float64.(df.logical_error_rate)#[3:60]#end]#50]
-    phys_v_log = local_error_rates - logical_error_rates
-    println(phys_v_log)
-    pseudo_thresh_ind = findfirst(i -> phys_v_log[i] * phys_v_log[i+1] < 0, eachindex(phys_v_log)[1:end-1])
-    pseudo_thresh_local_error = local_error_rates[pseudo_thresh_ind]
+    #logical_error_rates = Float64.(df.logical_error_rate)
+    #df.diff_logical_phys= logical_error_rates .- local_error_rates  
+    #acceptance_ratios = Float64.(df.acceptance_ratios)
 
-    acceptance_ratio = Float64.(df.acceptance_ratios)[3:60]#end]#50]
-    println(error_rates_bell)
-
-
-    # ── tick formatter ────────────────────────────────────────────────────────────
-    function power_of_10_label(val)
-        n = round(Int, log10(val))
-        return L"10^{%$n}"
-    end
-
-    # ── reference scaling lines, anchored at a mid-range point ───────────────────
-    p_range  = range(minimum(error_rates_bell), maximum(error_rates_bell), length = 300)
-    p_anchor = 1          # anchor point for the p and p² guide lines
-    y_anchor = 1          # where the guide lines pass through at p_anchor
+    #p_bells = sort(unique(error_rates_bell))
+    
+    #p_range  = range(minimum(error_rates_bell), maximum(error_rates_bell), length = 300)
+    
 
     # ── plot ──────────────────────────────────────────────────────────────────────
     fig = Figure(size = (640, 920), fontsize = 14)
@@ -55,8 +32,8 @@ function log_log_plot(data_path)#telegate_error_rates, logical_error_rate, accep
         title              = "Logical vs Physical Noise",
         xscale             = log10,
         yscale             = log10,
-        xtickformat        = xs -> power_of_10_label.(xs),
-        ytickformat        = ys -> power_of_10_label.(ys),
+        #xtickformat        = xs -> power_of_10_label.(xs),
+        #ytickformat        = ys -> power_of_10_label.(ys),
         xgridvisible       = true,
         ygridvisible       = true,
         xminorgridvisible  = true,
@@ -71,7 +48,7 @@ function log_log_plot(data_path)#telegate_error_rates, logical_error_rate, accep
         xlabel = "Physical noise rate",
         ylabel = "Acceptance ratio",
         xscale = log10,
-        xtickformat = xs -> power_of_10_label.(xs),
+        #xtickformat = xs -> power_of_10_label.(xs),
         xgridvisible = true,
         ygridvisible = true,
         xminorgridvisible = true,
@@ -84,59 +61,73 @@ function log_log_plot(data_path)#telegate_error_rates, logical_error_rate, accep
 
     linkxaxes!(ax1, ax2)
 
-    colors = Makie.wong_colors()
+    #p_anchor = 1          # anchor point for the p and p² guide lines
+    #y_anchor = 1          # where the guide lines pass through at p_anchor
 
     # p_L = p  (slope 1 in log-log)
-    lines!(ax1, p_range, y_anchor .* (p_range ./ p_anchor).^1,
+    lines!(ax1, p_range, p_range,# y_anchor .* (p_range ./ p_anchor).^1,
         color     = :gray60,
         linestyle = :dash,
         linewidth = 1.5,
         label     = L"p_L \sim p",
     )
 
-    
     # p_L = p²  (slope 2 in log-log)
-    lines!(ax1, p_range, y_anchor .* (p_range ./ p_anchor).^2,
+    lines!(ax1, p_range, p_range.^2, #y_anchor .* (p_range ./ p_anchor).^2,
         color     = :gray40,
         linestyle = :dot,
         linewidth = 1.5,
         label     = L"p_L \sim p^2",
     )
 
+    colors = Makie.wong_colors()
 
 
-    # for 5 telegate noises: filter by a certain p_bell noise and add data to te plot
+    for (idx,p_bell) in enumerate(p_bells_plot)
 
-        a, b = power_law_fit(error_rates_bell, logical_error_rates)
+        #print(idx,p_bell)
+        df_ = copy(df[df.p_bell .== p_bell, :])
+        sort!(df_, :p)
+        
+        df_.diff_logical_phys = df_.logical_error_rate .- df_.p  
+        pseudo_thresh_ind = findfirst(i -> df_.diff_logical_phys[i] * df_.diff_logical_phys[i+1] < 0, 1:length(df_.diff_logical_phys)-1)
+        pseudo_thresh = isnothing(pseudo_thresh_ind) ? nothing : df_.p[pseudo_thresh_ind]
 
-
-        # fitted line:  p_L = A * p^α
-        lines!(ax1, p_range, a .* p_range .^ b,
-            color     = colors[2],
+        if idx ==1
+            # We only extract the scaling line for the lowest noise
+            @info "Retrieving power law scaling for p_bell = $p_bell, assuming power law scaling p_log = a p_phys^b"
+            a, b = power_law_fit(df_.p, df_.logical_error_rate)
+            fit_label = L"\text{fit for p_{bell}}=%$(round(p_bell, digits=2)): p_L=%$(round(a, digits=2))\, p^{%$(power_of_10_label( round(b, digits=10)))}"
+            # fitted line:  p_L = A * p^α
+            lines!(ax1, p_range, a .* p_range .^ b,
+            color     = colors[idx],
             linestyle = :dashdot,
             linewidth = 2,
-            #label     = L"fit: $p_L = %.2f\, p^{%.2f}$" % (a,b),   # see note below
+            label     = fit_label
         )
-
+        end
+        data_label = L"\text{Logical noise for p_{bell}}=%$( power_of_10_label( round(p_bell, digits=10) ) )"
+        acc_label  = L"\text{Acceptance ratio for p_{bell}}=%$( power_of_10_label( round(p_bell, digits=10)) )"
+       
         # data
-        scatterlines!(ax1, error_rates_bell, logical_error_rates,
-            color      = colors[1],
+        scatterlines!(ax1, df_.p, df_.logical_error_rate,
+            color      = colors[idx],
             markersize = 10,
             linewidth  = 2,
-            label      = "Logical noise",
+            label      = data_label
         )
-        scatterlines!(ax2, error_rates_bell, acceptance_ratio,
-            color = colors[3], markersize = 10, linewidth = 2,
-            label = "Acceptance ratio")
 
-        for ax in (ax1, ax2)
-            vlines!(ax, [pseudo_thresh],
-                color = :red,
-                linestyle = :dash,
-                linewidth = 2,
-                label = ax === ax1 ? "Pseudothreshold" : nothing)
+        scatterlines!(ax2, df_.p, df_.acceptance_ratio,
+            color = colors[idx], markersize = 10, linewidth = 2,
+            label = acc_label
+        )
+
+        if pseudo_thresh !== nothing
+            vlines!(ax1, [pseudo_thresh], color= :green, linestyle=:dash)
+            vlines!(ax2, [pseudo_thresh], color= :green, linestyle=:dash)
         end
-    
+    end
+
 
     axislegend(ax1, position = :rb)
     axislegend(ax2, position = :rb)
@@ -147,12 +138,10 @@ function log_log_plot(data_path)#telegate_error_rates, logical_error_rate, accep
 
 end
 
-function two_d_plot(data_path)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
+function two_d_plot(df)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
 
     # read from file
     
-    df = CSV.read(data_path, DataFrame)
-    #print(df)
     local_error_rates = Float64.(df.p)
     error_rates_bell = Float64.(df.p_bell)#[3:60]#end]#50]
     logical_error_rates = Float64.(df.logical_error_rate)#[3:60]#end]#50]
@@ -197,18 +186,34 @@ function two_d_plot(data_path)#telegate_error_rates, logical_error_rate, accepta
 
     # maxabs = maximum(abs, Z)
     # hm = heatmap!(ax, ps, p_bells, Z; colormap = cgrad([:blue, :white, :red]), colorrange = (0, maxabs))
-    Colorbar(fig[1, 2], hm; label = "ϵ_logical/ϵ_p")
+    Colorbar(fig[1, 2], hm; label = "log(ϵ_logical/ϵ_p)")
 
     save(joinpath(data_path,"..", "2d_heatmap.png"), fig)
 
 end
 
+
+function power_law_fit(physical_noise, logical_noise)
+
+
+    m(t,p) = p[1] .* t .^p[2]# exp.(p[2] * t)
+    p0 = [1.0, 2.0]
+    fit = curve_fit(m, physical_noise, logical_noise, p0)
+    a, b = fit.param
+    σ_a, σ_b = stderror(fit)
+
+    @info "a = $(round(a, digits=4)) ± $(round(σ_a, digits=4)), b = $(round(b, digits=3)) ± $(round(σ_b, digits=3))"
+    return a, b
+end
+
 function power_of_10_label(val)
+    #print(val)
     n = round(Int, log10(val))
     return L"10^{%$n}"
 end
 
 #code =    # Set code and architecture here
 data_path = joinpath(@__DIR__, "..", "..", "data", "Steane/[4, 3]/simulation/dqc_sim_data.csv")
-#log_log_plot(data_path)
-two_d_plot(data_path)
+df = CSV.read(data_path, DataFrame)
+log_log_plot(df)
+two_d_plot(df)
