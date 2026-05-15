@@ -18,7 +18,7 @@ using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
 using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
-using .DQCodeSimulator: dqc_encoding_simulation
+using .DQCodeSimulator: dqc_ft_encoding_simulation
 
 using QECCore
 using QuantumClifford
@@ -297,8 +297,8 @@ function circuit_search_mcts(exp_label::String)
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
             error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
         end
-        network_specs = deserialize( joinpath(cfg.folder, "network_specs.jls"))
-        code_params = deserialize( joinpath(cfg.folder, "code_params.jls"))
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
 
     
         MCTS_circuit, verification_MCTS_logical_state, MCTS_gate_counts, fidelity_evolution, gate_count_evolution, reward_evolution = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params)
@@ -317,10 +317,10 @@ function circuit_search_mcts(exp_label::String)
             reward_evolution = reward_evolution
         )
 
-        CSV.write(joinpath(MCTS_dir, "mcts_evolution.csv"), df_evol)
+        CSV.write(joinpath(dir, "mcts_evolution.csv"), df_evol)
 
         df = DataFrame(method = ["MCTS"], verified = [verification_MCTS_logical_state], gate_counts = [MCTS_gate_counts])
-        CSV.write(joinpath(cfg.folder, "mcts_stats.csv"), df)
+        CSV.write(joinpath(dir, "mcts_stats.csv"), df)
 
         return dir
     else
@@ -355,7 +355,7 @@ function dqc_simulation(exp_label::String, mqt_path::String)
         # Where to define the noise?
         # What to retrieve back?
 
-        dqc_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
+        dqc_ft_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
 
 
         # ----- Data Storage ----------
