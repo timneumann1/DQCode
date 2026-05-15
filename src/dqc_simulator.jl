@@ -215,7 +215,7 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
     # It would show a probabilistic 0 and 1. Hence, we can test whether our circuit really works by setting all noise to zero and measuring success.
     # If we actually encoded the plus state, the result would only be true in 50% of the cases; we run this verification ccheck ones before initialising the noisy simulaton
 
-    noise_verif = NoiseSpecs(1,0,0,0)
+    noise_verif = NoiseSpecs(1,0,0)
     DQC_circuit = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif, 0.0)
 
     initial_state = Register(one(MixedDestabilizer, network_specs.num_data_and_comm_qubits+num_ancillas),network_specs.num_comm_qubits + num_ancillas)
@@ -235,10 +235,10 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
     #For simplicity, we assume all these to be comparable in magnitude, where it is reasonable to sweep a range from 5e-5 to 1e-3 in increments of 2.5e-5 (50 evals). (By the way that we define the 2-qubit depolarising
     # channel, the expected number of noise applications is actually 1.6x larger for 2-qubit gates than for 1-qubit gates, which benefits the distinction of the two). The communication qubits do not experience much decoherence on top of the initialisation error in our setup, which is why we exclude it from the simulation. Furthermore, we
     # assume that single-qubit gate and measurement noise are comparable between memory and communicatioin qubits. Lastly, we have two-qubit gate noise between ions of different species, which 
-    # can be assumed to be roughly 98% (Main), and due to the probabilistic Bell state creation delay, we need to account for additional decoherence of the memory qubits. Assuming a two-qubit gate takes on the order of hundredes of μs incl. cooling, whereas Bell state creation takes low ms regime ( https://arxiv.org/pdf/1911.10841)
+    # can be assumed to be roughly 98% (Main), but which we will subsume under p for simplicity (in the end, this is a local operation), and due to the probabilistic Bell state creation delay, we need to account for additional decoherence of the memory qubits. Assuming a two-qubit gate takes on the order of hundredes of μs incl. cooling, whereas Bell state creation takes low ms regime ( https://arxiv.org/pdf/1911.10841)
     # we are probably dealing with a factor of d ~ 1e1 to 1e3, which we account for by increasing the noise probability of the idling depolarising channel according to 1-(1-p)^d, where p is memory_idle_depolarising_noise, the usual 1 layer
-    # memory noise, whihc is on the order of 1e-4 to 1e-3 (according to Quantinuum) (and will be swept in roughly this regime). However, as mentioned in Main, for example, we can use DD to mitigate this dephasing effect,
-    # which justigies choosing d on the lower end of the spectrum, and adding noise corresponding to d=25 layers (Floquette claims 5 gate cycles, which we like to overestimate). If a layer is a telegate layer, we will thus apply
+    # memory noise, which is on the order of 1e-4 to 1e-3 (according to Quantinuum) (and will be swept in roughly this regime). However, as mentioned in Main, for example, we can use DD to mitigate this dephasing effect,
+    # which justigies choosing d on the lower end of the spectrum, and adding noise corresponding to d=10 layers (Floquette claims 5 gate cycles, which might be realistic for near-term experiments, here overestimate). If a layer is a telegate layer, we will thus apply
     # the corresponding p_idle_telegate_layer channel to all memory/ancilla qubits, whereas for other layers, we only assume decoherence for passive qubits.
 
     # In summary, we have local noise (memory init, single and two qubit noise on data/comm, measurement noise on data/comm), which we denote with p, and additionally
@@ -253,11 +253,9 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
 
     num_samples = 1e6
     ps = 5e-5:5e-5:1e-3 
-    #p_idle_telegate_layer = 1-(1-p)^25
-    p_mixed = 1e-2
+    #p_idle_telegate_layer = 1-(1-p)^d
     p_bells = 5e-3:2.5e-3:5e-2 
-
-    # CAVEAT!!!: depth 5 for tele idle, p_mixed = p instead of 1e-2
+    telegate_idle_depth = 10
     
     data = NamedTuple[]
 
@@ -265,21 +263,15 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
 
     for (p, p_bell) in Iterators.product(ps, p_bells)
         #  for each combination, initialise NoiseSpecs(...) according to above considerations
-        noise_model = NoiseSpecs(num_samples, p, p, p_bell)
-        p_idle_telegate_layer = 1-(1-noise_model.p)^5 # compute the telegate_layer idle error prob from the current p
+        noise_model = NoiseSpecs(num_samples, p,p_bell)
+        p_idle_telegate_layer = 1-(1-noise_model.p)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p
         logical_error_rate, acceptance_ratio = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model, p_idle_telegate_layer)
-        push!(data, (p=p, p_bell=p_bell, p_mixed=p_mixed, p_idle_telegate_layer=p_idle_telegate_layer, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio))
+        push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio))
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
-        #@info "For p=$p and p_bell=$p_bell, we obtain logical error rate and acceptanc ratio"
     end
 
-    # Determine slope<-> exponent
 
-    #power_exp, power_interc = ... # https://github.com/JuliaExtremes/RatingCurves.jl/blob/82512c19f89624443892e24e8fbde3f5b7c00c12/docs/src/tutorial/rcfit.md
     
-    # Log Log plot
-    #log_log_plot(telegate_error_rates, logical_error_rate, acceptance_ratio, power_exp, power_interc)
-
    
     return data
 end
@@ -690,8 +682,8 @@ function add_telegate(circuit, DQC_control, DQC_target, control_register, target
 
     push!(circuit, sCNOT(DQC_control, control_comm_index))
     push!(circuit, sCNOT(target_comm_index, DQC_target))
-    add_noise(circuit, [DQC_control, control_comm_index], noise.p_mixed; two_qubits = true) # mixed-species noise
-    add_noise(circuit, [target_comm_index, DQC_target], noise.p_mixed; two_qubits = true) # "
+    add_noise(circuit, [DQC_control, control_comm_index], noise.p; two_qubits = true) # mixed-species noise
+    add_noise(circuit, [target_comm_index, DQC_target], noise.p; two_qubits = true) # "
 
 
     # ---- III. comm1 + comm2 Measurement ----
