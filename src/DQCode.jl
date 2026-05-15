@@ -334,7 +334,7 @@ end
 # ---------- DQC Execution ----------------
 # -----------------------------------------
 
-function dqc_simulation(exp_label::String, mqt_path::String)
+function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::String)
     Random.seed!(42) 
     configs = experiment_configurations()
     
@@ -348,7 +348,7 @@ function dqc_simulation(exp_label::String, mqt_path::String)
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
 
-        circ_path = "$(folder)/warmstart_GA/GA_circuit.jls" 
+        circ_path = joinpath(folder,circuit_path) 
         encoding_circuit = deserialize(circ_path)
 
         data = dqc_ft_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
