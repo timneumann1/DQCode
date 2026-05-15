@@ -200,7 +200,7 @@ end
     n_samples::Int64
     p::Float64 # Captures memory initialisation, memory/comm single- and two-qubit gates, depth-1 decoherence and measurement noise
     #p_idle_telegate_layer::Float64 # Idle error probability for layer that includes a telegate (accounting for longer/probabilistic creation time)
-    p_mixed::Float64 # Captures two-qubit gate noise between species
+    #p_mixed::Float64 # Captures two-qubit gate noise between species
     p_bell::Float64 # Captures Bell states initialisation of communication qubits via photonic interconnects
  end
 

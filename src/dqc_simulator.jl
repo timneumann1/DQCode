@@ -269,9 +269,6 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
         push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio))
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
-
-
-    
    
     return data
 end
