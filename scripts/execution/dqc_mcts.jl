@@ -1,4 +1,4 @@
-include(joinpath(@__DIR__, "..", "src", "DQCode.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "DQCode.jl"))
 using .DQCode
 
 exp_label = "bivariate_9_9" # available configurations are stored and can be adapted in src/experiment/config.jl

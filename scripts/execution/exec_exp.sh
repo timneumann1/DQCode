@@ -60,27 +60,27 @@ end
 for exp_label in [
     #"steane_4_3",
     #"shor_3_3_3",
-    # "trivariate_3_3_3_3",
+    #"trivariate_3_3_3_3",
     # "trivariate_4_4_4",
-    # "trivariate_6_6",
+    #"trivariate_6_6",
     # "bivariate_3_3_3_3_3_3",
     # "bivariate_6_6_6",
     # "bivariate_9_9",
 ]
-    DQCode.circuit_search_gott(exp_label)
+    DQCode.circuit_search_gott_ga(exp_label)
 end
 
 # --- Monte Carlo Tree Search ---
 for exp_label in [
-    #"steane_4_3",
-    # "shor_3_3_3",
-    # "trivariate_3_3_3_3",
-    # "trivariate_4_4_4",
-    # "trivariate_6_6",
-    # "bivariate_3_3_3_3_3_3",
-    # "bivariate_6_6_6",
-    # "bivariate_9_9",
+    "steane_4_3",
+    "shor_3_3_3",
+    "trivariate_3_3_3_3",
+    "trivariate_4_4_4",
+    "trivariate_6_6",
+    "bivariate_3_3_3_3_3_3",
+    "bivariate_6_6_6",
+    "bivariate_9_9",
 ]
     DQCode.circuit_search_MCTS(exp_label)
 end
-' 2>&1 | tee "$LOG"
+' #2>&1 | tee "$LOG"
