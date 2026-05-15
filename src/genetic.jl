@@ -102,7 +102,7 @@ function crossover(num_individuals, selected_individuals, mutation_rate, num_dat
     new_generation = Vector{Vector{AbstractOperation}}()
     append!(new_generation, copy(selected_individuals)) #keep the selected individuals in the population
     #then make the selected individuals parents of the second half 
-    parents = shuffle(selected_individuals)
+    parents = selected_individuals
 
     i = 1
     while i < length(parents)
