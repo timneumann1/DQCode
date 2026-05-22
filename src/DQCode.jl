@@ -2,6 +2,7 @@ module DQCode
 
 include("types.jl")
 include("trivariate_bicycle_code.jl")
+include("symplectic_double_code.jl") 
 include("helper.jl")
 include("experiment_config.jl")
 include("baseline_encoding.jl")
@@ -12,6 +13,7 @@ include("dqc_simulator.jl")
 
 using .Types
 using .TrivariateBicycleCode
+using .SymplecticDoubleCode
 using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array, verify_success, execute_circuit, code_dirname, save_txt, save_circuit_diagram, qc_circuit_to_qasm
 using .ExperimentConfig: experiment_configurations#distributed_qec_code, type_two_register_sizes, opt_params, genetic_params, mcts_params, gate_set#, noise_model, n_shots
 using .EncodingGott: encoding_gott
@@ -108,7 +110,6 @@ end
 function _code_setup(qec_code)
 
     code = MixedDestabilizer(qec_code)
-
     target_state = vcat(stabilizerview(code), logicalzview(code))
     target_canon = canonicalize!(copy(target_state))
     num_X_checks = count(any( tableau_to_bitmatrix(tab(target_canon)) .== 1, dims = 2))# count how many rows contain X stabiliser (clean for CSS codes) #count(i -> tableau_to_bitmatrix(tab(target_canon))[i,i]==1, 1:size(target_canon,1))
@@ -116,14 +117,8 @@ function _code_setup(qec_code)
     target_tableau = tab(target_canon_rref[1])
     target_bit_matrix = tableau_to_bitmatrix(target_tableau)
     logical_Zs  = logicalzview(code)
-    code_distance = 0
-    try
-        code_distance = QECCore.distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
-        @info "Setup complete: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
-    catch err
-        @info "Setup complete: $(qec_code):\n[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
-        @warn "Code distance computation failed: setting d = 0" err
-    end
+    code_distance = _code_distance(qec_code)
+    @info "Setup complete: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
         
     code_params = CodeParameters(
         qec_code,
@@ -139,6 +134,19 @@ function _code_setup(qec_code)
 
 end
 
+function _code_distance(qec_code)
+    
+    try
+        return QECCore.distance(qec_code)
+    catch err
+        if err isa MethodError
+            return QECCore.distance(qec_code, DistanceMIPAlgorithm(solver=HiGHS))
+        else
+            @warn "Code distance computation failed: setting d = 0" err
+            rethrow()
+        end
+    end
+end
 
 # ----------------------------------------------
 # ------------ BASELINE ENCODING ---------------
@@ -334,7 +342,7 @@ end
 # ---------- DQC Execution ----------------
 # -----------------------------------------
 
-function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::String)
+function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::String, num_samples, ps, p_bells, telegate_idle_depth, method::String)
     Random.seed!(42) 
     configs = experiment_configurations()
     
@@ -351,14 +359,37 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
         circ_path = joinpath(folder,circuit_path) 
         encoding_circuit = deserialize(circ_path)
 
-        data = dqc_ft_encoding_simulation(code_params, network_specs, mqt_path, encoding_circuit)
+        if method == "none"
+            
+            data, data_circuit, DQC_circuit_noiseless = dqc_non_ft_encoding_simulation(code_params, network_specs, encoding_circuit)
 
-        # ----- Data Storage ----------
-        dir = joinpath(folder, "simulation")
-        mkpath(dir)
+            # ----- Data Storage ----------
+            dir = joinpath(folder, "simulation_non_FT")
+            mkpath(dir)
+            df = DataFrame(data)
+            CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
+            serialize( joinpath(dir, "data_circuit.jls"), data_circuit )
+            serialize( joinpath(dir, "DQC_circuit_zero_noise.jls"), DQC_circuit_noiseless )
+            save_circuit_diagram(DQC_circuit_noiseless, dir, "DQC_circuit_zero_noise.png")
 
-        df = DataFrame(data)
-        CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
+        else
+
+            data, data_circuit, quantum_clifford_verification_circ, DQC_circuit_noiseless, num_ancillas, num_x_anc, num_z_anc, ancilla_map = dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, mqt_path, encoding_circuit, method)
+            
+            # ----- Data Storage ----------
+            dir = joinpath(folder, "simulation_FT")
+            mkpath(dir)
+            df = DataFrame(data)
+            CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
+            serialize( joinpath(dir, "data_circuit.jls"), data_circuit )
+            serialize( joinpath(dir, "verification_circuit.jls"), quantum_clifford_verification_circ )
+            serialize( joinpath(dir, "DQC_circuit_zero_noise.jls"), DQC_circuit_noiseless )
+            save_circuit_diagram(DQC_circuit_noiseless, dir, "DQC_circuit_zero_noise.png")
+            ancilla_info = (; num_ancillas, num_x_anc, num_z_anc, ancilla_map)
+            save_txt(dir, "ancilla_info.txt", ancilla_info)
+            
+        end
+
         return dir
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")

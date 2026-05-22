@@ -14,7 +14,6 @@ export data_qubit_partitioning, circuit_size, tableau_distance, tableau_to_bitma
 export execute_circuit, gate_to_apply, gate_counts, verify_success, save_circuit_diagram
 export next_run_dir, code_dirname, save_txt
 export compare_states
-export plot_evolution
 export qc_circuit_to_qasm
 
 
@@ -415,7 +414,11 @@ function gate_counts(circuit, n)
             #push!(encoding_circuit_orig, T(p_control, p_target))
             if control_register == target_register
                 # the above is equivalent to network_specs.register_lookup_array[findfirst(==(p_target), network_specs.permutation)]
-                gate_counts += [0,1,0]
+                if T == sSWAP
+                    gate_counts += [0,3,0] # a SWAP can be decomposed as three CNOT gates
+                else 
+                    gate_counts += [0,1,0]
+                end
             else
                 if T == sSWAP
                     gate_counts += [0,0,3] # a SWAP can be decomposed as three CNOT gates, each of which needs to be performed inter-core

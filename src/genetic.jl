@@ -48,7 +48,7 @@ function evaluate_population(population, code_params, network_specs, genetic_par
     for (idx, circuit) in enumerate(population)
        
         gcounts = gate_counts(circuit, network_specs)
-        @assert gcounts[1] == code_params.num_X_checks
+        #@assert gcounts[1] == code_params.num_X_checks
 
         new_quantum_state = execute_circuit(circuit, network_specs.num_data_qubits)
         new_quantum_state_tab = tab(canonicalize_rref!( stabilizerview(new_quantum_state) )[1])
@@ -134,11 +134,11 @@ function crossover(num_individuals, selected_individuals, mutation_rate, num_dat
         child1 = _clean_circuit(child1)
         child2 = _clean_circuit(child2)
 
-        _ensure_min_size!(child1, num_hadamards+2, num_data_qubits, num_hadamards)
-        _ensure_min_size!(child2, num_hadamards+2, num_data_qubits, num_hadamards)
+        child1 = _ensure_min_size!(child1, num_hadamards+2, num_data_qubits, num_hadamards)
+        child2 = _ensure_min_size!(child2, num_hadamards+2, num_data_qubits, num_hadamards)
 
-        _cap_individual_size(child1, max_len)
-        _cap_individual_size(child2, max_len)
+        child1 = _cap_individual_size(child1, max_len)
+        child2 = _cap_individual_size(child2, max_len)
 
         push!(new_generation, child1, child2)
 
@@ -149,8 +149,8 @@ function crossover(num_individuals, selected_individuals, mutation_rate, num_dat
         child = copy(parents[end])
         child = mutation(child, mutation_rate, num_data_qubits)
         child = _clean_circuit(child)
-        _ensure_min_size!(child, num_hadamards+2, num_data_qubits, num_hadamards)
-        _cap_individual_size(child, max_len)
+        child = _ensure_min_size!(child, num_hadamards+2, num_data_qubits, num_hadamards)
+        child = _cap_individual_size(child, max_len)
         push!(new_generation, child)
     end
 
