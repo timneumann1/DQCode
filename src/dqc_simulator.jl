@@ -10,7 +10,7 @@ using ..Types
 using ..Helper
 
 using QuantumClifford
-using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, continue_stat, AbstractSingleQubitOperator, AbstractResetMeasurement, AbstractTwoQubitOperator, AbstractOperation, AbstractStabilizer, AbstractNoise, apply_single_x!, apply_single_y!, apply_single_z! #, sX, SY, SZ
+using QuantumClifford: MixedDestabilizer, sHadamard, sCNOT, @S_str, Register, continue_stat, AbstractSingleQubitOperator, sMZ, AbstractTwoQubitOperator, AbstractOperation, AbstractStabilizer, AbstractNoise, apply_single_x!, apply_single_y!, apply_single_z! #, sX, SY, SZ
 using QECCore
 using QuantumClifford.ECC: DecoderCorrectionGate, CSSTableDecoder, decode,  AbstractSyndromeDecoder, faults_matrix, ClassicalTableDecoder, create_lookup_table, parity_checks, decode
 using Combinatorics: combinations
@@ -24,12 +24,52 @@ import QuantumClifford: apply!, affectedqubits, applynoise! # we want to extend 
 qiskit = pyimport("qiskit")
 qasm2 = pyimport("qiskit.qasm2")
 
-export dqc_ft_encoding_simulation
+export dqc_ft_encoding_simulation, dqc_non_ft_encoding_simulation
 export construct_DQC_executable_circuit
 export dqc_logical_evaluation
 
 
-function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::NetworkSpecifications, mqt_path::String, circuit::Vector{AbstractOperation})
+function dqc_non_ft_encoding_simulation(code_params::CodeParameters, network_specs::NetworkSpecifications, circuit::Vector{AbstractOperation})
+
+    data_circuit = deepcopy(circuit)
+    
+    noise_verif = NoiseSpecs(1e5,0,0)
+
+    quantum_clifford_verification_circ = Vector{AbstractOperation}() # no verification circuit ⇔ non-FT
+    DQC_circuit = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif, 0.0)
+
+    initial_state = Register(one(MixedDestabilizer, network_specs.num_data_and_comm_qubits+num_ancillas),network_specs.num_comm_qubits + num_ancillas)
+    state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) #, trajectories=noise_verif.n_samples)
+    @assert stat == true_success_stat "Adding the verifcation circuit compromised the data circuit"
+
+    # Also verify the dqc_evaluation, which should give an error rate of zero in the noiseless setting
+    logical_error_rate, acceptance_ratio = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [], code_params, network_specs, noise_verif, 0.0)
+    @assert logical_error_rate == 0.0 "Logical error rate is non-zero in noiseless setting; please check your circuit"  
+    @assert acceptance_ratio == 1.0 "Not all runs accepted in noiseless setting; please check your verification circuit"
+    @info "Noiseless testing of FT encoding circuit successful."
+
+    num_samples = 5e5
+    ps = 10 .^ range(log10(5e-5),-3,length=30) # 5e-5:2e-5:1e-3  # 50
+    p_bells = 10 .^ range(-3,log10(5e-2), length = 30) #1e-3:2e-3:5e-2  #25
+    telegate_idle_depth = 8
+
+    data = NamedTuple[]
+    progress = Progress(length(ps) * length(p_bells); desc="(p, p_bell) sweep", dt=1)
+
+    for (p, p_bell) in Iterators.product(ps, p_bells)
+        #  for each combination, initialise NoiseSpecs(...) according to above considerations
+        noise_model = NoiseSpecs(num_samples, p,p_bell)
+        p_idle_telegate_layer = 1-(1-noise_model.p)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p
+        logical_error_rate, acceptance_ratio = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model, p_idle_telegate_layer)
+        push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio))
+        next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
+    end
+   
+    return data, data_circuit, DQC_circuit
+end
+
+
+function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params::CodeParameters, network_specs::NetworkSpecifications, mqt_path::String, circuit::Vector{AbstractOperation}, method::String)
     
     data_circuit = deepcopy(circuit)
     #println("Initial circuit: $circuit")
@@ -49,10 +89,11 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
     script_path =  joinpath(mqt_path, "scripts/verification_circuit.py")
 
     @info "Retrieving verification circuit"
-    verification_circ_qasm = readchomp(`$(python_bin) $(script_path) $qasm $(code_params.distance)`)
+
+    verification_circ_qasm = readchomp(`$(python_bin) $(script_path) $qasm $(code_params.distance) $(method)`)
     verification_circ = qasm2.loads(verification_circ_qasm) 
     @info "Retrieved verification circuit"
-    #println("Verification Cirucit: $verification_circ")
+    println("Verification Cirucit: $verification_circ_qasm")
     #verification_circ.draw(output="mpl", initial_state=true, fold=-1, scale=0.4)
     #plt.show()
 
@@ -175,6 +216,8 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
             @assert reg_name != "q" # only ancillas will be measured
             index = Int(bit_info.index)
             push!(quantum_clifford_verification_circ, sMZ(index+network_specs.num_comm_qubits+1, index-network_specs.num_data_qubits+network_specs.num_comm_qubits+1)) 
+        else
+            throw("Verification circuit contains gates that are currently not supported.")
         end
     end
     
@@ -195,11 +238,12 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
     end
 
     num_ancillas = length(ancilla_map) # collects all ancillas that have been used in some interaction
-    #print("num_ancillas is $num_ancillas, where there are $num_z_anc z ancillas and $num_x_anc x ancillas")
+    print("Verification circuit uses $num_ancillas ancillas, with $num_z_anc z-ancillas, $num_x_anc x-ancillas, and $(num_ancillas-num_z_anc-num_x_anc) flag qubits")
     
     #println("Ancilla map: $ancilla_map")
-
-
+    @info "Data Circuit: $data_circuit"
+    
+    @info "Verification Circuit: $quantum_clifford_verification_circ"
     # Now, we have retrieved the verification circuit. Next, we want to execute it for multiple noises, which is handled by dqc_state_prep, which calls make_executable and then executes
 
     # TODO: save data circuit and verification circuit in noise folder
@@ -256,15 +300,16 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
     # The pseudothreshold lies at p = p_logical, since initialisation \textit{any} bare qubit has error probability p, whereas initialising \textit{any} logical qubit has max error rate logical_rate
 
 
-    num_samples = 1e6
-    # Evaluating 50x25 = 1250 logical error rates, with 1e6 samples each (but early stopping condition)
-    ps = 10 .^ range(log10(5e-5),-3,length=30) # 5e-5:2e-5:1e-3  # 50
-    #p_idle_telegate_layer = 1-(1-p)^d
-    p_bells = 10 .^ range(-3,log10(5e-2), length = 30) #1e-3:2e-3:5e-2  #25
-    telegate_idle_depth = 8
-    
-    data = NamedTuple[]
 
+    # num_samples = 1e3
+    # # Evaluating 50x25 = 1250 logical error rates, with 1e6 samples each (but early stopping condition)
+    # ps = 10 .^ range(-2,-1,length=2) # 5e-5:2e-5:1e-3  # 50
+    # #p_idle_telegate_layer = 1-(1-p)^d
+    # p_bells = 10 .^ range(-2,-1, length = 2) #1e-3:2e-3:5e-2  #25
+    # telegate_idle_depth = 1
+
+
+    data = NamedTuple[]
     progress = Progress(length(ps) * length(p_bells); desc="(p, p_bell) sweep", dt=1)
 
     for (p, p_bell) in Iterators.product(ps, p_bells)
@@ -276,7 +321,7 @@ function dqc_ft_encoding_simulation(code_params::CodeParameters, network_specs::
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
    
-    return data
+    return data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, num_ancillas, num_x_anc, num_z_anc, ancilla_map
 end
 
 
@@ -288,13 +333,15 @@ end
 function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas, ancilla_map, code_params, network_specs, noise, p_idle_telegate_layer::Float64)
 
     DQC_circuit = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise, p_idle_telegate_layer)
-    
 
     # ----- For the noiseless decoding ------
     css_lut_decoder = CSSTableDecoder(code_params.qec_code, error_weight =  Int(floor((code_params.distance-1)/2)) )
     #println("X Lookup Table: $(css_lut_decoder.tabledecoderx.lookup_table)")
     #println("Z Lookup Table: $(css_lut_decoder.tabledecoderz.lookup_table)")
     H = parity_checks(css_lut_decoder)
+    # fault matrix is a (2k)x(2n) dimensional matrix, and to determine the logical Z part, we need the last k rows: O[end÷2+1:end,:]
+    faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] #  decoder has the faults_matrix as attribute
+
     #println("PARITY CHECKS: $H")
     # Build perfect syndrome circuit, with ancillas being appended to DQC cores (consisting of data qubits) and comm_qubits register
     # and bit string measurements being written into classical register n.num_registers*(n.num_registers-1) + #verification classical registers + 1
@@ -315,38 +362,22 @@ function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas
     #println("\n\n\n $circuit \n\n\n")
 
     n_samples = noise.n_samples
+    initial_state = Register(one(MixedDestabilizer,total_number_qubits),total_number_classical_regs)
     for sample in 1:n_samples
 
-        initial_state = Register(one(MixedDestabilizer,total_number_qubits),total_number_classical_regs)
-        
-        # if apply_correction # for code testing
-            #Apply the correction gate (since there is a correctable syndrome, this measn that the correction will bring us back to the codespace)
-            # applying pauli correction: https://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl maps back to the codespace so stabilisers are satisfied. 
-        #and see if the logical syndrome is correct now (if everything is zero we are in the codespace and the logicals are satisfied)
-
-        #     # Would have to apply yet another noise_free syndrome circuit, reinitialise the ancilla qubits, adn see whether it worked
-        #     correction_gate = DecoderCorrectionGate(css_lut_decoder, network_specs.data_qubits, noisefree_syndrome_bits )
-        #     #print(correction_gate)
-        #     state, stats = mctrajectory!(initial_state, vcat(circuit, correction_gate))
-        #     syndrome = Vector{Bool}(state.bits[noisefree_syndrome_bits])
-        #     println("Syndrome is: $syndrome")
-        #     println("Error guess is $(decode(css_lut_decoder, syndrome))")
-        #     println("Logical Z bits are $(state.bits[noisefree_logical_Z_bits])")
-            
-        #     matching = compare_states(state.stab, code_params.target_state, network_specs)
-        #     println("Matching States: $matching")
-        #     continue
-        # end
-        
-
-        state, stats = mctrajectory!(initial_state, circuit)
+        state, stats = mctrajectory!(copy(initial_state), circuit)
         
         # HERE, determine whether or not to discard the state based on the ancilla bits being triggered or not
 
-        verification_bits = Vector{Bool}(state.bits[network_specs.num_comm_qubits+1:network_specs.num_comm_qubits+num_ancillas])
-        syndrome = Vector{Bool}(state.bits[noisefree_syndrome_bits])
+        verification_bits = Vector{Bool}(state.bits[network_specs.num_comm_qubits+1:network_specs.num_comm_qubits+num_ancillas]) # num_ancillas contains z_anc, x_anc and flags
 
-        measured_logical_Z_bits = state.bits[noisefree_logical_Z_bits] # since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
+        if any(verification_bits)==1
+            #@info "Discarded"
+            discarded_runs +=1
+            continue
+        end
+
+        syndrome = Vector{Bool}(state.bits[noisefree_syndrome_bits])
         
         # if any(measured_logical_Z_bits)==1 || any(syndrome)==1 
         #     logical_failures_pre_decoding +=1
@@ -357,24 +388,21 @@ function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas
         # error_guess collects n guesses for x errors, then n guess for z errors, where we are interested in the first n guesses (whether the decoder predicts that a certain X error has happened)
         #@info "ERROR GUESS: $error_guess"
 
-        if any(verification_bits)==1
-            discarded_runs +=1
-            continue
-        end
-
+        #@info "Syndrome is: $syndrome"
+        #@info "Error guess: $error_guess"
+        
 
         if isnothing(error_guess)
             # Table decoder can't find a matching syndrome bc error weight is too high
             # this edge case only occurs if the syndrome is non-trivial, hence it is safe to say that if it occurs, there will be a logical error (since the state is incorrect yet nothing got corrected)
             # Since we are counting logical errors per logical qubit, we thus manually set the error guess to be all-zero, such that the faulty logical qubits
             # accumulate the error from non-decoding via detection of a logical error in the next loop
-            error_guess = zeros(n) # give n zero-guesses for X errors
-            #logical_failures .+= 1
-            #continue
+            #error_guess = zeros(code_params.n) # give n zero-guesses for X errors
+            logical_failures .+= 1
+            continue
         end
 
-        # fault matrix is a (2k)x(2n) dimensional matrix, and to determine the logical Z part, we need the last k rows: O[end÷2+1:end,:]
-        faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] #  decoder has the faults_matrix as attribute
+        measured_logical_Z_bits = state.bits[noisefree_logical_Z_bits] # since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
         
         k = size(faults_matrix_z, 1) 
         n = size(faults_matrix_z, 2)
@@ -382,27 +410,54 @@ function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas
         @assert n == 2*code_params.n
 
 
+        #no_Z_error = true
+
         for j in 1:k # iterate over the k logical Z operators
             sum_mod = 0
             @inbounds @simd for q in 1:n # iterate over all the physical qubits (/error locations)
                 sum_mod += faults_matrix_z[j, q] * error_guess[q] 
             end
             sum_mod %= 2  # will be 1 if there is an odd number of agreed indiced between fault matrix and error_guess for the given jth logical Z operator
-            # the logic behind this is error degeneracy of the code: If there are is an even number of corrections in error guess coinciding with locations that actually lead to
+            # the logic behind this is error degeneracy of the code (since we are able to decode, we will be back in the codespace again, so now we check if we are in the correct state within the codespace):
+            # If there are is an even number of corrections in error guess coinciding with locations that actually lead to
             # a logical flip of this operator, then applying the even number cancels out the flip. Then if there was a logical error for this logical operator, we will not correct it (if there was not)
             # i.e., sum_mod == measured_fault, we are fine since the even number of corrections fixes the state.
             # If there is an odd number of corrections matching, we perform a logical correction. Now if there was an error (agian sum_mod == mneasured fault), this is exactly what we want. If not, we INTRODUCE an error, 
             # again leading to a logical failure. 
             if sum_mod != measured_logical_Z_bits[j] # measured_logical_Z_bits = measured_Z_faults
                 logical_failures[j] += 1
+                #no_Z_error = false
             end
         end
 
-        if maximum(logical_failures) >= 200
-            # In the given noise regime, we expect logical error rates on the order of 1e-4 to 5e-3, which corresponds to 100 to 5000 logical errors for the noisiest Z logical observable over 1e6 executions.
-            # Thus, collecting 100 errors (MQT QECC:500) at most should give us a good estimate of the true error rate.
+
+        # Alternatively, apply correction and see if we ended up in the correct state:
+        # When checking analyitcally for logical errors with the error_guess, we can also use the error guess to apply a correction which maps back to codespace, 
+        # then the verifyOp should give exactly the same outcome as the Z logical analytical computation
+
+        # Here, we apply the correction gatehttps://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl,
+        # whihc maps back to the codespace  (since there is a correctable syndrome, this measn that the correction will bring us back to the codespace) so stabilisers are satisfied. 
+        
+        # Then we check whether the state overlaps fully with the target zero state, and whether this info matches with the analytical computation above.
+
+
+        # correction_gate = DecoderCorrectionGate(css_lut_decoder, network_specs.data_qubits, noisefree_syndrome_bits )
+        # final_state,_ = mctrajectory!(state,[correction_gate])
+        # no_Z_error2 = compare_states(final_state, code_params.target_state, network_specs)
+        # if !no_Z_error
+        #     println("Z error registered")
+        # end
+        # @assert no_Z_error == no_Z_error2 "The analytic computation of logical errors did not yield the same result as the state tomography following the application of a correction gate."
+        
+
+        if maximum(logical_failures) >= 500# n_samples*noise.ps[floor(end:2)] 
+
+            # For a given p, under linear scaling (~upper bound) we roughly expect n_samples*p errors. Thus, we take a mid-range p and limit the execution for all larger p, once this
+            # number of logical failures has been recordedFor the upper half of physical noise values, we 
+            # In the given noise regime, we expect logical error rates on the order of 1e-4 to 5e-3, which corresponds to 50 to 1000 logical errors for the noisiest Z logical observable over 5e5 executions.
+            # Thus, collecting 200 errors (MQT QECC:500) at most should give us a good estimate of the true error rate.
             # This helps to decreae overall runtime, since it reduces the execution time particularly in the high-noise regime, in which we are less interested.
-                                            
+            @info "For physical error rate $(noise.p) and Bell state error rate $(noise.p_bell), we collected $(maximum(logical_failures)) logical failures after $sample iterations."
             n_samples = sample
             break
         end
@@ -427,7 +482,7 @@ function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas
 
     #println("DQC circuit length: $(length(filter!(g -> g isa NoiseOp, DQC_circuit)))")
     acceptance_ratio = 1-discarded_runs/n_samples
-    logical_error_rate = maximum(logical_failures)/(n_samples-discarded_runs)
+    logical_error_rate = mean(logical_failures)/(n_samples-discarded_runs)
     #println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/noise.n_samples) ")
     #println("Over $(n_samples) runs, there were $discarded_runs discarded runs -> acceptance ratio: $acceptance_ratio, for the kept runs the the logical error rate (after decoding) is $logical_error_rate")
     return logical_error_rate, acceptance_ratio
@@ -495,7 +550,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
 
     # Add initialisatin noise to all qubits
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
-    add_noise(circuit, [n.inv_map[data_q] for data_q in collect(1:n.num_data_qubits)], noise.p) # initialisation noise p
+    add_noise(circuit, [n.inv_map[data_q] for data_q in collect(1:n.num_data_qubits)], 3/2*noise.p) # initialisation noise p
 
     for layer in layers_enc_circ
     # for every layer, add gate noise for every normal gate and idling noise for any idle qubits (if there is telegates in the layer, we increase the probability of the noise channel)
@@ -555,7 +610,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
     ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
 
     #add_noise(circuit, [data_q for data_q in collect(1:n.num_data_qubits)], noise.idle_depolarising_noise) # since noise is applied to all qubits, we don't need to worry about mapping
-    add_noise(circuit, [data_q for data_q in ancilla_qubits], noise.p) #  init noise on ancilla qubits
+    add_noise(circuit, [data_q for data_q in ancilla_qubits], 3/2*noise.p) #  init noise on ancilla qubits
 
     for layer in layers_ver_circ
         # analogous to raw encoding circuit
@@ -621,7 +676,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
                     push!(tele_qubits, DQC_target)
                 end
             elseif T <: sMZ
-                add_noise(circuit, affectedqubits(gate), noise.p) # measurement noise the ancilla is of the same type, thus we have the same measurement noise
+                add_noise(circuit, affectedqubits(gate), 3/2*noise.p) # measurement noise the ancilla is of the same type, thus we have the same measurement noise
                 push!(circuit, gate) # only ancillas are ever measured, so we don't need a remapping
             else
                 throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
@@ -710,13 +765,14 @@ function add_telegate(circuit, DQC_control, DQC_target, control_register, target
     meas_control = sMRZ(control_comm_index, classical_register_index_control ) 
     # The restoration can probably be neglected since in reality, the Bell pair will be created anew via photonic beam splitters. 
     # For the sake of simulation however, we assume lossless restoration. This is handled by using sMRZ rather than sMZ.
-    add_noise(circuit, [control_comm_index], noise.p) # Comm qubit measurement noise
+    add_noise(circuit, [control_comm_index], 3/2*noise.p) # Comm qubit measurement noise
     push!(circuit, meas_control)
 
     classical_register_index_target = target_comm_index - n.num_data_qubits#sum(n.register_sizes[1:target_register])
     meas_target = sMRZ(target_comm_index, classical_register_index_target)#PauliMeasurement(pauli_string_target, classical_register_index_target)
     push!(circuit, sHadamard(target_comm_index)) # measuring in the X-basis requires us to Hadamard-transform and then measure in the Z basis
-    add_noise(circuit, [target_comm_index], noise.p) # Comm qubit measurement noise
+    add_noise(circuit, [target_comm_index], noise.p) # single-gate noise
+    add_noise(circuit, [target_comm_index], 3/2*noise.p) # Comm qubit measurement noise
     push!(circuit, meas_target)
 
     add_noise(circuit, [DQC_control], noise.p) # usual idle depolarising_noise
@@ -851,10 +907,7 @@ end
 
 function affectedqubits(op::sMZ)
     qs = Int[]
-    #println("HERE NOW:$qs")
-    #print(op.qubit)
     append!(qs, op.qubit)
-    #print(qs)
     return qs
 end
 
