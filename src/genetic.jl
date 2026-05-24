@@ -238,8 +238,8 @@ function genetic_search(code_params, network_specs, genetic_params, warm_start_g
         fitness_scores = fitness_function(fidelities, circuit_sizes, gen, genetic_params)  # TODO: Need to find a fair weighting here
         
         # By elite retention, the best individual in the offspring generation will always be the best individual overall, up to ties. 
-        # however, this does not mean that it will have fidelity 1 (thus, we only overwrite best_circ_ind and gcounts if fidelity is 1)
-        # Since we initialise with a fidelity 1 circuit and have elites, we are guaranteed to have a fidelity 1 circ in the end!
+        # however, this does not mean that it will have fidelity 1.0 (thus, we only overwrite best_circ_ind and gcounts if fidelity is 1)
+        # Since we initialise exclusively with fidelity-1.0 circuits and maintain elites, we are guaranteed to have a fidelity 1 circ in the end
         best_index = argmax(fitness_scores)
         best_fidelity = fidelities[best_index]
 
