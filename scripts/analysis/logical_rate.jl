@@ -46,10 +46,10 @@ function log_log_plot(df; monolithic = false)#telegate_error_rates, logical_erro
     linkxaxes!(ax1, ax2)
 
     # p_L = p  (slope 1 in log-log)
-    lines!(ax1, p_range, p_range, color = :gray60,  linestyle = :dash, linewidth = 1.5,  label     = L"p_L \sim p")
+    lines!(ax1, p_range, p_range, color = :gray60,  linestyle = :dash, linewidth = 1.5,  label = L"p_L \sim p")
 
     # p_L = p²  (slope 2 in log-log)
-    lines!(ax1, p_range, p_range.^2, color = :gray40, linestyle = :dot, linewidth = 1.5, label     = L"p_L \sim p^2")
+    lines!(ax1, p_range, p_range.^2, color = :gray40, linestyle = :dot, linewidth = 1.5, label = L"p_L \sim p^2")
 
     colors = Makie.wong_colors()
 
@@ -61,12 +61,11 @@ function log_log_plot(df; monolithic = false)#telegate_error_rates, logical_erro
         @info "Deleted $(nrow(df_bell)-nrow(df_)) row(s) because of 0.0 logical error rate"
         sort!(df_, :p)
         df_.diff_logical_phys = df_.logical_error_rate .- df_.p  
+        df_.std_error = sqrt.(1/5e5 .* (df_.logical_error_rate) .* (1 .- df_.logical_error_rate))
         pseudo_thresh_ind = findfirst(i -> df_.diff_logical_phys[i] * df_.diff_logical_phys[i+1] < 0, 1:length(df_.diff_logical_phys)-1)
         pseudo_thresh = isnothing(pseudo_thresh_ind) ? nothing : df_.p[pseudo_thresh_ind]
         
         if idx ==1
-            @info "Retrieving power law scaling, assuming p_log = a p_phys^b"
-            
             a, b = power_law_fit(df_.p, df_.logical_error_rate)
             if monolithic
                 fit_label = L"\text{Power law fit: p_L=%$(round(a, digits=2))\, p^{%$( round(b, digits=2))} }"
@@ -86,6 +85,7 @@ function log_log_plot(df; monolithic = false)#telegate_error_rates, logical_erro
         end
   
         # data
+        errorbars!(ax1, df_.p, df_.logical_error_rate, df_.std_error; color =colors[idx], label=L"\sigma^2(LER)")
         scatterlines!(ax1, df_.p, df_.logical_error_rate, color = colors[idx],markersize = 10, linewidth  = 2, label = data_label)
 
         scatterlines!(ax2, df_.p, df_.acceptance_ratio, color = colors[idx], markersize = 10, linewidth = 2,  label = acc_label )
@@ -140,7 +140,7 @@ function two_d_plot(df)
         xminorticks = IntervalsBetween(9),  yminorticks = IntervalsBetween(9),
     )
 
-    log_ratio = map(z -> (z > 0) ? log10(z) : NaN, ratio) # for plotting, we use the log of the ratio
+    log_ratio = map(z -> (z > 0.0) ? log10(z) : NaN, ratio) # for plotting, we use the log of the ratio
     vals = filter(x -> !isnan(x), vec(log_ratio))
     maxabs = isempty(vals) ? 1.0 : maximum(abs, vals)
     
@@ -153,7 +153,7 @@ function two_d_plot(df)
     # ---------------------- Plot ----------------------
     fig = Figure(size = (800, 600))
     ax = Axis(fig[1, 1]; xlabel = L"\text{Physical error rate } p",  ylabel = L"p_{Bell}", title  = L"\text{Logical } |0 \rangle_L \text{ per physical initialisation error and p_{Bell}}",   
-        #xscale = log10, yscale = log10,
+        xscale = log10, yscale = log10,
         xgridvisible = true, ygridvisible  = true, xlabelsize = 22, ylabelsize = 22,titlesize = 26,
         xminorgridvisible  = true, yminorgridvisible  = true, xminorticksvisible = true, yminorticksvisible = true,
         xminorticks = IntervalsBetween(9),  yminorticks = IntervalsBetween(9),
@@ -175,7 +175,7 @@ function power_law_fit(physical_noise, logical_noise)
     fit = curve_fit(m, physical_noise, logical_noise, p0)
     a, b = fit.param
     σ_a, σ_b = stderror(fit)
-    @info "a = $(round(a, digits=4)) ± $(round(σ_a, digits=4)), b = $(round(b, digits=3)) ± $(round(σ_b, digits=3))"
+    @info "Retrieving power law scaling, assuming p_log = a p_phys^b -> a = $(round(a, digits=4)) ± $(round(σ_a, digits=4)), b = $(round(b, digits=3)) ± $(round(σ_b, digits=3))"
     return a, b
 end
 
@@ -187,8 +187,8 @@ function power_of_10_label(val)
 end
 
 
-code = "Triangular"
-qpu_sizes = "[8, 9]"
+code = "TrivariateBicycle"
+qpu_sizes = "[3, 3, 3, 3]"
 monolithic = false
 
 data_path = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "simulation_FT/dqc_sim_data.csv") # stores to simulation_FT/ or simulation_non_FT/ folder, depending on the indicated path
