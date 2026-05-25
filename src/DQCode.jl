@@ -42,10 +42,10 @@ const MQT_PATH = "/Users/tim/Tim/projects/mqt/qecc/"
 function create_code_network_data(exp_label::String)
      
     # Creates all code and network data for specified experiment from the config file
-    configs = experiment_configurations()
-    if haskey(configs, exp_label)
+    code_architecture_setup,_,_ = experiment_configurations()
+    if haskey(code_architecture_setup, exp_label)
         # Retrieve configuration
-        cfg = configs[exp_label]
+        cfg = code_architecture_setup[exp_label]
 
         # Create networking specifications and code parameters
         network_specs = _network_setup(cfg.code, cfg.qpu_sizes)
@@ -135,7 +135,6 @@ function _code_setup(qec_code)
 end
 
 function _code_distance(qec_code)
-    
     try
         return QECCore.distance(qec_code)
     catch err
@@ -157,10 +156,10 @@ function baseline_encoding_qiskit(exp_label::String)
     # this function orchestrates a baseline run, gathering code and networking parameters, and then
     # saves the results to data/{QEC_code}>{Network Architecture}>{qiskit}
     Random.seed!(42) 
-    configs = experiment_configurations()
+    code_architecture_setup,_,_ = experiment_configurations()
 
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
+    if haskey(code_architecture_setup, exp_label)
+        cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
@@ -192,10 +191,10 @@ function baseline_encoding_mqt(exp_label::String, mqt_path:: String, prep_method
     # this function orchestrates a baseline run, gathering code and networking parameters, and then
     # saves the results to data/{QEC_code}>{Network Architecture}>{qiskit}
     Random.seed!(42) 
-    configs = experiment_configurations()
+    code_architecture_setup,_,_ = experiment_configurations()
 
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
+    if haskey(code_architecture_setup, exp_label)
+        cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
@@ -236,10 +235,12 @@ function circuit_search_gott_ga(exp_label::String)
     # initialising the Gottesman encoding warmstart Genetic Algorithm 
     # It saves the results in {QEC_code}>{Network Architecture}>{Optimiser}
     Random.seed!(42) 
-    configs = experiment_configurations()
+    code_architecture_setup, genetic_parameters,_ = experiment_configurations()
 
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
+    if haskey(code_architecture_setup, exp_label) && haskey(genetic_parameters, exp_label)
+        cfg = code_architecture_setup[exp_label]
+        genetic_params = genetic_parameters[exp_label]
+
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
@@ -254,7 +255,7 @@ function circuit_search_gott_ga(exp_label::String)
 
         # Warmstart GA with DQC-compiled circuit
 
-        GA_encoding_circuit, verification_ga, gate_counts_ga, fitness_evolution, fidelity_evolution, gate_count_evolution = genetic_search(code_params, network_specs, cfg.genetic_params, dqc_compiled_encoding_circuit)
+        GA_encoding_circuit, verification_ga, gate_counts_ga, fitness_evolution, fidelity_evolution, gate_count_evolution = genetic_search(code_params, network_specs, genetic_params, dqc_compiled_encoding_circuit)
         
         # ----- Data Storage ----------
         dir = joinpath(folder, "warmstart_ga")
@@ -263,7 +264,7 @@ function circuit_search_gott_ga(exp_label::String)
         serialize( joinpath(dir, "gott_encoding_circuit.jls"), gottesman_encoding_circuit )
         serialize( joinpath(dir, "gott_circuit_dqc_compiled.jls"), dqc_compiled_encoding_circuit )
         serialize(joinpath(dir, "GA_circuit.jls"), GA_encoding_circuit)
-        save_txt(dir, "genetic_algorithm_parameters.txt", cfg.genetic_params)
+        save_txt(dir, "genetic_algorithm_parameters.txt", genetic_params)
 
         save_circuit_diagram(gottesman_encoding_circuit, dir, "gott_encoding_circuit.png")
         save_circuit_diagram(dqc_compiled_encoding_circuit, dir, "gott_circuit_dqc_compiled.png")
@@ -296,10 +297,12 @@ end
 function circuit_search_mcts(exp_label::String)
 
     Random.seed!(42) 
-    configs = experiment_configurations()
+    code_architecture_setup, _, mcts_parameters = experiment_configurations()
     
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
+    if haskey(code_architecture_setup, exp_label) && haskey(mcts_parameters, exp_label)
+        cfg = code_architecture_setup[exp_label]
+        mcts_params = mcts_parameters[exp_label]
+
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
@@ -309,7 +312,7 @@ function circuit_search_mcts(exp_label::String)
         code_params = deserialize( joinpath(folder, "code_params.jls"))
 
     
-        MCTS_circuit, verification_MCTS_logical_state, MCTS_gate_counts, fidelity_evolution, gate_count_evolution, reward_evolution = monte_carlo_tree_search(code_params, network_specs, cfg.mcts_params)
+        MCTS_circuit, verification_MCTS_logical_state, MCTS_gate_counts, fidelity_evolution, gate_count_evolution, reward_evolution = monte_carlo_tree_search(code_params, network_specs, mcts_params)
        
         # ----- Data Storage ----------
         dir = joinpath(folder, "mcts")
@@ -317,7 +320,7 @@ function circuit_search_mcts(exp_label::String)
 
         serialize( joinpath(dir, "MCTS_circuit.jls"), MCTS_circuit )
         save_circuit_diagram(MCTS_circuit, dir, "MCTS_circuit.png")
-        save_txt(dir, "mcts_parameters.txt", cfg.mcts_params)
+        save_txt(dir, "mcts_parameters.txt", mcts_params)
 
         df_evol = DataFrame(
             fidelity_evolution = fidelity_evolution, 
@@ -344,10 +347,10 @@ end
 
 function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::String, num_samples, ps, p_bells, telegate_idle_depth, method::String)
     Random.seed!(42) 
-    configs = experiment_configurations()
+    code_architecture_setup,_,_ = experiment_configurations()
     
-    if haskey(configs, exp_label)
-        cfg = configs[exp_label]
+    if haskey(code_architecture_setup, exp_label)
+        cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
 
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
@@ -361,7 +364,7 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
 
         if method == "none"
             
-            data, data_circuit, DQC_circuit_noiseless = dqc_non_ft_encoding_simulation(code_params, network_specs, encoding_circuit)
+            data, data_circuit, DQC_circuit_noiseless = dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, encoding_circuit)
 
             # ----- Data Storage ----------
             dir = joinpath(folder, "simulation_non_FT")
