@@ -316,7 +316,7 @@ function data_qubit_partitioning(capacities, stabilizers)
 
     k = length(capacities)
     nqubits = size(stabilizers, 2)
-    @assert sum(capacities) == nqubits "Register capacities must sum to code length."
+    @assert sum(capacities) == nqubits "Register capacities must sum to code length: $(sum(capacities)) vs. $nqubits"
     
     #println("Stabilizers: $stabilizers")
     # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
@@ -449,8 +449,8 @@ function save_circuit_diagram(circuit::Vector{AbstractOperation}, directory, lab
             scale = 1
             
         )
-        catch err
-            @warn "savecircuit failed (circuit likely too large)" err
+        catch 
+            @warn "Saving circuit picture failed. The most likely cause is the large circuit size. You may want to increase the TeX memory size." 
         end
     end
 end

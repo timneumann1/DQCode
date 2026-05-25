@@ -10,7 +10,7 @@ using QECCore: AbstractCSSCode
 
 import Quantikz: QuantikzOp, ClassicalDecision
 
-export Circuit, CircuitIndividual #SimulationParameters, SimulationFidelity,
+#export Circuit, CircuitIndividual #SimulationParameters, SimulationFidelity,
 #export GateSet
 #export Gate, GateSet, SingleQubitGate, TwoQubitGate
 export HadamardGate, IdentityGate, PauliXGate, PauliYGate, PauliZGate, CX_Gate, CZ_Gate, SGate, InvSGate, SqrtXGate, InvSqrtXGate, SWAP_Gate, ConditionalGate
@@ -198,9 +198,10 @@ end
 
  struct NoiseSpecs # Defining circuit-level noise
     n_samples::Int64
-    p::Float64 # Captures memory initialisation, memory/comm single- and two-qubit gates, depth-1 decoherence and measurement noise ()
-    #p_idle_telegate_layer::Float64 # Idle error probability for layer that includes a telegate (accounting for longer/probabilistic creation time)
-    #p_mixed::Float64 # Captures two-qubit gate noise between species
+    p::Float64 # Captures memory/comm initialisation, measurement and two-qubit error (same + mixed species)
+    p_idle::Float64 # Captures depth-1 memory error
+    p_idle_telegate_layer::Float64 # Idle error probability for layer that includes a telegate (accounting for longer/probabilistic creation time)
+    p_single::Float64 # Captures single-qubit gate noise
     p_bell::Float64 # Captures Bell states initialisation of communication qubits via photonic interconnects
  end
 

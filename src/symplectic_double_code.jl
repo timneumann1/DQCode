@@ -48,7 +48,6 @@ _Hz = Bool[
     0 0 0 0 0 1 1 0 0 0 0 0 0 1 1
 ]
 
-
 parity_matrix_x(c::SymplecticDouble) = hcat(_Hx, _Hz)
 parity_matrix_z(c::SymplecticDouble) = hcat(_Hz, _Hx)
 
