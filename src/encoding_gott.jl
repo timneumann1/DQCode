@@ -356,10 +356,10 @@ function encoding_gott(code_params, network_specs, basis_state)
 
     # ----- Verification ------
     verification_logical_state = verify_success(encoding_circ, code_params.target_state, network_specs)
-    @info "Verification of Gottesman circuit successful: $verification_logical_state"
+    @info "Verification of Gottesman circuit successful: $verification_logical_state, gate count: $gate_counts"
 
     verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
-    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled"
+    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled, gate count: $gate_counts_compiled"
 
     return encoding_circ, encoding_circ_compiled, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled
 end

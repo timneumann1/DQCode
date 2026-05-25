@@ -244,6 +244,26 @@ function run_qiskit_baseline(code_params, network_specs)
             bit_info = qiskit_encoding_circ.find_bit(qubits[1])
             index = Int(bit_info.index)
             push!(quantum_clifford_encoding_circ, sHadamard(index+1))
+        elseif gate == "x"
+            qubits = instruction.qubits
+            bit_info = qiskit_encoding_circ.find_bit(qubits[1])
+            index = Int(bit_info.index)
+            push!(quantum_clifford_encoding_circ, sX(index+1))
+        elseif gate == "y"
+            qubits = instruction.qubits
+            bit_info = qiskit_encoding_circ.find_bit(qubits[1])
+            index = Int(bit_info.index)
+            push!(quantum_clifford_encoding_circ, sY(index+1))
+        elseif gate == "z"
+            qubits = instruction.qubits
+            bit_info = qiskit_encoding_circ.find_bit(qubits[1])
+            index = Int(bit_info.index)
+            push!(quantum_clifford_encoding_circ, sZ(index+1))
+        elseif gate == "s"
+            qubits = instruction.qubits
+            bit_info = qiskit_encoding_circ.find_bit(qubits[1])
+            index = Int(bit_info.index)
+            push!(quantum_clifford_encoding_circ, sPhase(index+1))
         elseif gate == "cx"
             qubits = instruction.qubits
             control_info = qiskit_encoding_circ.find_bit(qubits[1])
@@ -259,7 +279,7 @@ function run_qiskit_baseline(code_params, network_specs)
             target = Int(target_info.index)
             push!(quantum_clifford_encoding_circ, sSWAP(control+1,target+1))
         else
-            @error("Unknown register type encountered in Qiskit circuit")
+            @error("Unknown gate type encountered in Qiskit circuit")
         end
     end
 
