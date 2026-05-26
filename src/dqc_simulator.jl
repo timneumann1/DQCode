@@ -104,6 +104,7 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
     # We actually parse throught the qiskit circuit now, which is more convenient than the QASM string
 
     ancilla_data_interactions = Dict{Tuple{String, Int}, Vector{Int}}() # will contain ancilla qubits, e.g., Z_anc, 1 as keys, and interacting data qubits as values
+    # cannot be done per stabiliser in verification_circ, for example, since we need to treat the entire circuit
    
     num_q = 0
     num_z_anc = 0
@@ -222,7 +223,7 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
     end
     
     # determine the best placement for the ancilla qubits, noting which cnots have to be applied to them, and noting the index of the measueretn (on which we later base the discarding)
-    # choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping
+    # choose the core with the max occurences fr the ancilla to be placed and store it in core_mapping (ties are broken by mode implicitly)
 
     # println("Ancilla interactis: $ancilla_data_interactions")
    
@@ -281,7 +282,7 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
    
-    return data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, num_ancillas, num_x_anc, num_z_anc, ancilla_map
+    return data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, num_ancillas, num_z_anc, num_x_anc, ancilla_map
 end
 
 
@@ -356,24 +357,26 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
     noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, network_specs.num_comm_qubits + num_ancillas +1, network_specs)
     #println("num syndrome bits: $noisefree_syndrome_bits")
     noisefree_logical_Z_circ, num_noisefree_logical_Z_ancillas, noisefree_logical_Z_bits = syndrome_circuit(code_params.logical_Zs, network_specs.num_data_and_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + 1, last(noisefree_syndrome_bits)+1, network_specs )
-    # prior: QECTools.
+
     total_number_qubits = network_specs.num_data_and_comm_qubits + num_ancillas +  num_noisefree_syndrome_ancillas + num_noisefree_logical_Z_ancillas
     total_number_classical_regs = network_specs.num_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + num_noisefree_logical_Z_ancillas
 
     # HERE, the verificaion circuit is already part of the DQC circuit
-    circuit = vcat(DQC_circuit, noisefree_syndrome_circ ) #sX(9),sX(13),sX(14),sX(19), sX(21) gives a logical X error, [sHadamard(1),sHadamard(2), sHadamard(3), sHadamard(7), sHadamard(8), sHadamard(9), sHadamard(13),sHadamard(14), sHadamard(15), sHadamard(19), sHadamard(20), sHadamard(21)] a logical H
+    circuit = vcat(DQC_circuit, noisefree_syndrome_circ, noisefree_logical_Z_circ) #sX(9),sX(13),sX(14),sX(19), sX(21) gives a logical X error, [sHadamard(1),sHadamard(2), sHadamard(3), sHadamard(7), sHadamard(8), sHadamard(9), sHadamard(13),sHadamard(14), sHadamard(15), sHadamard(19), sHadamard(20), sHadamard(21)] a logical H
 
     discarded_runs = 0
     z_errors_pre_decoding = 0
     x_errors_pre_decoding = 0
     logical_failures = zeros(code_params.k) # we determine  the logical Z failures per qubit, then take the max over all > later compare to initialisation failure prop of a single physical qubit
-    fidelities = Vector{Float64}()
+    avg_fidelity = 0
     #apply_correction = false # for code testing
     #println("\n\n\n $circuit \n\n\n")
 
     n_samples = noise.n_samples
     initial_state = Register(one(MixedDestabilizer,total_number_qubits),total_number_classical_regs)
 
+    # Flow is: For each sample, first simulate data+verification+noisefree_syndrome+noise_free_logicalZ circuit
+    # -> discard according to verification, then identify pre-decoding X and Z errors, then determine logical Z errors via (i) measurment outcome + error_guess and (ii) fidelity
 
 ###### TIME TEST
     #t_run = @elapsed begin
@@ -385,6 +388,8 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
         # HERE, determine whether or not to discard the state based on the ancilla bits being triggered or not
         #println("Type of state bits: $(typeof(state.bits))")
         verification_bits = @view state.bits[network_specs.num_comm_qubits+1:network_specs.num_comm_qubits+num_ancillas] # num_ancillas contains z_anc, x_anc and flags
+        syndrome = @view state.bits[noisefree_syndrome_bits]
+        measured_logical_Z_bits = @view state.bits[noisefree_logical_Z_bits] ## since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
 
         if any(verification_bits)
             #@info "Discarded"
@@ -392,14 +397,18 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
             continue
         end
 
-        syndrome = @view state.bits[noisefree_syndrome_bits]
+        
         #@info "$syndrome"
-        # if any Z-type stabiliser of the parity checks is triggered, there was some X error
-        if any(syndrome[Z_type_idx:end])==1 
+        #final_state, _ = mctrajectory!(copy(state), noisefree_logical_Z_circ)
+
+        # if any Z-type stabiliser of the parity checks, or the logicl Z operators, are triggered, there was some X error (phyiscal or logical) pre-decoding
+        if any(syndrome[Z_type_idx:end]) || any(measured_logical_Z_bits)
             x_errors_pre_decoding +=1
         end
-        # if any X-type stabiliser within the parity checks is triggered, there was some Z error
-        if any(syndrome[1:Z_type_idx-1])==1 
+
+
+        # if any X-type stabiliser within the parity checks is triggered, there was some physical Z error before decoding (logical Z error is impossible)
+        if any(syndrome[1:Z_type_idx-1]) 
             z_errors_pre_decoding +=1
         end
        
@@ -414,7 +423,9 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
             # accumulate the error from non-decoding via detection of a logical error in the next loop
             #error_guess = zeros(code_params.n) # give n zero-guesses for X errors
             logical_failures .+= 1
-            push!(fidelities, 0.0)
+            avg_fidelity -= avg_fidelity / (sample-discarded_runs) # denominator can never be zero if we reach this point verification conditional breaks the loop
+            # avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples > avg_fidelity += (x-avg_fidelity)/samples , then replace samples with samples - discarded_runs
+            #push!(fidelities, 0.0)
             continue
         end
 
@@ -425,9 +436,7 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
         # (i)
         #@info "Init State: $initial_state"
         #@info "State: $state"
-        final_state, _ = mctrajectory!(copy(state), noisefree_logical_Z_circ)
-        measured_logical_Z_bits = @view final_state.bits[noisefree_logical_Z_bits] # since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
-
+        
         for j in 1:k # iterate over the k logical Z operators
             sum_mod = 0
             @inbounds @simd for q in 1:n # iterate over all the physical qubits (/error locations)
@@ -464,7 +473,9 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
 
         #println("Corrected data: $(stabilizerview(corrected_state_data))")
         post_decoding_fidelity = dot(corrected_state_data, code_params.target_state)
-        push!(fidelities, post_decoding_fidelity)
+        avg_fidelity += (post_decoding_fidelity-avg_fidelity)/(sample-discarded_runs)
+        #avg_fidelity = ( avg_fidelity*(sample-1) + post_decoding_fidelity ) / sample
+        #push!(fidelities, post_decoding_fidelity)
         #no_Z_error2 = compare_states(final_state, code_params.target_state, network_specs)
         # if !no_Z_error
         #     println("Z error registered")
@@ -508,7 +519,7 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
     logical_error_rate = mean(logical_failures)/(n_samples-discarded_runs)
     z_error_pre_decoding_rate = z_errors_pre_decoding/(n_samples-discarded_runs)
     x_error_pre_decoding_rate = x_errors_pre_decoding/(n_samples-discarded_runs)
-    avg_fidelity = mean(fidelities)
+    #avg_fidelity = mean(fidelities)
     #println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/noise.n_samples) ")
     #println("Over $(n_samples) runs, there were $discarded_runs discarded runs -> acceptance ratio: $acceptance_ratio, for the kept runs the the logical error rate (after decoding) is $logical_error_rate")
     return logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples 

@@ -10,6 +10,7 @@ include("encoding_gott.jl")
 include("genetic.jl")
 include("mcts.jl")
 include("dqc_simulator.jl")
+include("resource_estimate.jl")
 
 using .Types
 using .TrivariateBicycleCode
@@ -21,6 +22,7 @@ using .Genetic: genetic_search
 using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
 using .DQCodeSimulator: dqc_ft_encoding_simulation
+using .ResourceEstimation: estimate_resources_encoding_circuit, estimate_resources_measurement_based_encoding
 
 using QECCore
 using QuantumClifford
@@ -377,7 +379,7 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
 
         else
 
-            data, data_circuit, quantum_clifford_verification_circ, DQC_circuit_noiseless, num_ancillas, num_x_anc, num_z_anc, ancilla_map = dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, mqt_path, encoding_circuit, method)
+            data, data_circuit, quantum_clifford_verification_circ, DQC_circuit_noiseless, num_ancillas, num_z_anc, num_x_anc, ancilla_map = dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, mqt_path, encoding_circuit, method)
             
             # ----- Data Storage ----------
             dir = joinpath(folder, "simulation_FT")
@@ -388,8 +390,9 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
             serialize( joinpath(dir, "verification_circuit.jls"), quantum_clifford_verification_circ )
             serialize( joinpath(dir, "DQC_circuit_zero_noise.jls"), DQC_circuit_noiseless )
             save_circuit_diagram(DQC_circuit_noiseless, dir, "DQC_circuit_zero_noise.png")
-            ancilla_info = (; num_ancillas, num_x_anc, num_z_anc, ancilla_map)
+            ancilla_info = (; num_ancillas, num_z_anc, num_x_anc, ancilla_map)
             save_txt(dir, "ancilla_info.txt", ancilla_info)
+            serialize(joinpath(dir, "ancilla_map.jls"), ancilla_map)
             
         end
 
@@ -397,6 +400,62 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
     else
         error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
     end
+end
+
+# -----------------------------------------
+# --------- Resource Estimation -----------
+# -----------------------------------------
+
+function resource_estimation(exp_label::String)
+
+    code_architecture_setup,_,_ = experiment_configurations()
+    
+    if haskey(code_architecture_setup, exp_label)
+        cfg = code_architecture_setup[exp_label]
+        folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
+
+        if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
+            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+        end
+        network_specs = deserialize( joinpath(folder, "network_specs.jls"))
+        code_params = deserialize( joinpath(folder, "code_params.jls"))
+        dir = joinpath(folder, "simulation_FT")
+        ancilla_map = deserialize(joinpath(dir, "ancilla_map.jls"))
+        num_ancillas_circ, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ = estimate_resources_encoding_circuit(dir, network_specs, cfg.qpu_sizes, ancilla_map)
+        resources_info_circ = (; network_specs.num_comm_qubits, num_ancillas_circ, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ)
+        save_txt(dir, "resources_info_circ.txt", resources_info_circ)
+
+        resources_info_circ_df = DataFrame(
+            num_comm_qubits = [network_specs.num_comm_qubits],
+            num_ancillas = [num_ancillas_circ],
+            single_qubit_gates = [total_gate_counts_circ[1]],
+            cx_gates = [total_gate_counts_circ[2]],
+            telegates = [total_gate_counts_circ[3]],
+            measurements = [total_number_measurements_circ],
+            qpu_core_sizes = [join(qpu_core_sizes_circ, ";")],
+        )
+        CSV.write(joinpath(dir, "resources_info_circ.csv"), resources_info_circ_df)
+        
+        num_ancillas_meas, gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas =  estimate_resources_measurement_based_encoding(network_specs, code_params, cfg.qpu_sizes)
+        resources_info_meas = (; num_ancillas_meas, gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas)
+        save_txt(dir, "resources_info_meas.txt", resources_info_meas)
+
+        resources_info_meas_df = DataFrame(
+            num_ancillas = [resources_info_meas],
+            single_qubit_gates = [gate_counts_meas[1]],
+            cx_gates = [gate_counts_meas[2]],
+            telegates = [gate_counts_meas[3]],
+            measurements = [total_number_measurements_meas],
+            qpu_core_sizes = [join(qpu_core_sizes_meas, ";")],
+        )
+        CSV.write(joinpath(dir, "resources_info_meas.csv"), resources_info_meas_df)
+
+    else
+        error("The configuration label $exp_label was not found. Please add the respective data to the configuration file first.")
+    end
+    return dir
+
+
 end
 
 

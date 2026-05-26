@@ -279,6 +279,7 @@ function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}; metri
     if metric == "hamming"
         return count(difference_mask) / length(matrix)
     elseif metric == "jaccard"
+        # intersection / union
         support_mask = (matrix .!= 0) .| (target_matrix .!= 0)
         return count(difference_mask .& support_mask) / count(support_mask) # edge case of denom == 0 is trivial (n identity operators stabilise the state) and cannot occur for any valid stabilizer code
     end
@@ -393,7 +394,7 @@ function data_qubit_partitioning(capacities, stabilizers)
 end
 
 
-
+# used by qiskit, mqt baseline and resource estimation
 function gate_counts(circuit, n)
     # Converts gates to a circuit (same indexing), but counts gate overhead (in contrast to the below function which only constructs the circuit)
     
@@ -433,6 +434,76 @@ function gate_counts(circuit, n)
     end
     
     return gate_counts
+end
+
+
+# as used in verificaion gate counting
+function gate_counts(verification_circuit, n, ancilla_map)
+
+    #mapping = copy(n.inv_map)
+    num_ancillas = length(ancilla_map)
+    all_qubits = 1:(n.num_data_and_comm_qubits + num_ancillas)
+    ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
+    gate_counts = [0,0,0]
+    num_meas = 0
+
+    for op in verification_circuit
+        T = typeof(op)
+        if T <: AbstractSingleQubitOperator
+            #qubit = op.q
+            # In the verifciation circuit, Hadamard gates are ONLY applied to ancillas, which sit at their regular index
+            #push!(circuit, sHadamard(qubit))
+            #add_noise(circuit, [qubit], noise.p_single) # single-qubit noise, ancilla qubits experience the same sort of noise, since they are of the same physical type
+            gate_counts[1] += 1
+
+        elseif T <: AbstractTwoQubitOperator
+            control = op.q1
+            target = op.q2
+            DQC_control = -1
+            DQC_target = -1
+            control_register = -1
+            target_register = -1
+
+            if control in ancilla_qubits 
+                DQC_control = control
+                control_register = ancilla_map[control-n.num_data_and_comm_qubits] 
+            else
+                DQC_control = n.inv_map[control]
+                control_register = n.register_lookup_array[DQC_control] 
+            end
+            if target in ancilla_qubits
+                DQC_target = target
+                target_register = ancilla_map[target-n.num_data_and_comm_qubits] 
+            else
+                DQC_target = n.inv_map[target]
+                target_register = n.register_lookup_array[DQC_target] 
+            end
+            
+            @assert DQC_control > 0 
+            @assert DQC_target > 0 
+            @assert control_register > 0 
+            @assert target_register > 0 
+
+            if control_register == target_register 
+                #push!(circuit, sCNOT(DQC_control, DQC_target))
+                gate_counts[2] += 1
+                #add_noise(circuit, [DQC_control, DQC_target], noise.p; two_qubits = true) # two-qubit noise
+            else
+                #circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise, p_idle_telegate_layer)
+                #telegates_layer = true
+                gate_counts[3] += 1
+                #push!(tele_qubits, DQC_control)
+                #push!(tele_qubits, DQC_target)
+            end
+        elseif T <: sMZ
+            num_meas +=1
+            #add_noise(circuit, affectedqubits(gate), noise.p) # measurement noise the ancilla is of the same type, thus we have the same measurement noise
+            #push!(circuit, gate) # only ancillas are ever measured, so we don't need a remapping
+        else
+            throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
+        end
+    end
+    return gate_counts, num_meas
 end
 
 
