@@ -394,7 +394,7 @@ function data_qubit_partitioning(capacities, stabilizers)
 end
 
 
-# used by qiskit, mqt baseline and resource estimation
+# used by qiskit, mqt baseline
 function gate_counts(circuit, n)
     # Converts gates to a circuit (same indexing), but counts gate overhead (in contrast to the below function which only constructs the circuit)
     

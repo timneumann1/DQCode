@@ -37,7 +37,7 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
     noise_verif = NoiseSpecs(1e1,0,0,0,0,0) # Can set to one if we have the fidelity measurement
 
     quantum_clifford_verification_circ = Vector{AbstractOperation}() # no verification circuit ⇔ non-FT
-    DQC_circuit = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif, 0.0)
+    DQC_circuit, _,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif)
 
     num_ancillas = 0
     ancilla_map = Vector{Int}()
@@ -45,7 +45,7 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
     state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) #, trajectories=noise_verif.n_samples)
     @assert stat == true_success_stat "Adding the verifcation circuit compromised the data circuit"
     # Also verify the dqc_evaluation, which should give an error rate of zero in the noiseless setting
-    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [], code_params, network_specs, noise_verif, 0.0)
+    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, _,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [], code_params, network_specs, noise_verif)
     @assert z_error_pre_decoding_rate == 0.0
     @assert x_error_pre_decoding_rate == 0.0
     @assert avg_fidelity == 1.0
@@ -64,10 +64,11 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
         p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p_idle = p/10
         noise_model = NoiseSpecs(num_samples,p,p_idle,p_idle_telegate_layer,p_single,p_bell)
         #p_idle_telegate_layer = 1-(1-noise_model.p)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p
-        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model, p_idle_telegate_layer) # empty verifiation circuit is passed
+        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model) # empty verifiation circuit is passed
         push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
                     discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
-                    avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate))
+                    avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
+                    depth=depth, gate_counts=gate_counts, num_meas=num_meas))
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
    
@@ -247,12 +248,12 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
     # If we actually encoded the plus state, the result would only be true in 50% of the cases; we run this verification ccheck ones before initialising the noisy simulaton
 
     noise_verif = NoiseSpecs(1e1,0,0,0,0,0) # can set to 1 if we return fidelity 
-    DQC_circuit = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif, 0.0)
+    DQC_circuit, _,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif)
     initial_state = Register(one(MixedDestabilizer, network_specs.num_data_and_comm_qubits+num_ancillas),network_specs.num_comm_qubits + num_ancillas)
     state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) #, trajectories=noise_verif.n_samples)
     @assert stat == true_success_stat "Adding the verifcation circuit compromised the data circuit"
     # Also verify the dqc_evaluation, which should give an error rate of zero in the noiseless setting
-    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_verif, 0.0)
+    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, _,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_verif)
     @assert z_error_pre_decoding_rate == 0.0
     @assert x_error_pre_decoding_rate == 0.0
     @assert avg_fidelity == 1.0
@@ -273,11 +274,12 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
         p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p_idle = p/10
         noise_model = NoiseSpecs(num_samples,p,p_idle,p_idle_telegate_layer,p_single,p_bell)
 
-        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model, p_idle_telegate_layer)
+        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas  = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
 
         push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
                     discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
-                    avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate))
+                    avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
+                    depth=depth, gate_counts=gate_counts, num_meas=num_meas ))
 
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
@@ -291,12 +293,12 @@ end
 # ---------------------------------------------------------------
 
 
-function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas, ancilla_map, code_params, network_specs, noise, p_idle_telegate_layer::Float64)
+function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas, ancilla_map, code_params, network_specs, noise)
 
     ### TIMIMG TEST
 
     #t_build = @elapsed begin
-    DQC_circuit = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise, p_idle_telegate_layer)
+    DQC_circuit, depth, gate_counts, num_meas = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise)
     #end
     #println("TIMING OF constructing DQC circuit for $t_build")
 
@@ -368,7 +370,7 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
     z_errors_pre_decoding = 0
     x_errors_pre_decoding = 0
     logical_failures = zeros(code_params.k) # we determine  the logical Z failures per qubit, then take the max over all > later compare to initialisation failure prop of a single physical qubit
-    avg_fidelity = 0
+    avg_fidelity = 0.0
     #apply_correction = false # for code testing
     #println("\n\n\n $circuit \n\n\n")
 
@@ -419,8 +421,8 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
         if isnothing(error_guess)
             # Table decoder can't find a matching syndrome bc error weight is too high
             # this edge case only occurs if the syndrome is non-trivial, hence it is safe to say that if it occurs, there will be a logical error (since the state is incorrect yet nothing got corrected)
-            # Since we are counting logical errors per logical qubit, we thus manually set the error guess to be all-zero, such that the faulty logical qubits
-            # accumulate the error from non-decoding via detection of a logical error in the next loop
+            # Since we are counting logical errors per logical qubit, we thus manually increment the logical failure on all logical qubits (and track a fidelity of 0.0) and continue with the next MC simulation
+    
             #error_guess = zeros(code_params.n) # give n zero-guesses for X errors
             logical_failures .+= 1
             avg_fidelity -= avg_fidelity / (sample-discarded_runs) # denominator can never be zero if we reach this point verification conditional breaks the loop
@@ -522,7 +524,7 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
     #avg_fidelity = mean(fidelities)
     #println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/noise.n_samples) ")
     #println("Over $(n_samples) runs, there were $discarded_runs discarded runs -> acceptance ratio: $acceptance_ratio, for the kept runs the the logical error rate (after decoding) is $logical_error_rate")
-    return logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples 
+    return logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas
 
 end
 
@@ -571,7 +573,7 @@ end
 # ------------ Construction of executable circuit ---------------
 # ---------------------------------------------------------------
 
-function construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, n::NetworkSpecifications, noise::NoiseSpecs, p_idle_telegate_layer::Float64)
+function construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, n::NetworkSpecifications, noise::NoiseSpecs)
     
     # Map, then add verification on mapped, then unmap
 
@@ -590,6 +592,10 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
     # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
     add_noise(circuit, [n.inv_map[data_q] for data_q in collect(1:n.num_data_qubits)], noise.p) # initialisation noise p
 
+    depth = [0,0] # first index encodes the number of ordinary layers, second index encodes the number of telegate layers (i.e., non-parallel telegates)
+    gate_counts = [0,0,0]
+    num_meas = 0
+    # number of gates will be counted separately (see resource_estimate > helper)
     for layer in layers_enc_circ
     # for every layer, add gate noise for every normal gate and idling noise for any idle qubits (if there is telegates in the layer, we increase the probability of the noise channel)
     # also, insert the telegate gadgets in place (this includes the folloing noise: comm init noise, two qubit depolarising for each gate , measeuremtn noise, classical noise, one more gate noise for single quits )
@@ -599,8 +605,10 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
         idle_qubits = setdiff(1:n.num_data_qubits, affected_qubits)
         idle_qubits_DQC = [n.inv_map[idle_q] for idle_q in idle_qubits]
     
-        telegates_layer = false
-        tele_data_qubits = Vector{Int64}()
+        #telegates_layer = false
+        num_telegates_layer = 0
+        telegate_pairs = Set{Tuple{Int,Int}}()
+        telegate_qubits = Set{Int64}()
 
         for gate in layer
             T = typeof(gate)
@@ -608,6 +616,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
                 qubit = affectedqubits(gate)[1]
                 DQC_qubit = n.inv_map[qubit]
                 push!(circuit, sHadamard(DQC_qubit))
+                gate_counts[1] += 1
                 add_noise(circuit, [DQC_qubit], noise.p_single) # Single-qubit noise
                 
             elseif T <: AbstractTwoQubitOperator
@@ -621,20 +630,44 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
 
                 if control_register == target_register 
                     push!(circuit, sCNOT(DQC_control, DQC_target))
+                    gate_counts[2] += 1
                     add_noise(circuit, [DQC_control, DQC_target], noise.p; two_qubits = true) # two-qubit noise
                 else
-                    # Perform telegate between control and target qubit in different registers, 
-                    circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise, p_idle_telegate_layer)
-                    telegates_layer = true
-                    push!(tele_data_qubits, DQC_control)
-                    push!(tele_data_qubits, DQC_target)
+                    # Perform telegate between control and target qubit in different registers
+                    if num_telegates_layer == 0
+                        num_telegates_layer += 1 # if this is the first telegate in the layer, we need to increase the telegate count; for any of the following telegates, we increase the number of layers only when the comm pair has already been used (since then we must wait)
+                    end
+                    #telegates_layer = true
+                    if (control_register, target_register) ∈ telegate_pairs || (target_register, control_register) ∈ telegate_pairs # if the communication qubits for this register pair have been used, we need to increase the number of telegates for this layer, and apply as much noise as there have been previous telegates in this layer
+                        #for _ in 1:num_telegates_layer
+                        add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^num_telegates_layer ) 
+                        #end
+                        num_telegates_layer +=1
+                    end 
+                    # if the telegate was not the first one in the layer, or the comm qubits had not been used, then we don't need to increase the num_telegates_layer count
+                    circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise)
+                    gate_counts[3] += 1
+                    # due to this telegate, previous telegate qubits incur noise (all non-telegate qubits are handled later)
+                    # the current telegate qubits are not in the telegate_qubits set yet by construction, which is why we add the noise above separately.
+                    add_noise(circuit, collect(telegate_qubits), noise.p_idle_telegate_layer)
+                    push!(telegate_pairs, (control_register, target_register))
+                    push!(telegate_qubits, DQC_control)
+                    push!(telegate_qubits, DQC_target)
                 end
             else
                 throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
             end
         end
-        telegates_layer ? add_noise(circuit, setdiff(1:n.num_data_qubits, Set(tele_data_qubits)), noise.p_idle_telegate_layer) : add_noise(circuit, idle_qubits_DQC, noise.p_idle) # idling noise (if telegate: to all non-telegate qubits, no matter if idle or not (since telegate is much longer), otherwise: idling noise p on idle qubits)
-
+        if num_telegates_layer == 0
+            add_noise(circuit, idle_qubits_DQC, noise.p_idle) # idling noise (if telegate: to all non-telegate qubits, no matter if idle or not (since telegate is much longer), otherwise: idling noise p on idle qubits)
+            depth[1] +=1
+        else
+            #for _ in 1:num_telegates_layer 
+            add_noise(circuit, setdiff(1:n.num_data_qubits, Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_layer)  # the telegate qubits are excluded from this noise application on the genuine idle qubits
+            #end
+            depth[2] += num_telegates_layer 
+            #@info "Number of telegates in this layer: $layer is $num_telegates_layer"
+        end
     end
 
     
@@ -648,7 +681,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
     ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
 
     #add_noise(circuit, [data_q for data_q in collect(1:n.num_data_qubits)], noise.idle_depolarising_noise) # since noise is applied to all qubits, we don't need to worry about mapping
-    add_noise(circuit, [data_q for data_q in ancilla_qubits], noise.p) #  init noise on ancilla qubits
+    add_noise(circuit, ancilla_qubits, noise.p) #  init noise on ancilla qubits
 
     for layer in layers_ver_circ
         # analogous to raw encoding circuit
@@ -666,15 +699,18 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
             end
         end
 
-        telegates_layer = false
-        tele_qubits = Vector{Int64}()
-
+        #telegates_layer = false
+        num_telegates_layer = 0
+        #tele_qubits = Vector{Int64}()
+        telegate_pairs = Set{Tuple{Int,Int}}()
+        telegate_qubits = Set{Int64}()
         for gate in layer
             T = typeof(gate)
             if T <: AbstractSingleQubitOperator
                 qubit = affectedqubits(gate)[1]
                 # In the verifciation circuit, Hadamard gates are ONLY applied to ancillas, which sit at their regular index
                 push!(circuit, sHadamard(qubit))
+                gate_counts[1] += 1
                 add_noise(circuit, [qubit], noise.p_single) # single-qubit noise, ancilla qubits experience the same sort of noise, since they are of the same physical type
             elseif T <: AbstractTwoQubitOperator
                 control = affectedqubits(gate)[1]
@@ -706,24 +742,48 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
 
                 if control_register == target_register 
                     push!(circuit, sCNOT(DQC_control, DQC_target))
+                    gate_counts[2] += 1
                     add_noise(circuit, [DQC_control, DQC_target], noise.p; two_qubits = true) # two-qubit noise
                 else
-                    circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise, p_idle_telegate_layer)
-                    telegates_layer = true
-                    push!(tele_qubits, DQC_control)
-                    push!(tele_qubits, DQC_target)
+                    if num_telegates_layer == 0
+                        num_telegates_layer += 1 # if this is the first telegate in the layer, we need to increase the telegate count; for any of the following telegates, we increase the number of layers only when the comm pair has already been used (since then we must wait)
+                    end
+                    #telegates_layer = true
+                    if (control_register, target_register) ∈ telegate_pairs || (target_register, control_register) ∈ telegate_pairs # if the communication qubits for this register pair have been used, we need to increase the number of telegates for this layer, and apply as much noise as there have been previous telegates in this layer
+                        #for _ in 1:num_telegates_layer
+                        add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^num_telegates_layer ) 
+                        #end
+                        num_telegates_layer +=1
+                    end 
+
+                    circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise)
+                    #telegates_layer = true
+                    #num_telegates_layer +=1
+                    gate_counts[3] += 1
+                    add_noise(circuit, collect(telegate_qubits), noise.p_idle_telegate_layer) # other telegate qubits incur noise
+                    push!(telegate_qubits, DQC_control)
+                    push!(telegate_qubits, DQC_target)
                 end
             elseif T <: sMZ
                 add_noise(circuit, affectedqubits(gate), noise.p) # measurement noise the ancilla is of the same type, thus we have the same measurement noise
                 push!(circuit, gate) # only ancillas are ever measured, so we don't need a remapping
+                num_meas += 1
             else
                 throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
             end
         end
        # println("idle qubits: $idle_qubits_DQC")
-        
+        if num_telegates_layer == 0
+            add_noise(circuit, idle_qubits_DQC, noise.p_idle) # idling noise (if telegate: to all non-telegate qubits, no matter if idle or not (since telegate is much longer), otherwise: idling noise p on idle qubits)
+            depth[1] +=1
+        else
+            # the telegate qubits are excluded from this noise application on the genuine idle qubits (here, noise is also applied on the ancillas)
+            add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_layer) 
+            depth[2] += num_telegates_layer 
+            #@info "Number of telegates in this layer: $layer is $num_telegates_layer"
+        end
         #telegates_layer ? add_noise(circuit, idle_qubits_DQC, noise.p_idle_telegate_layer) : add_noise(circuit, idle_qubits_DQC, noise.p) # idling noise
-        telegates_layer ? add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(tele_qubits)), noise.p_idle_telegate_layer) : add_noise(circuit, idle_qubits_DQC, noise.p_idle) # idling noise (if telegate: to all non-telegate qubits (data + ancilla), no matter if idle or not (since telegate is much longer), otherwise: idling noise p on idle qubits)
+#        telegates_layer ? add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(tele_qubits)), noise.p_idle_telegate_layer) : add_noise(circuit, idle_qubits_DQC, noise.p_idle) # idling noise (if telegate: to all non-telegate qubits (data + ancilla), no matter if idle or not (since telegate is much longer), otherwise: idling noise p on idle qubits)
 
     end
 
@@ -732,7 +792,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
         push!(circuit, sSWAP(i, j)) 
     end
 
-    return circuit
+    return circuit, depth, gate_counts, num_meas
 end
 
 
@@ -759,6 +819,7 @@ function build_layers(gates,num_qubits)
         push!(layers, layer)
         deleteat!(gate_list, del_gates)
     end
+    #@info "Layers: $layers"
     return layers
 end
 
@@ -766,7 +827,7 @@ end
 # ------------ Telegates for construction of executable circuit ---------------
 
 
-function add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise, p_idle_telegate_layer)
+function add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise)
     if control_register == target_register
         throw("Ooops, this is not a telegate.")
     end

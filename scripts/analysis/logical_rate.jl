@@ -188,7 +188,7 @@ end
 
 
 code = "TrivariateBicycle"
-qpu_sizes = "[3, 3, 3, 3]"
+qpu_sizes = "[4, 4, 4]"
 monolithic = false
 
 data_path = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "simulation_FT/dqc_sim_data.csv") # stores to simulation_FT/ or simulation_non_FT/ folder, depending on the indicated path
