@@ -424,14 +424,16 @@ function resource_estimation(exp_label::String)
 
         qpu_sizes = cfg.qpu_sizes .+ network_specs.num_comm_qubits/network_specs.num_registers # accounting for data + communication qubits
 
-        num_ancillas_circ, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ = estimate_resources_encoding_circuit(dir, network_specs, copy(qpu_sizes), ancilla_map)
-        resources_info_circ = (; network_specs.num_comm_qubits, network_specs.num_registers, num_ancillas_circ, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ)
+        num_ancillas_circ, circuit_depth, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ = estimate_resources_encoding_circuit(dir, copy(qpu_sizes), ancilla_map)
+        resources_info_circ = (; network_specs.num_comm_qubits, network_specs.num_registers, num_ancillas_circ, circuit_depth, total_gate_counts_circ, total_number_measurements_circ, qpu_core_sizes_circ)
         save_txt(dir, "resources_info_circ.txt", resources_info_circ)
 
         resources_info_circ_df = DataFrame(
             num_comm_qubits = [network_specs.num_comm_qubits],
             num_registers = [network_specs.num_registers],
             num_ancillas = [num_ancillas_circ],
+            depth_cx_layers = [circuit_depth[1]],
+            depth_telegate_layers = [circuit_depth[2]],
             single_qubit_gates = [total_gate_counts_circ[1]],
             cx_gates = [total_gate_counts_circ[2]],
             telegates = [total_gate_counts_circ[3]],
@@ -439,15 +441,17 @@ function resource_estimation(exp_label::String)
             qpu_core_sizes = [join(qpu_core_sizes_circ, ";")],
         )
         CSV.write(joinpath(dir, "resources_info_circ.csv"), resources_info_circ_df)
-        
-        num_ancillas_meas, gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas =  estimate_resources_measurement_based_encoding(network_specs, code_params, copy(qpu_sizes))
-        resources_info_meas = (; network_specs.num_comm_qubits, network_specs.num_registers, num_ancillas_meas, gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas)
+
+        num_ancillas_meas, depth_meas, gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas =  estimate_resources_measurement_based_encoding(network_specs, code_params, copy(qpu_sizes))
+        resources_info_meas = (; network_specs.num_comm_qubits, network_specs.num_registers, num_ancillas_meas, depth_meas,  gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas)
         save_txt(dir, "resources_info_meas.txt", resources_info_meas)
 
         resources_info_meas_df = DataFrame(
             num_comm_qubits = [network_specs.num_comm_qubits],
             num_registers = [network_specs.num_registers],
             num_ancillas = [num_ancillas_meas],
+            depth_cx_layers = [depth_meas[1]],
+            depth_telegate_layers = [depth_meas[2]],
             single_qubit_gates = [gate_counts_meas[1]],
             cx_gates = [gate_counts_meas[2]],
             telegates = [gate_counts_meas[3]],
