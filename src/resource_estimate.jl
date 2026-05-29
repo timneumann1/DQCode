@@ -23,9 +23,9 @@ function estimate_resources_encoding_circuit(folder, qpu_sizes, ancilla_map)
     df = CSV.read(joinpath(folder, "dqc_sim_data.csv"), DataFrame)
     depth_cx_layers = df.depth_cx_layers[1]
     depth_telegate_layers = df.depth_telegate_layers[1]
-    total_single_qubit_count = df.single_qubit_count[1]
-    total_two_qubit_count = df.two_qubit_count[1]
-    total_telegate_count = df.telegate_count[1]
+    total_single_qubit_count = df.total_single_qubit_count[1]
+    total_two_qubit_count = df.total_two_qubit_count[1]
+    total_telegate_count = df.total_telegate_count[1]
     #total_gate_counts = df.gate_counts[1]
     @info "total gate counts:$total_single_qubit_count,$total_two_qubit_count $total_telegate_count"
     num_meas = df.num_meas[1]
