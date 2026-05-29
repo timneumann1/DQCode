@@ -1,14 +1,16 @@
 using CairoMakie, LaTeXStrings
+using CairoMakie: Axis
 using LsqFit
 using CSV, DataFrames
 using Statistics
+
 
 # ---------------------------------------------------------------
 # ------------------ 2D Heatmap ---------------------------------
 # ---------------------------------------------------------------
 
 
-function log_log_plot(df; monolithic = false)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
+function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
 
     # ---------------------- Pre-Processing ----------------------
     ps_all = sort(unique(Float64.(df.p)))
@@ -108,7 +110,7 @@ end
 
 
 
-function two_d_plot(df)
+function two_d_plot(df, data_path)
 
     # ---------------------- Pre-Processing ----------------------
 
@@ -187,16 +189,18 @@ function power_of_10_label(val)
 end
 
 
-code = "TrivariateBicycle"
-qpu_sizes = "[4, 4, 4]"
+code = "Steane"
+qpu_sizes = "[4, 3]"
 monolithic = false
 
 data_path = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "simulation_FT/dqc_sim_data.csv") # stores to simulation_FT/ or simulation_non_FT/ folder, depending on the indicated path
 df = CSV.read(data_path, DataFrame)
 
 if monolithic
-    log_log_plot(df, monolithic = monolithic)
+    log_log_plot(df, data_path, monolithic = monolithic)
 else
-    log_log_plot(df)
-    two_d_plot(df)
+    log_log_plot(df, data_path)
+    two_d_plot(df,data_path)
 end
+
+

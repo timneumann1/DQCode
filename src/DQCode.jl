@@ -366,7 +366,7 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
 
         if method == "none"
             
-            data, data_circuit, DQC_circuit_noiseless = dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, encoding_circuit)
+            data, data_circuit, DQC_circuit, full_circuit = dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, encoding_circuit)
 
             # ----- Data Storage ----------
             dir = joinpath(folder, "simulation_non_FT")
@@ -374,12 +374,15 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
             df = DataFrame(data)
             CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
             serialize( joinpath(dir, "data_circuit.jls"), data_circuit )
-            serialize( joinpath(dir, "DQC_circuit_zero_noise.jls"), DQC_circuit_noiseless )
-            save_circuit_diagram(DQC_circuit_noiseless, dir, "DQC_circuit_zero_noise.png")
-
+            save_circuit_diagram(data_circuit, dir, "data_circuit.png")
+            serialize( joinpath(dir, "DQC_circuit.jls"), DQC_circuit )
+            save_circuit_diagram(DQC_circuit, dir, "DQC_circuit.png")
+            serialize( joinpath(dir, "full_circuit.jls"), full_circuit )
+            save_circuit_diagram(full_circuit, dir, "full_circuit.tex")
+            
         else
 
-            data, data_circuit, quantum_clifford_verification_circ, DQC_circuit_noiseless, num_ancillas, num_z_anc, num_x_anc, ancilla_map = dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, mqt_path, encoding_circuit, method)
+            data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, full_circuit, num_ancillas, num_z_anc, num_x_anc, ancilla_map = dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_depth, code_params, network_specs, mqt_path, encoding_circuit, method)
             
             # ----- Data Storage ----------
             dir = joinpath(folder, "simulation_FT")
@@ -387,9 +390,13 @@ function dqc_simulation(exp_label::String, mqt_path::String, circuit_path::Strin
             df = DataFrame(data)
             CSV.write(joinpath(dir, "dqc_sim_data.csv"), df)
             serialize( joinpath(dir, "data_circuit.jls"), data_circuit )
+            save_circuit_diagram(data_circuit, dir, "data_circuit.png")
             serialize( joinpath(dir, "verification_circuit.jls"), quantum_clifford_verification_circ )
-            serialize( joinpath(dir, "DQC_circuit_zero_noise.jls"), DQC_circuit_noiseless )
-            save_circuit_diagram(DQC_circuit_noiseless, dir, "DQC_circuit_zero_noise.png")
+            save_circuit_diagram(quantum_clifford_verification_circ, dir, "verification_circuit.png")
+            serialize( joinpath(dir, "DQC_circuit.jls"), DQC_circuit )
+            save_circuit_diagram(DQC_circuit, dir, "DQC_circuit.png")
+            serialize( joinpath(dir, "full_circuit.jls"), full_circuit )
+            save_circuit_diagram(full_circuit, dir, "full_circuit.tex")
             ancilla_info = (; num_ancillas, num_z_anc, num_x_anc, ancilla_map)
             save_txt(dir, "ancilla_info.txt", ancilla_info)
             serialize(joinpath(dir, "ancilla_map.jls"), ancilla_map)

@@ -35,10 +35,10 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
 
     data_circuit = deepcopy(circuit)
     
-    noise_verif = NoiseSpecs(1e1,0,0,0,0,0) # Can set to one if we have the fidelity measurement
+    noise_verif = NoiseSpecs(1e2,0,0,0,0,0) # Can set to one if we have the fidelity measurement
 
     quantum_clifford_verification_circ = Vector{AbstractOperation}() # no verification circuit ⇔ non-FT
-    DQC_circuit, _,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif)
+    DQC_circuit,_,_,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif)
 
     num_ancillas = 0
     ancilla_map = Vector{Int}()
@@ -46,7 +46,7 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
     state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) #, trajectories=noise_verif.n_samples)
     @assert stat == true_success_stat "Adding the verifcation circuit compromised the data circuit"
     # Also verify the dqc_evaluation, which should give an error rate of zero in the noiseless setting
-    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, _,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [], code_params, network_specs, noise_verif)
+    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs,_,_,_,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [], code_params, network_specs, noise_verif)
     @assert z_error_pre_decoding_rate == 0.0
     @assert x_error_pre_decoding_rate == 0.0
     @assert avg_fidelity == 1.0
@@ -57,6 +57,7 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
     data = NamedTuple[]
     progress = Progress(length(ps) * length(p_bells); desc="(p, p_bell) sweep", dt=1)
 
+    full_circuit = nothing
     @assert isempty(quantum_clifford_verification_circ) # we don't append the verification circuit in the non-FT setting
     for (p, p_bell) in Iterators.product(ps, p_bells)
         #  for each combination, initialise NoiseSpecs(...) according to above considerations
@@ -65,16 +66,17 @@ function dqc_non_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_
         p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p_idle = p/10
         noise_model = NoiseSpecs(num_samples,p,p_idle,p_idle_telegate_layer,p_single,p_bell)
         #p_idle_telegate_layer = 1-(1-noise_model.p)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p
-        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model) # empty verifiation circuit is passed
+        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, encoding_circ_gate_counts, gate_counts, num_meas, full_circuit = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model) # empty verifiation circuit is passed
         push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
                     discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
                     avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
-                    depth_cx_layers=depth[1], depth_telegate_layers=depth[2], single_qubit_count=gate_counts[1], two_qubit_count=gate_counts[2], telegate_count=gate_counts[3], num_meas=num_meas))
+                    depth_cx_layers=depth[1], depth_telegate_layers=depth[2], encoding_circ_gate_counts = encoding_circ_gate_counts,
+                    total_single_qubit_count=gate_counts[1], total_two_qubit_count=gate_counts[2], total_telegate_count=gate_counts[3], num_meas=num_meas))
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
    
 
-    return data, data_circuit, DQC_circuit
+    return data, data_circuit, DQC_circuit, full_circuit
 end
 
 
@@ -248,13 +250,13 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
     # It would show a probabilistic 0 and 1. Hence, we can test whether our circuit really works by setting all noise to zero and measuring success.
     # If we actually encoded the plus state, the result would only be true in 50% of the cases; we run this verification ccheck ones before initialising the noisy simulaton
 
-    noise_verif = NoiseSpecs(1e1,0,0,0,0,0) # can set to 1 if we return fidelity 
-    DQC_circuit, _,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif)
+    noise_verif = NoiseSpecs(1e2,0,0,0,0,0) # can set to 1 if we return fidelity 
+    DQC_circuit,_,_,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif)
     initial_state = Register(one(MixedDestabilizer, network_specs.num_data_and_comm_qubits+num_ancillas),network_specs.num_comm_qubits + num_ancillas)
     state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) #, trajectories=noise_verif.n_samples)
     @assert stat == true_success_stat "Adding the verifcation circuit compromised the data circuit"
     # Also verify the dqc_evaluation, which should give an error rate of zero in the noiseless setting
-    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, _,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_verif)
+    logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs,_,_,_,_,_,_ = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_verif)
     @assert z_error_pre_decoding_rate == 0.0
     @assert x_error_pre_decoding_rate == 0.0
     @assert avg_fidelity == 1.0
@@ -267,6 +269,7 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
 
     data = NamedTuple[]
     progress = Progress(length(ps) * length(p_bells); desc="(p, p_bell) sweep", dt=1)
+    full_circuit = nothing
 
     for (p, p_bell) in Iterators.product(ps, p_bells)
         #  for each combination, initialise NoiseSpecs according to our considerations above
@@ -275,18 +278,19 @@ function dqc_ft_encoding_simulation(num_samples, ps, p_bells, telegate_idle_dept
         p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle error prob from the current p_idle = p/10
         noise_model = NoiseSpecs(num_samples,p,p_idle,p_idle_telegate_layer,p_single,p_bell)
 
-        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas  = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
+        logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, encoding_circ_gate_counts, gate_counts, num_meas, full_circuit  = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, code_params, network_specs, noise_model)
 
         push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
                     discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
                     avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
-                    depth_cx_layers=depth[1], depth_telegate_layers=depth[2], single_qubit_count=gate_counts[1], two_qubit_count=gate_counts[2], telegate_count=gate_counts[3], num_meas=num_meas))
+                    depth_cx_layers=depth[1], depth_telegate_layers=depth[2], encoding_circ_gate_counts = encoding_circ_gate_counts,
+                    total_single_qubit_count=gate_counts[1], total_two_qubit_count=gate_counts[2], total_telegate_count=gate_counts[3], num_meas=num_meas))
 
 
         next!(progress; showvalues=[(:p, p), (:p_bell, p_bell), (:logical_error_rate, logical_error_rate), (:acceptance_ratio,acceptance_ratio)])
     end
    
-    return data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, num_ancillas, num_z_anc, num_x_anc, ancilla_map
+    return data, data_circuit, quantum_clifford_verification_circ, DQC_circuit, full_circuit, num_ancillas, num_z_anc, num_x_anc, ancilla_map
 end
 
 
@@ -300,7 +304,7 @@ function dqc_logical_evaluation(data_circuit, verification_circuit, num_ancillas
     ### TIMIMG TEST
 
     #t_build = @elapsed begin
-    DQC_circuit, depth, gate_counts, num_meas = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise)
+    DQC_circuit, depth, encoding_circ_gate_counts, gate_counts, num_meas = construct_DQC_executable_circuit(data_circuit, verification_circuit, num_ancillas, ancilla_map, network_specs, noise)
     #end
     #println("TIMING OF constructing DQC circuit for $t_build")
 
@@ -428,6 +432,7 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
             #error_guess = zeros(code_params.n) # give n zero-guesses for X errors
             logical_failures .+= 1
             avg_fidelity -= avg_fidelity / (sample-discarded_runs) # denominator can never be zero if we reach this point verification conditional breaks the loop
+            # we update the average fidelity for efficiency purposes (storing all fidelites would take too much space, so storing avg. fidelity is analogous to counting errors, for example)
             # avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples > avg_fidelity += (x-avg_fidelity)/samples , then replace samples with samples - discarded_runs
             #push!(fidelities, 0.0)
             continue
@@ -472,11 +477,11 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
         #println("Corrected: $(corrected_state.stab)")
         #corrected_state_data = stabilizerview( traceout!(copy(corrected_state.stab), collect(network_specs.num_data_qubits+1:total_number_qubits)) )
         #println("Corrected data: $(corrected_state_data)")
-        corrected_state_data = stabilizerview( ptrace(copy(corrected_state.stab), collect(network_specs.num_data_qubits+1:total_number_qubits)) )
+        corrected_state_data_qubits = stabilizerview( ptrace(copy(corrected_state.stab), collect(network_specs.num_data_qubits+1:total_number_qubits)) )
         #println("Corrected data ptrace: $(corrected_state_data)")
 
         #println("Corrected data: $(stabilizerview(corrected_state_data))")
-        post_decoding_fidelity = dot(corrected_state_data, code_params.target_state)
+        post_decoding_fidelity = dot(corrected_state_data_qubits, code_params.target_state)
         avg_fidelity += (post_decoding_fidelity-avg_fidelity)/(sample-discarded_runs)
         #avg_fidelity = ( avg_fidelity*(sample-1) + post_decoding_fidelity ) / sample
         #push!(fidelities, post_decoding_fidelity)
@@ -520,13 +525,13 @@ CSS Table decoder returns the X and Z lookup table decoders for the degenerate H
     #println("TIMING OF SAMPLING for $n_samples SAMPLES: $t_run")
     #println("DQC circuit length: $(length(filter!(g -> g isa NoiseOp, DQC_circuit)))")
     acceptance_ratio = 1 - discarded_runs/n_samples
-    logical_error_rate = mean(logical_failures)/(n_samples-discarded_runs)
+    logical_error_rate = mean(logical_failures)/(n_samples-discarded_runs) # mean logical error rate across all logical qubits
     z_error_pre_decoding_rate = z_errors_pre_decoding/(n_samples-discarded_runs)
     x_error_pre_decoding_rate = x_errors_pre_decoding/(n_samples-discarded_runs)
     #avg_fidelity = mean(fidelities)
     #println("Without decoding, the logical error rate is $(logical_failures_pre_decoding/noise.n_samples) ")
     #println("Over $(n_samples) runs, there were $discarded_runs discarded runs -> acceptance ratio: $acceptance_ratio, for the kept runs the the logical error rate (after decoding) is $logical_error_rate")
-    return logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, gate_counts, num_meas
+    return logical_failures, logical_error_rate, avg_fidelity, z_error_pre_decoding_rate, x_error_pre_decoding_rate, acceptance_ratio, discarded_runs, n_samples, depth, encoding_circ_gate_counts, gate_counts, num_meas, circuit
 
 end
 
@@ -539,6 +544,7 @@ function perfect_ancillary_paulimeasurement(p::PauliOperator, ancillary_index, b
     @assert num_data_qubits == network_specs.num_data_qubits
     for qubit in 1:num_data_qubits
         # for the perfect ancillary measurement, qubits are back in their correct position already
+        # we also use an arbitraty gate set and don't worry about implementatbility (in resource_estimation, the syndrom circuit overhead will be discussed)
         if p[qubit] == (1,0)
             push!(circuit, sXCX(qubit, ancillary_index)) # X-controlled X     
         elseif p[qubit] == (0,1)
@@ -568,7 +574,6 @@ function syndrome_circuit(parity_check_tableau, ancillary_index, bit_index, netw
 
     return syndrome_circ, ancillaries, bit_index:bit_index+bits-1
 end
-
 
 
 # ---------------------------------------------------------------
@@ -673,9 +678,12 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
         end
     end
 
-    
+    #@info "Gate counts encoding circuit: $gate_counts"
     # Add the verification circuit before reversing the virtual mapping
     # telegates between ancillas and data qubits can use the comm qubits of the register, likewise for telegates between ancillas and flags
+
+    encoding_circ_gate_counts = copy(gate_counts)
+
     layers_ver_circ = build_layers(verification_circuit, n.num_data_and_comm_qubits + num_ancillas)
 
     #@info "Mapping: $ancilla_map"
@@ -684,7 +692,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
     ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
 
     #add_noise(circuit, [data_q for data_q in collect(1:n.num_data_qubits)], noise.idle_depolarising_noise) # since noise is applied to all qubits, we don't need to worry about mapping
-    add_noise(circuit, ancilla_qubits, noise.p) #  init noise on ancilla qubits
+    add_noise(circuit, ancilla_qubits, noise.p) #  init noise on ancilla qubits for verification measurements
 
     for layer in layers_ver_circ
         # analogous to raw encoding circuit
@@ -693,6 +701,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
         #println("all qubits: $all_qubits, idle: $idle_qubits, data: $(n.data_qubits)")
         idle_qubits_DQC = Vector{Int}()
         for idle_q in idle_qubits
+            # comm qubits will never be treated as idle, since they get reinitialised every time
             if idle_q in n.data_qubits
                 push!(idle_qubits_DQC, n.inv_map[idle_q] )
             elseif idle_q in ancilla_qubits
@@ -798,7 +807,7 @@ function construct_DQC_executable_circuit(data_circuit, verification_circuit, nu
         push!(circuit, sSWAP(i, j)) 
     end
 
-    return circuit, depth, gate_counts, num_meas
+    return circuit, depth, encoding_circ_gate_counts, gate_counts, num_meas
 end
 
 
