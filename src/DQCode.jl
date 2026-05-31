@@ -1,12 +1,11 @@
 # DQCode.jl — Optimising fault-tolerant zero-state encoding on distributed quantum architectures
 # Author: Tim Neumann <tneumann@tudelft.nl / tim01.neumann@gmail.com>
 
-module DQCode
-
 """
 DQCode — utilities to set up CSS codes and distributed Type-II architectures, 
 optimise logical zero state encoding, and simulate encoding circuits in a DQC setting.
 """
+module DQCode
 
 export create_code_network_data, baseline_encoding_qiskit, baseline_encoding_mqt, circuit_search_gott_ga, 
     circuit_search_mcts, dqc_simulation, resource_estimation
@@ -38,7 +37,7 @@ using .ResourceEstimation: estimate_resources_encoding_circuit, estimate_resourc
 
 using QECCore
 using QuantumClifford: MixedDestabilizer, Stabilizer, Tableau, stabilizerview, 
-    logicalxview, logicalzview, canonicalize_rref!, tab
+                        logicalxview, logicalzview, canonicalize!, canonicalize_rref!, tab
 using QuantumClifford.ECC: DistanceMIPAlgorithm
 using HiGHS, JuMP
 using DataFrames, CSV
@@ -110,7 +109,7 @@ which data qubit will be mapped to this position.
 
 Whereas for partitioning, we use the original stabiliser formalism (that will later be used in QEC cycles),
 for optimisation, we use the canonical form of the tableau for commensurability, by which the target state
-of the  `qec_code` is uniquely identified.
+of the `qec_code` is uniquely identified.
 """
 function _network_setup(qec_code::AbstractCSSCode, register_sizes::Vector{Int})::NetworkSpecifications
     @assert sum(register_sizes) == code_n(qec_code) "$(code_n(qec_code))"
@@ -128,7 +127,7 @@ function _network_setup(qec_code::AbstractCSSCode, register_sizes::Vector{Int}):
         register_sizes,         # register sizes of Type-II architecture
         length(register_sizes), # number of registers
         mapping,                # initial placement of qubits
-        mapping_transpositions, # corresponding transpositions for mapping, to be consumed from right to left
+        mapping_transpositions, # corresponding transpositions for mapping, to be applied from right to left
         inv_map,                # inverse mapping (to be used in circuit execution)
         register_lookup_array,  # lookup array for core membership 
         data_qubits,            # array of data qubit indices
@@ -164,8 +163,8 @@ Since we are working with CSS codes, the number of X checks equals the number of
 Hadamards we need in the initial layer, assuming that our encoding circuit follows 
 a H-CNOT template.
 """
-function _code_setup(qec_code)
-    code = MixedDestabilizer(qec_code::AbstractCSSCode)::CodeParameters
+function _code_setup(qec_code::AbstractCSSCode)::CodeParameters
+    code = MixedDestabilizer(qec_code)
     target_state = vcat(stabilizerview(code), logicalzview(code))
     target_canon = canonicalize!(copy(target_state))
     num_X_checks = count(any( tableau_to_bitmatrix(tab(target_canon)) .== 1, dims = 2))
@@ -176,14 +175,14 @@ function _code_setup(qec_code)
     code_distance = _code_distance(qec_code)
     @info "Setup complete: $(qec_code)[$(code_n(qec_code)), $(code_k(qec_code)), $code_distance]]-code"
     code_params = CodeParameters(
-        qec_code,
-        num_X_checks,
-        logical_Zs,
-        target_state,
-        target_bit_matrix,
-        code_n(qec_code),
-        code_k(qec_code),
-        code_distance
+        qec_code,       # QEC CSS code for logical state preparation
+        num_X_checks,   # number of X checks in canonical tableau
+        logical_Zs,     # canonical logical Z operator
+        target_state,   # target logical zero state of the code
+        target_bit_matrix,  # bit matrix encoding the tableau of the target state
+        code_n(qec_code),   # number of physical qubits the code is defined on
+        code_k(qec_code),   # logical space dimension of the code
+        code_distance       # distance of the QEC code
     )
     return code_params
 end
