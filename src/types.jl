@@ -5,9 +5,12 @@ Type definitions used in DQCode for optimisation and DQC simulation of fault-tol
 """
 module Types
 
+export CodeParameters, NoiseSpecs, NetworkSpecifications, 
+        GeneticParameters, MCTSParameters, EncodingMDP, CircuitState
+
 using QuantumClifford
 using QECCore: AbstractCSSCode
-export CodeParameters, GeneticParameters, NetworkSpecifications, MCTSParameters, NoiseSpecs
+using POMDPs
 
 
 """
@@ -130,6 +133,48 @@ struct MCTSParameters
     n_iterations::Int
     exploration_constant::Float64
 end
+
+
+"""
+    CircuitState
+
+Type that defines a state in the Monte Carlo Tree Search.
+
+### Fields
+
+- `circuit` -- vector of quantum operations
+- `quantum_state` -- corresponding state after circuit execution, starting from the all-zero state
+- `bit_matrix` -- the tableau representation of the quantum state converted into a boolean matrix format
+- `gate_counts` -- array capturing the single-qubit, two-qubit, and telegate count
+- `fidelity` -- the fitness of `quantum_state` as overlap with the target logical zero state
+"""
+struct CircuitState
+    circuit::Vector{QuantumClifford.AbstractOperation}   
+    quantum_state::QuantumClifford.MixedDestabilizer{QuantumClifford.Tableau{Vector{UInt8}, Matrix{UInt64}}}   
+    bit_matrix::Matrix{Int}
+    gate_counts::Vector{Int}
+    fidelity::Float64
+end
+
+
+"""
+    EncodingMDP
+
+Type that defines the Markov Decision Process (MDP) environment for the Monte Carlo Tree Search algorithm. 
+It formalises the state space as `CircuitState` (see above) and the action space as (QuantumClifford) `AbstractOperation`.
+
+### Fields
+
+- `code_params` -- parameters defining the target QEC code and its logical zero state
+- `network_specs` -- networking specifications for the underlying DQC architecture
+- `mcts_params` -- optimisation parameters guiding the MCTS tree traversal and reward evaluation
+"""
+struct EncodingMDP <: MDP{CircuitState, QuantumClifford.AbstractOperation} 
+    code_params:: CodeParameters
+    network_specs:: NetworkSpecifications
+    mcts_params:: MCTSParameters
+end
+
 
 """
     NoiseSpecs
