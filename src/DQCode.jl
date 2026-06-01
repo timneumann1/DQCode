@@ -57,7 +57,7 @@ save it to `data/<code_dirname>/<qpu_sizes>`.
 
 ### Input
 
-- `exp_label` -- label of the experiment defined in `experiment_configurations()`.
+- `exp_label` -- label of the experiment defined in `experiment_configurations()`
 
 ### Output
 
@@ -95,7 +95,7 @@ network specifications in the corresponding type structure.
 ### Input
 
 - `qec_code` -- quantum error correction code 
-- `register_sizes` -- array containing the sizes (number of memory qubits) of each QPU register.
+- `register_sizes` -- array containing the sizes (number of memory qubits) of each QPU register
 
 ### Output 
 
@@ -195,7 +195,7 @@ Compute the code distance for the given quantum error correction code
 
 ### Input
 
-- `qec_code` -- quantum error correction code.
+- `qec_code` -- quantum error correction code
 
 ### Output 
 
@@ -369,7 +369,7 @@ function circuit_search_gott_ga(exp_label::String)::String
             verification_logical_state_compiled, 
             gate_counts, 
             gate_counts_compiled
-        ) = encoding_gott(code_params, network_specs, zeros(code_params.k))
+        ) = encoding_gott(code_params, network_specs, zeros(Int, code_params.k))
         (
             GA_encoding_circuit,
             verification_ga,
@@ -601,7 +601,7 @@ Save the statistics (ancillas, depth, gate counts, measurements) to `data/<code_
 
 ### Input
 
-- `exp_label` -- label of the experiment defined in `experiment_configurations()`.
+- `exp_label` -- label of the experiment defined in `experiment_configurations()`
 
 ### Output 
 

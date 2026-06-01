@@ -1,6 +1,15 @@
-""" Credit: Almost entirely based on https://github.com/QuantumSavory/QuantumClifford.jl/blob/4d524965a11b6d8594d578d4935ccd7bc385f56c/src/ecc/circuits.jl"""
+# encoding_gott.jl
 
+""" 
+Encoding circuits for stabiliser codes.
+
+Credit: The implementation of `_gottesman_encoding_circuit_raw` is (up to minor details) identical to the implementation in the 
+        QuantumClifford library (https://github.com/QuantumSavory/QuantumClifford.jl, https://arxiv.org/abs/2512.16752), which can
+        be inspected at https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl.
+"""
 module EncodingGott
+
+export encoding_circuit_gott, encoding_gott, overlap_compilation
 
 using ..Types
 using ..Helper
@@ -8,49 +17,55 @@ using ..Helper
 using QuantumClifford
 using QECCore
 using Serialization
-using Quantikz: savecircuit
-using QuantumClifford: true_success_stat, false_success_stat, continue_stat, failure_stat, AbstractOperation, AbstractSingleQubitOperator, AbstractTwoQubitOperator
 using CSV, DataFrames
 
-export encoding_circuit_gott, encoding_gott, overlap_compilation
 
 """
-This function creates an encoding circuit based on the procedure described by Gottesman. We first obtain the canonical form of the
-    stabiliser tableau, without re-permuting the qubits ( MixedDestabilizer(code, undoperm=false) ), while reporting the permutation
-    operation (see `canonicalize_gott!`). Next, the logical operators are extracted from this canonical form, and the encoding circuit
-    is built. Lastly, the qubits (in the encoded circuit) are permuted back to match the original qubit ordering.
+    _gottesman_encoding_circuit_raw(code::AbstractCSSCode, basis_state::Vector{Int})::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{Int}}
 
-    The resulting circuit encodes any state on physical qubits at indices 'n-k+1:n' into a larger logical code by creation of (non fault-tolerant) encoding circuit.
-    If we simply start from the all-zero physical register, it encodes the logical all-zero state.
+Accept a CSS code and a computational basis state, and output the Gottesman encoding circuit as originally described by Daniel Gottesman. 
 
-By calling MixedDestabilizer(code, undoperm=true), we can additionally directly extract the standard form of the tableau with its logical operators,
-    with the correct qubit indexing (i.e., after repermuting).  The stabiliser generators here might be different as a result of Guassian elimination, 
-    which however is not problematic since this new set of generators still stabilises the codespace (columns swaps will be restored correctly).
-    (Also, the logical operators match both forms of generators, since those generators generate the same stabiliser group.)
-    Using the backtrack argument to MixedDestabilizer, one is also able to restore the entire original tableau, which however is not necessary for our purposes,
-    since we work with the final canonical tableau, after column swaps for state preparation).
+### Input
+
+- `code` -- the CSS code for which the encoding circuit is to be constructed
+- `basis_state` -- the computational basis state that is to be encoded
+
+### Output
+
+Tuple of Gottesman encoding circuit based on the permuted qubit space (`circ`) and corresponding permutation of qubits (`gottesman_perm`).
+
+### Notes
+
+In this function, we first obtain the canonical form of the stabiliser tableau, without re-permuting the qubits, while reporting the permutation
+operation (see `canonicalize_gott!`). Next, the logical operators are extracted from this canonical form, and the encoding circuit is built. 
+While we expose the functionality of encoding an arbitrary computational basis state (labeled `Logical Xs` in the code below), this is not necessary
+for encoding the logical zero state of a CSS code. Noteworthy, applying all corresponding `sCNOT` operation irregardless of `basis_state`, we can encode
+a general state on the last `k` qubits into the `n` qubit register. However, such encoding is not fault-tolerant. 
     
-The implementation is based on [cleve1997efficient] and [gottesman1997stabilizer], which however is partly erroneous
-    (see https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html), [grassl2002algorithmic] and [grassl2011variations] )
+The Julia implementation of this algorithm, on which the below implementation is based (see Credit in the header), 
+is based on [cleve1997efficient] and [gottesman1997stabilizer]. However, the description in these sources was partly erroneous, as noted and 
+corrected in [grassl2002algorithmic] and [grassl2011variations] (also cf. https://perimeterinstitute.ca/personal/dgottesman/thesis-errata.html).
+
+### Examples
+
+The `MixedDestabilizer` operation permutes qubits to reach canonical form and returns the permutation. The X- and Z-part of the tableau are canonicalised 
+separately, but since they only yield the correct description of the state together, any permutation on one part of the tableau is also applied on the other.
+For example, to reach the canonical form of X-part of a 4-qubit system, one might have to apply a column/qubit swap of columns 2 and 3, resulting
+in permx = [1,3,2,4] ("qubit 3 is swapped into tableau column 2, and qubit 2 is swapped into tableau column 3"); also, one might have to apply further swaps in 
+the Z-part of the tableau, resulting in permz = [1,2,4,3] ("qubit 3 is swapped into tableau column 4, and qubit 4 is swapped into tableau column 3"). Since both 
+permutations are applied on the entire tableau, and permx is applied first, this yields the overall permutation [1,2,3,4][permx][permz] = [1,3,2,4][permz] = [1,3,4,2].
+Now [1,3,4,2] = [1,2,3,4][permx][permz] = [1,2,3,4][permx[permz]] = [1,2,3,4][perm], so we define gottesman_perm = permx[permz] = [1,3,4,2]. The vector `gottesman_perm` 
+then captures the permutation information that qubit 3 has been placed at position 2, qubit 4 at position 3, and qubit 2 at position 4 during the swap operations.
 """
-
-
-function _gottesman_encoding_circuit_raw(code, basis_state)#; reportperm = true)#, undoperm=false)
-         
-    # Creatung the Gottesman encoding circuit (without re-permuting the columns)
+function _gottesman_encoding_circuit_raw(code::AbstractCSSCode, basis_state::Vector{Int})::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{Int}}
     n = code_n(code)
     k = code_k(code)
     @assert length(basis_state) == k
-    
-    code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true); # undoperm without returns gives the orignal stabiliser tableau
-  
+    code_standard_form, r, permx, permz = MixedDestabilizer(code, undoperm=false, reportperm=true) # setting `undoperm=false` controls that we obtain the canonical Gottesman tableau 
     T = stabilizerview(code_standard_form)
     X = logicalxview(code_standard_form)  
-    
-    circ = Vector{AbstractOperation}()
-
-# ----- Logical Xs -----
-    
+    circ = Vector{QuantumClifford.AbstractOperation}()
+    # ----- Logical Xs -----
     for i in 1:k
         if basis_state[i] == 1
             push!(circ, sX(n-k+i))
@@ -60,11 +75,8 @@ function _gottesman_encoding_circuit_raw(code, basis_state)#; reportperm = true)
                 end
             end
         end
-        
     end
-
-# ----- Projection onto codespace -----
-
+    # ----- Projection onto codespace -----
     for i in 1:r
         push!(circ, sHadamard(i))
         if T[i,i][2] == true
@@ -84,8 +96,7 @@ function _gottesman_encoding_circuit_raw(code, basis_state)#; reportperm = true)
             end
         end
     end
-
-# ----- Adapting for negative phases in the tableau -----
+    # ----- Adapting for negative phases in the tableau -----
     for i in 1:n-k  # 1:r+s
         if phases(T)[i]!=0
             if i<=r
@@ -94,274 +105,235 @@ function _gottesman_encoding_circuit_raw(code, basis_state)#; reportperm = true)
                 push!(circ, sX(i))
             end
         end
-    end
-    
-    gottesman_perm = permz[permx]
-
-"""
-For example:
-    permx = [1,3,2,4] says: "for x canonicalization, qubit 3 was placed in position 2"
-    permz = [1,2,4,3] says: "for z canonicalization, qubit 4 was placed in position 3"
-    We performed permx first, then permz.
-    Overall, this means [1,2,3,4]>(permx)>[1,3,2,4]>(permz)>[1,3,4,2]
-    Now this is precisely permz[permx] = permz[1,3,2,4] = [1,3,4,2]
-"""
-        
+    end 
+    gottesman_perm = permx[permz] # Collecting the qubit permutations performed        
     return circ, gottesman_perm
 end
 
-function encoding_circuit_gott(qec_code, network_specs, basis_state)
 
+"""
+    encoding_circuit_gott(qec_code::AbstractCSSCode, network_specs::NetworkSpecifications, basis_state::Vector{Int})::Tuple{Vector{AbstractOperation}, Vector{Int}}
+
+Retrieve the Gottesman encoding circuit on permuted columns/qubits and construct the logical state encoding cicuit using the original
+qubit ordering defined in `qec_code`. While constructing the circuit, obtain the gate count for the encoding circuit.
+
+### Input
+
+- `qec_code` -- the CSS code for which the encoding circuit is to be constructed
+- `network_specs` -- Type-II DQC networking specifications
+- `basis_state` -- the computational basis state that is to be encoded
+
+### Output
+
+Returns the Gottesman encoding circuit using the original qubit ordering as well as the corresponding gate count, collecting 
+single-, two-qubit- and telegates.
+
+### Notes
+
+The resulting circuit encodes the specified basis state on physical qubits at indices 'n-k+1:n' into a logical code state using a non-fault-tolerant 
+encoding circuit. If we start from the all-zero physical register, the resulting circuit encodes the logical all-zero state.
+
+We wish to recover the original ordering from the canonicalization permutation. From the Notes section of `_gottesman_encoding_circuit_raw`, we know
+that `perm` here captures which qubit `j` has been placed at tableau position `i` if the `i`th index of the list is `j`. 
+Thus, for a quantum operation `op(i)`, to obtain the original labeling of columns/qubits, we wish to apply the operation on qubit `j`. This can
+be achieved by applying `op` on qubit `perm[i] = j`, i.e. to apply op on `perm[op.q]` instead of `op.q`.
+
+In order to retrieve the gate counts, we make use of the `register_lookup_array` as well as the `inv_map` arrays stored in `NetworkSpecifications`.
+Since the value `b` at index `a` in `network_specs.mapping` indicates that qubit `b` has been mapped to physical slot `a` in the DQC architecture, and 
+`register_lookup_array` collects the registers for each physical slot, we are interested in the value of `register_lookup_array` at index `a` (which 
+is populated by qubit `b`). Thus, if an operation is applied to qubit `b` (in the notation of above, `b = perm[op.q]`), we extract its physical slot `a`
+by using `register_lookup_array[inv_map[b]]`, where `inv_map` captures the inverse permutation of `mapping`; `inv_map[b]` evaluates to `a`, which is the
+correct index to retrieve from `register_lookup_array`.
+"""
+function encoding_circuit_gott(qec_code::AbstractCSSCode, network_specs::NetworkSpecifications, basis_state::Vector{Int})::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{Int}}
     @assert qec_code !== nothing 
-
-    encoding_circuit_gott, perm = _gottesman_encoding_circuit_raw(qec_code, basis_state)
-"""
-We wish to recover the original ordering from the canonicalization permutation.
-The permutation expresses, which index i gets qubit j. Now by the virtue of canonicalization, we need to make
-sure that an opertaion performed on index i is actually applied to qubit j. Thus, we relabel the affected qubit of 
-an operation from op.q to perm[op.q] (instead of introducing SWAP operations)
-"""
-
-    encoding_circuit_orig = Vector{AbstractOperation}()
+    encoding_circ_gott, perm = _gottesman_encoding_circuit_raw(qec_code, basis_state)
+    encoding_circuit_orig = Vector{QuantumClifford.AbstractOperation}()
     gate_counts = [0,0,0]
-
-    for op in encoding_circuit_gott
-        
+    for op in encoding_circ_gott
         T = typeof(op)
-        if T <: AbstractSingleQubitOperator
+        if T <: QuantumClifford.AbstractSingleQubitOperator
             push!(encoding_circuit_orig, T(perm[op.q]))
-            gate_counts += [1,0,0]
-        elseif T<: AbstractTwoQubitOperator
+            gate_counts[1] += 1
+        elseif T<: QuantumClifford.AbstractTwoQubitOperator
             p_control = perm[op.q1]
             p_target = perm[op.q2]
-            # perm is the permutation that identifies the qubit to apply the gate to (from permuted encoding circuit),
-            # but to identify telegates, we need the qubit mapping (here: the inverse mapping) from the DQC network specifications
             push!(encoding_circuit_orig, T(p_control, p_target))
             if network_specs.register_lookup_array[network_specs.inv_map[p_control]] == network_specs.register_lookup_array[network_specs.inv_map[p_target]]
-                # the above is equivalent to network_specs.register_lookup_array[findfirst(==(p_target), network_specs.permutation)]
-                gate_counts += [0,1,0]
+                gate_counts[2] += 1
             else
-                gate_counts += [0,0,1]
+                gate_counts[3] += 1
             end
         end
     end
-       
     circuit_sizes = gate_counts
-    
     @assert length(encoding_circuit_orig) == sum(circuit_sizes) 
-  
     return encoding_circuit_orig, gate_counts
 end
 
 
-
-function overlap_compilation(circuit, network_specs)
-
 """
-The overlap is a circuit compilation method used by Paetznick and Reichardt in "Fault-tolerant ancilla preparation and noise threshold lower bounds  for the 23-qubit Golay code" [2013]
-    to reduce the number of CNOTs in the encoding circuit of the Steane code. It makes use of overlapping gates to reduce certain sequences of four CNOTs to three, thus effectively reducing
-    gate count by 1.
+    overlap_compilation(circuit::Vector{QuantumClifford.AbstractOperation}, 
+                        network_specs::NetworkSpecifications)::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{Int}}
 
-The below code is valid for CSS codes with all-positive phases, which is a very large class of QEC codes. These requirements assure that the circuits consist entirely of H + CX , where 
-    a CX will never act on prior qubit based on the Gottesman canonical form, so everything commutes.
+Apply a DQC circuit compilation method based on the overlap method introduced by Paetznick and 
+Reichardt (https://arxiv.org/abs/1106.2190) to reduce the number of telegates in the encoding circuit. 
 
-Assume that we have a pair of CX(i,k), CX(j,k) that share target qubit k. Further assume that we have a different set of CX(i,m), CX(j,m), which 
-    share the same target qubit m, and whose control qubits i and j match those of the first pair of CX gates. For the central insight, if there are no other gates in between the controls that map |0> <-> |1> 
-    (such as X and Y, or the target of a CX), i.e., if in between we only find controls for other gates or Z-type gates, for example, then the latter set of controls is active iff the first is. In this case, the target qubit m
-    will be flipped iff the target qubit k is flipped, hence we may replace the second set of CX-gates with a CX-gate from k to m.
+### Input
 
-We use this insight to greedily find such quartets in the Gottesman encoding circuit, reducing the effective gate count. In the DQC setting, however, we don't want to reduce the gate count unconditionally, but only if 
-    reducing the gate count does not actually increase the telegate count. The only case in which this happens is when k and m do not share the same core, whereas i, j and m all share the same core (in this case, we
-    effectively remove two intra-core two-qubit gates and add one telegate, which is usually not desirable). Since the CX gates commute, however, we should in this case still insert a telegate between k and m, yet with 
-    control m and target k, while deleting the telegates CX_ik and CX_jk. 
+- `circuit` -- the initial uncompiled Gottesman encoding circuit
+- `network_specs` -- Type-II DQC networking specifications
 
-In order to assure that inserting new gates does not change the overall unitary, it is important to insert the new gate right at the next available spot in the compiled_circ vector. I.e., having identified gates 1-4, we insert
-two of them (depending on the DQC criterion), plus the added CX gate right after. Since all CNOT gates in the Gottesman circuit we created commute, this is valid, and it ensure that there is no mixing with other gates.
-However, there is a subtlety: While this procedure does the trick for one quartet, if we have another quartet that overlaps with a previous one, the inserted gate will be contaminated from earlier CNOT action that was not present 
-in the original circuit. Thus, we must make sure that only those gates can be inserted that have not been before target of a CX (besides from the ones in the quartet itself, of course). This is equivalent to blocking all those insertions
-that overlap in at least one qubit with a previous insertion. Since insertions are determined by the values of k and m, we add a blocking mechanism that prevents previously used qubits k and m to be accessed again for insertion. 
- 
-Also: Network of cleanly separated controls and targets, which we change in the course of compilation, so when grouping gates and adding them to the beginning, we need to be careful: 
-    we need to perform all possible such grouping first (also respecting the above point of not reusing inserted gate qubits), and only then append the qubits (commute them to the end) 
-    that were not able to participate in any such grouping such that those don't additionally contaminate insertions
+### Output
+
+Tuple of the compiled encoding circuit (`compiled_circ`) and the improved gate counts as a 3-element vector (`gate_counts`).
+
+### Notes
+
+The aforementioned method makes use of overlapping CNOT gates to reduce certain sequences of four CNOTs to three. The compilation 
+method is specifically tailored to optimise the logical zero state encoding of CSS codes. These restrictions ensure that control qubits 
+in `circuit` are never targets, and they further allow us to assume a H-CNOT template (possibly padded with X- and/or Z-gates for
+negative phase correction in the end). Therefore, we append the Hadamard gates in `circuit` first, then perform the compilation on
+the CNOT layer, and lastly append the single-qubit gate corrections. 
+
+For details about the compilation method itself, please refer to the publication that this repository accompanies.
 """
-
-    compiled_circ = Vector{AbstractOperation}()
-
-    remaining_gates = [gate for gate in circuit if typeof(gate) <: AbstractTwoQubitOperator ]
-
-    append!(compiled_circ, [gate for gate in circuit if typeof(gate) <: AbstractSingleQubitOperator])
-
-    # In the above construction of encoding circuits, we can safely push the single-qubit gates to the beginning of the circuit, and since we are working with CSS codes,
-    # we only need to consider CX gates. Also, controls here are never targets, so we can safely assume that no gates are in between, and disregard order entirely (everything commutes) for the search (not the insertion, see above)
-    
-    # Only perform compilation pass once since otherwise qubits might already be contaminated
-    
-    singular_gates = Vector{AbstractOperation}()
-
+function overlap_compilation(circuit::Vector{QuantumClifford.AbstractOperation}, 
+                                network_specs::NetworkSpecifications)::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{Int}}
+    compiled_circ = Vector{QuantumClifford.AbstractOperation}()
+    remaining_gates = Vector{QuantumClifford.AbstractOperation}()
+    phase_correction_gates = Vector{QuantumClifford.AbstractOperation}()
+    for gate in circuit
+        if typeof(gate) <: QuantumClifford.AbstractSingleQubitOperator
+            if gate isa sHadamard
+                push!(compiled_circ, gate)
+            else
+                push!(phase_correction_gates, gate)
+            end
+        elseif typeof(gate) <: QuantumClifford.AbstractTwoQubitOperator
+            if gate isa sCNOT || gate isa sZCX
+                push!(remaining_gates, gate)
+            else
+                @error "oops, this gate was not expected in the encoding circuit -- please double-check your code definition or submit an issue"
+            end
+        end
+    end
+    singular_gates = Vector{QuantumClifford.AbstractOperation}() # will accumulate gates that cannot be grouped with others in compilation
     insertion_gate_qubits = Vector{Int64}()
-
-    # we look for two pairs of CNOTs, as descibed above
     @label while_loop
     while !isempty(remaining_gates)
-        # Start with the first gate ik
-        CX_ik = remaining_gates[1]
-        i, k = affectedqubits(CX_ik)
-        # if (k ∈ insertion_gate_qubits)
-        #     push!(singular_gates, sCNOT(i,k) )
-        #     print(i,k, remaining_gates, CX_ik)
-        #     filter!(g -> g != CX_ik , remaining_gates)
-        #     @goto while_loop
-        # end
-        
-        # Find all potential jk gates that share the same target
-        CX_jks = filter(gate -> (affectedqubits(gate)[1] != i && affectedqubits(gate)[2] == k), remaining_gates) #findall(gate, gate.q2 ==k)
-
-     
-        # traverse the list
+        CX_ik = remaining_gates[1] # start with the first gate `ik`
+        i, k = affectedqubits(CX_ik)   
+        # find all potential `jk` gates that share the same target 
+        CX_jks = filter(gate -> (affectedqubits(gate)[1] != i && affectedqubits(gate)[2] == k), remaining_gates) 
         if !isempty(CX_jks)
             for CX_jk in CX_jks
-                # we have a combination ik + jk, now we need im and jm
-                j, k2 = affectedqubits(CX_jk)
+                j, k2 = affectedqubits(CX_jk) # for `{ik, jk}`, we need to find `im` and `jm`
                 @assert k == k2 "Oops, something went wrong in the filtering, the indices k=$k and k2=$k2 should match"
-
-                CX_ims = filter(gate -> (affectedqubits(gate)[1] == i && affectedqubits(gate)[2] != k), remaining_gates) #findall(gate, gate.q1 ==i)
-
+                CX_ims = filter(gate -> (affectedqubits(gate)[1] == i && affectedqubits(gate)[2] != k), remaining_gates)
                 if isempty(CX_ims)
                     continue
                 else 
                     for CX_im in CX_ims
                         i2, m = affectedqubits(CX_im)
-                        
                         @assert i == i2 "Oops, something went wrong in the filtering, the indices i=$i and i2=$i2 should match"
-
-                        # if (m ∈ insertion_gate_qubits)
-                        #     push!(singular_gates, sCNOT(i,m) )
-                        #     filter!(g -> g != CX_im , remaining_gates)
-                        #     continue
-                        # end
-                        # now we have ik + jk + im > only missing jm
-                        # there can only be one such CX_km gate by the way the Gottesman circuit is constructed
-                        CX_jms = filter(gate -> (affectedqubits(gate)[1] == j && affectedqubits(gate)[2] == m), remaining_gates) #findfirst(gate, gate.q1 ==j, gate.q2 ==m)
-                        @assert length(CX_jms) <= 1 "For any valid choice of i=$i, j=$j k=$k and m=$m, there should at most be one gate available"
+                        # for `{ik, jk, im}`, we need to find unique `jm` 
+                        CX_jms = filter(gate -> (affectedqubits(gate)[1] == j && affectedqubits(gate)[2] == m), remaining_gates)
+                        @assert length(CX_jms) <= 1 "for any valid choice of i=$i, j=$j k=$k and m=$m, the circuit can contain at most one CNOT_{jm}"
                         if isempty(CX_jms)
                             continue
-                            #push!(compiled_circ, CX_ik)
-                            #remaining_gates.pop(CX_ik) 
                         else
-                            # now we have a quartet ik + jk + im + jm
-                            # ----  DQC criterion  ------
-                            # we check the DQC criterion: are k and m in differnet cores?
-                            CX_jm = CX_jms[1] # filter returned an array of length 1
+                            # -------  DQC compilation for quartet `{ik, jk, im, jm}` ---------
+                            CX_jm = CX_jms[1] # filter() returned an array of length 1
                             k_register = network_specs.register_lookup_array[network_specs.inv_map[k]]
                             m_register = network_specs.register_lookup_array[network_specs.inv_map[m]]
-            
+                            # determine whether k and m are in different cores
                             if k_register != m_register
                                 i_register = network_specs.register_lookup_array[network_specs.inv_map[i]]
                                 j_register = network_specs.register_lookup_array[network_specs.inv_map[j]]
                                 if i_register == m_register && j_register == m_register
-                                    # in this special case, i and j are in the same register with m, but k is in a different one
-                                    # then we want to eliminate the first two gates, while adding a gate m>k (instead of k>m)
-
-                                    # But first, we need to check the contamination criteria again, on control qubit m
-                                    if (m ∈ insertion_gate_qubits)
+                                    if (m ∈ insertion_gate_qubits) # verify contamination criteria on m
                                         continue
                                     else
+                                        # `{i,j,m}` share a core disjoint from `k` -> eliminate `ik` and `jk` and add `mk`
                                         push!(compiled_circ, sCNOT(i,m))
                                         push!(compiled_circ, sCNOT(j,m))
                                         push!(compiled_circ, sCNOT(m,k))
                                         filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                                        #@info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$m and $j>$m, $m>$k "
                                         push!(insertion_gate_qubits, m)
-                                        push!(insertion_gate_qubits, k)
-                                        # remaining_gates.pop(CX_ik) 
-                                        # remaining_gates.pop(CX_jk) 
-                                        # remaining_gates.pop(CX_im)
-                                        # remaining_gates.pop(CX_jm)  
+                                        push!(insertion_gate_qubits, k) 
                                         @goto while_loop 
                                     end
                                 end
                             end
-                            # in this case (we don't add a telegate, or we don't add an additional one at least), we proceed to add the gate and delete the other two
-                            # in this case, it is always beneficial to add the new gate, since we are not introducing a telegate
-                            # this strategy might not be globally optimally, but it provides a good greedy approach
-
-                            # But first, we need to check the contamination criteria again
-                            if (k ∈ insertion_gate_qubits)
+                            if (k ∈ insertion_gate_qubits) # verify contamination criteria on k
                                 continue
                             else
+                                # eliminate `im` and `jm` and add `km`
                                 push!(compiled_circ, sCNOT(i,k))
                                 push!(compiled_circ, sCNOT(j,k))
                                 push!(compiled_circ, sCNOT(k,m))
                                 filter!(g -> g ∉ (CX_ik, CX_jk, CX_im, CX_jm) , remaining_gates)
-                                #@info "Deleted gates $i>$k, $j>$k, $i>$m and $j>$m, added gates $i>$k and $j>$k, $k>$m "
                                 push!(insertion_gate_qubits, k)
                                 push!(insertion_gate_qubits, m)
-                                # After adding the 3 gates to circuit and deleting 4 gates, we don't traverse the circuit again (one compilation pass)
-
                                 @goto while_loop 
                             end
                         end
                     end
                 end
             end
-        end
-        
-        #Now after all the checks and then nothing was found), we remove this gate from the list while adding it to the circuit to maintain its action
+        end        
         push!(singular_gates, sCNOT(i,k))
-        filter!(g -> g != CX_ik, remaining_gates) #remaining_gates.pop(CX_ik) 
-
+        filter!(g -> g != CX_ik, remaining_gates)
     end
-
-    compiled_circ = vcat(compiled_circ, singular_gates)
-
+    compiled_circ = vcat(compiled_circ, singular_gates,phase_correction_gates)
+    # retrieve the update gate counts
     gate_counts = [0,0,0]
-
     for op in compiled_circ
-        
         T = typeof(op)
-        if T <: AbstractSingleQubitOperator
+        if T <: QuantumClifford.AbstractSingleQubitOperator
             gate_counts += [1,0,0]
-        elseif T<: AbstractTwoQubitOperator
+        elseif T<: QuantumClifford.AbstractTwoQubitOperator
             control = op.q1
             target = op.q2
-            # perm is the permutation that identifies the qubit to apply the gate to (from permuted encoding circuit),
-            # but to identify telegates, we need the qubit mapping (here: the inverse mapping) from the DQC network specifications
             if network_specs.register_lookup_array[network_specs.inv_map[control]] == network_specs.register_lookup_array[network_specs.inv_map[target]]
-                # the above is equivalent to network_specs.register_lookup_array[findfirst(==(p_target), network_specs.permutation)]
                 gate_counts += [0,1,0]
             else
                 gate_counts += [0,0,1]
             end
         end
     end
-      
     return compiled_circ, gate_counts
-
 end
 
 
-function encoding_gott(code_params, network_specs, basis_state)
+"""
+    encoding_gott(code_params::CodeParameters, network_specs::NetworkSpecifications, 
+                    basis_state::Vector{Int})::Tuple{Vector{AbstractOperation}, Vector{AbstractOperation}, Bool, Bool, Vector{Int}, Vector{Int}}
 
+Entry point to module used to initialise Gottesman circuit generation and DQC compilation.
+
+### Input
+
+- `code_params` -- code parameters
+- `network_specs` -- Type-II DQC networking specifications
+- `basis_state` -- the computational basis state to be encoded
+
+### Output
+
+Returns a 6-element Tuple containin the Gottesman encoding circuit (on original qubit ordering), the overlap-compiled
+encoding circuit, the verification booleans for both circuits, and the gate counts for both circuits.
+"""
+function encoding_gott(code_params::CodeParameters, network_specs::NetworkSpecifications, 
+                        basis_state::Vector{Int})::Tuple{Vector{QuantumClifford.AbstractOperation}, Vector{QuantumClifford.AbstractOperation}, Bool, Bool, Vector{Int}, Vector{Int}}
     encoding_circ, gate_counts = encoding_circuit_gott(code_params.qec_code, network_specs, basis_state)
-
     encoding_circ_compiled, gate_counts_compiled = overlap_compilation(encoding_circ, network_specs)
-
-    # @info "Encoding Circuit: $encoding_circ"
-    # @info "Gottesman encoding circuit length in DQC setting:: Single-qubit gates: $(gate_counts[1]), Two-qubit gates: $(gate_counts[2]), Telegates: $(gate_counts[3])"
-
-    # @info "Encoding circuit compiled: $encoding_circ_compiled"
-    # @info "Overlap DQC compilation circuit length in DQC setting:: Single-qubit gates: $(gate_counts_compiled[1]), Two-qubit gates: $(gate_counts_compiled[2]), Telegates: $(gate_counts_compiled[3])"
-
-
-    # ----- Verification ------
     verification_logical_state = verify_success(encoding_circ, code_params.target_state, network_specs)
-    @info "Verification of Gottesman circuit successful: $verification_logical_state, gate count: $gate_counts"
-
+    @info "Verification of Gottesman circuit successful: $verification_logical_state, Gate count: $gate_counts"
     verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
-    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled, gate count: $gate_counts_compiled"
-
-    return encoding_circ, encoding_circ_compiled, verification_logical_state, verification_logical_state_compiled, gate_counts, gate_counts_compiled
+    @info "Verification of Compiled circuit successful: $verification_logical_state_compiled, Gate count: $gate_counts_compiled"
+    return encoding_circ, encoding_circ_compiled, verification_logical_state, 
+            verification_logical_state_compiled, gate_counts, gate_counts_compiled
 end
 
 
