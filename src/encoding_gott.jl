@@ -1,7 +1,7 @@
 # encoding_gott.jl
 
 """ 
-Encoding circuits for stabiliser codes.
+Gottesman encoding circuits and DQC compilation thereof for CSS stabiliser codes.
 
 Credit: The implementation of `_gottesman_encoding_circuit_raw` is (up to minor details) identical to the implementation in the 
         QuantumClifford library (https://github.com/QuantumSavory/QuantumClifford.jl, https://arxiv.org/abs/2512.16752), which can
@@ -332,6 +332,7 @@ function encoding_gott(code_params::CodeParameters, network_specs::NetworkSpecif
     @info "Verification of Gottesman circuit successful: $verification_logical_state, Gate count: $gate_counts"
     verification_logical_state_compiled = verify_success(encoding_circ_compiled, code_params.target_state, network_specs)
     @info "Verification of Compiled circuit successful: $verification_logical_state_compiled, Gate count: $gate_counts_compiled"
+    @assert verification_logical_state_compiled "oops, this DQC compilation failed -- please double-check your code definition or submit an issue"
     return encoding_circ, encoding_circ_compiled, verification_logical_state, 
             verification_logical_state_compiled, gate_counts, gate_counts_compiled
 end

@@ -1,5 +1,8 @@
 # mcts.jl
 
+"""
+Monte Carlo Tree search for efficient encoding circuits of CSS QEC codes.
+"""
 module MonteCarloTreeSearch
 
 export monte_carlo_tree_search
