@@ -361,6 +361,12 @@ Compute the normalised distance between two tableau bit-matrices.
 ### Output
 
 Returns a scalar in `[0.0, 1.0]`, where `0.0` indicates identical tableaus.
+
+### Notes
+
+There is an implicit guardrail against a division-by-zero error for the `jaccard`-distance; it can never
+occur, since otherwise both `matrix` and `target_matrix` would have to be trivial, and thus not define a
+valid quantum state.
 """
 function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}; metric = "jaccard")::Float64
     @assert size(matrix) == size(target_matrix) "Mismatch in dimensions"
@@ -425,84 +431,30 @@ function gate_counts(circuit::Vector{AbstractOperation}, n::NetworkSpecification
 end
 
 
-# as used in verificaion gate counting
-function gate_counts(verification_circuit::Vector{Abstractoperation}, n::NetworkSpecifications, ancilla_map::Vector{Int})::Tuple{Vector{Int}, Int}
+"""
+    save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)::nothing
 
-    #mapping = copy(n.inv_map)
-    num_ancillas = length(ancilla_map)
-    all_qubits = 1:(n.num_data_and_comm_qubits + num_ancillas)
-    ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
-    gate_counts = [0,0,0]
-    num_meas = 0
+Render and save a circuit diagram to disk using the `Quantikz`
+library (https://arxiv.org/abs/1809.03842, https://github.com/QuantumSavory/Quantikz.jl).
 
-    for op in verification_circuit
-        T = typeof(op)
-        if T <: AbstractSingleQubitOperator
-            #qubit = op.q
-            # In the verifciation circuit, Hadamard gates are ONLY applied to ancillas, which sit at their regular index
-            #push!(circuit, sHadamard(qubit))
-            #add_noise(circuit, [qubit], noise.p_single) # single-qubit noise, ancilla qubits experience the same sort of noise, since they are of the same physical type
-            gate_counts[1] += 1
+### Input
 
-        elseif T <: AbstractTwoQubitOperator
-            control = op.q1
-            target = op.q2
-            DQC_control = -1
-            DQC_target = -1
-            control_register = -1
-            target_register = -1
+- `circuit` -- the quantum circuit to render
+- `directory` -- path to the output directory
+- `label` -- filename (without path) for the saved diagram
 
-            if control in ancilla_qubits 
-                DQC_control = control
-                control_register = ancilla_map[control-n.num_data_and_comm_qubits] 
-            else
-                DQC_control = n.inv_map[control]
-                control_register = n.register_lookup_array[DQC_control] 
-            end
-            if target in ancilla_qubits
-                DQC_target = target
-                target_register = ancilla_map[target-n.num_data_and_comm_qubits] 
-            else
-                DQC_target = n.inv_map[target]
-                target_register = n.register_lookup_array[DQC_target] 
-            end
-            
-            @assert DQC_control > 0 
-            @assert DQC_target > 0 
-            @assert control_register > 0 
-            @assert target_register > 0 
+### Notes
 
-            if control_register == target_register 
-                #push!(circuit, sCNOT(DQC_control, DQC_target))
-                gate_counts[2] += 1
-                #add_noise(circuit, [DQC_control, DQC_target], noise.p; two_qubits = true) # two-qubit noise
-            else
-
-                gate_counts[3] += 1
-            end
-        elseif T <: sMZ
-            num_meas +=1
-        else
-            throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
-        end
-    end
-    return gate_counts, num_meas
-end
-
-
-
-
-
-
-
-function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory, label)
+For moderate register sizes (~ < 15 qubits), the saving works well, yet for larger registers we Quantikz 
+memory capacity might be exceeded, in which case we skip the saving.
+"""
+function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)::nothing
     @with classicalbitslayout => :expanded begin
         try
         savecircuit(
             circuit,
             joinpath(directory, label);
             scale = 1
-            
         )
         catch 
             @warn "Saving circuit picture failed. The most likely cause is the large circuit size." 
@@ -511,19 +463,31 @@ function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}
 end
 
 
+"""
+    verify_success(circuit::Vector{AbstractOperation}, target_state::Stabilizer, n::NetworkSpecifications)::Bool
 
+Verify whether a given circuit successfully prepares the target logical zero state.
 
+### Input
 
+- `circuit` -- quantum circuit to verify
+- `target_state` -- the target stabilizer state to check against
+- `n` -- network specification object 
 
+### Output
 
+Returns `true` if the circuit encodes the target logical zero state, `false` otherwise.
 
-# AS USED IN GENETIC, MCTS and GOTTESMAN as well as mqt and qiskit baseline encoding
-function verify_success(circuit, target_state, n)#; comm_setting=false)
+### Notes
+
+Verification appends a `VerifyOp` to the circuit and uses `mctrajectory!` for simulation, and
+throws an `ErrorException` if the simulation terminates with an unexpected status.
+"""
+function verify_success(circuit::Vector{AbstractOperation}, target_state::Stabilizer, n::NetworkSpecifications)::Bool
     verification_circuit = copy(circuit)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
-   
     initial_state = Register(one(MixedDestabilizer, n.num_data_and_comm_qubits),n.num_registers*(n.num_registers-1))
-    state, stat = mctrajectory!(initial_state, verification_circuit)#, trajectories=n.num_shots)
+    state, stat = mctrajectory!(initial_state, verification_circuit)
     if stat == true_success_stat
         return true
     elseif stat == false_success_stat
@@ -534,19 +498,47 @@ function verify_success(circuit, target_state, n)#; comm_setting=false)
 end
 
 
+"""
+    code_dirname(code)::String
 
+Extract a normalised base name for a QEC code for usage as directory name.
 
+### Input
 
+- `code` -- a QEC code object whose type name encodes the code family
 
-function code_dirname(code)
-    name = string(nameof(typeof(code)))   # "Steane7" or "TrivariateBicycleViaCirculantMat"
-    name = replace(name, r"Via.*$" => "") # "TrivariateBicycle"
-    name = replace(name, r"\d+$" => "")   # "Steane"
+### Output
+
+Returns the directory name string corresponding to the code.
+
+### Examples
+We remove trailing digits and any `Via...` suffix in the code name, e.g., 
+`Steane7` becomes `Steane`, and `TrivariateBicycleViaCirculantMat` becomes `TrivariateBicycle`.
+"""
+function code_dirname(code::AbstractCSSCode)::String
+    name = string(nameof(typeof(code))) 
+    name = replace(name, r"Via.*$" => "") 
+    name = replace(name, r"\d+$" => "")  
     return name
 end
 
 
-function save_txt(folder, title, obj)
+"""
+    save_txt(folder::String, title::String, obj::Any)::nothing
+
+Serialise all fields of a struct to a plain-text file.
+
+### Input
+
+- `folder` -- path to the output directory
+- `title` -- filename for the output file
+- `obj` -- any Julia struct whose fields are to be written
+
+### Notes
+
+Each line of the output file has the form `fieldname = repr(value)`.
+"""
+function save_txt(folder::String, title::String, obj::Any)::nothing
     open(joinpath(folder, title), "w") do io
         for fn in fieldnames(typeof(obj))
             println(io, fn, " = ", repr(getfield(obj, fn)))
@@ -555,8 +547,16 @@ function save_txt(folder, title, obj)
 end
 
 
-# For Quantikz
+
+function QuantikzOp(op::ConditionalGate)
+    # Maps a ConditionalGate to a Quantikz ClassicalDecision for circuit diagram rendering.
+    targets = collect(affectedqubits(op.truegate))
+    label = _conditional_gate_label(op.truegate)
+    return ClassicalDecision(label, targets, op.controlbit)
+end
+
 function _conditional_gate_label(g::QuantumClifford.AbstractOperation)
+    # Returns the single-character Pauli/gate label for a conditional gate operand.
     repr_g = string(g)
     if occursin("sX", repr_g)
         return "X"
@@ -571,13 +571,6 @@ function _conditional_gate_label(g::QuantumClifford.AbstractOperation)
     end
     return "U"
 end
-
-function QuantikzOp(op::ConditionalGate)
-    targets = collect(affectedqubits(op.truegate))
-    label = _conditional_gate_label(op.truegate)
-    return ClassicalDecision(label, targets, op.controlbit)
-end
-
 
 
 
