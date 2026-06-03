@@ -11,7 +11,7 @@ using ..Types
 using ..Helper
 
 using QuantumClifford: MixedDestabilizer, Tableau, AbstractOperation, stabilizerview, AbstractSingleQubitOperator,
-                        AbstractTwoQubitOperator, sHadamard, sCNOT, tab, canonicalize_rref!
+                        AbstractTwoQubitOperator, sHadamard, sCNOT, tab, canonicalize_rref!, Register, mctrajectory!
 using POMDPs, POMDPTools
 using MCTS
 using Random
@@ -226,7 +226,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::AbstractOpera
         reward -= mdp.mcts_params.fitness_weights[2]
         gate_counts[1] += 1
         qubit = action.q
-        new_quantum_state = execute_circuit([sHadamard(qubit)], initial_quantum_state)
+        new_quantum_state = execute_circuit(AbstractOperation[sHadamard(qubit)], initial_quantum_state)
     elseif action isa AbstractTwoQubitOperator
         control = action.q1
         target = action.q2
@@ -239,7 +239,7 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::AbstractOpera
             reward -= mdp.mcts_params.fitness_weights[4]
             gate_counts[3] += 1
         end
-        new_quantum_state = execute_circuit([sCNOT(control, target)], initial_quantum_state)
+        new_quantum_state = execute_circuit(AbstractOperation[sCNOT(control, target)], initial_quantum_state)
     end
     new_quantum_state_tab = tab(canonicalize_rref!( stabilizerview(new_quantum_state) )[1])
     new_quantum_state_bit_matrix = tableau_to_bitmatrix(new_quantum_state_tab) 
@@ -251,7 +251,32 @@ function POMDPs.gen(mdp::EncodingMDP, state::CircuitState, action::AbstractOpera
 end
 
 
-``` Hash overwrites to discern equality of actions and states.```
+"""
+    execute_circuit(circuit::Vector{AbstractOperation}, 
+                        initial_state::MixedDestabilizer{Tableau{Vector{UInt8}, Matrix{UInt64}}})::MixedDestabilizer
+
+Execute the given sequence of gates applied to a specified `initial_state`.
+
+### Input
+- `circuit` -- the specified sequence of quantum gates to apply
+- `initial_state` -- the state onto which the circuit is applied
+
+### Output
+The final state of the quantum system, captured as `MixedDestabilizer` object.
+
+### Notes
+For circuit execution, we leverage the Monte Carlo trajectory simulation
+function `mctrajectory!` provided by `QuantumClifford`.
+"""
+function execute_circuit(circuit::Vector{AbstractOperation}, 
+                        initial_state::MixedDestabilizer{Tableau{Vector{UInt8}, Matrix{UInt64}}})::MixedDestabilizer
+    initial_state = Register(initial_state, 0)
+    state, stat = mctrajectory!(copy(initial_state), circuit)
+    return state.stab
+end
+
+
+``` Hash overwrites to discern equality of actions and states```
 function Base.hash(s::CircuitState, h::UInt)
     hash(s.circuit, h)
 end

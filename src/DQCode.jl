@@ -383,6 +383,7 @@ function circuit_search_gott_ga(exp_label::String)::String
         mkpath(dir)
         serialize( joinpath(dir, "gott_encoding_circuit.jls"), gottesman_encoding_circuit )
         serialize( joinpath(dir, "gott_circuit_dqc_compiled.jls"), dqc_compiled_encoding_circuit )
+        @info "Saving best-performing individual from genetic search, conditioned on `fidelity=1.0`."
         serialize(joinpath(dir, "GA_circuit.jls"), GA_encoding_circuit)
         save_txt(dir, "genetic_algorithm_parameters.txt", genetic_params)
         save_circuit_diagram(gottesman_encoding_circuit, dir, "gott_encoding_circuit.png")

@@ -1,16 +1,22 @@
 include(joinpath(@__DIR__, "..", "..", "src", "DQCode.jl"))
 using .DQCode
 
-exp_label = "trivariate_4_4_4" # available configurations are stored and can be adapted in src/experiment/config.jl
-circuit_path = "mqt_encoding/mqt_encoding_circuit.jls"
-#circuit_path = "warmstart_GA/GA_circuit.jls" # set the circuit path (within the {code}/{architecture}/ folder of interest) that you wish to simulate
+mqt_path = normpath(joinpath(@__DIR__, "..", "..", "..", "qecc")) # assumes that PyCall was build correspondingly (see setup instructions in README.md)
+isdir(mqt_path) || error("Cannot find qecc at $mqt_path. Clone qecc next to DQCode, or set mqt_path manually in this script.")
 
-# Initialise the DQC simulation
-method = "heuristic" # "optimal", "heuristic" or "none"
+exp_label = "steane_4_3" # available configurations are stored and can be adapted in src/experiment/config.jl
 
-num_samples = 3e5
-ps = 10 .^ range(log10(5e-5),log10(1e-3),length=30) 
-p_bells = 10 .^ range(log10(1e-3),log10(5e-2), length = 30) 
-telegate_idle_depth = 10 # THIS SHOULD STAY FIXED (MOTIVATED BY TELEGATE EXECUTION TIME)
-# We assume classical communication to be noiseless and crosstalk noise to be negligible
-DQCode.dqc_simulation(exp_label, DQCode.MQT_PATH, circuit_path, num_samples, ps, p_bells, telegate_idle_depth, method)
+circuit_path = "warmstart_ga/GA_circuit.jls" # set circuit path (within {code}/{architecture}/ folder) pointing to the circit to simulate
+method = "optimal" # "optimal", "heuristic" or "none" 
+
+num_samples = 2.5e5
+ps = 10 .^ range(log10(5e-5),log10(1e-3),length=15) 
+p_bells = 10 .^ range(log10(1e-3),log10(5e-2), length = 15) 
+telegate_idle_depth = 10
+p_single_ratio = 1/100
+p_idle_ratio = 1/10
+DQCode.dqc_simulation(exp_label, mqt_path, circuit_path, Int(num_samples), ps, p_bells,
+                        telegate_idle_depth, p_single_ratio, p_idle_ratio, method) # perform the DQC simulation
+
+
+

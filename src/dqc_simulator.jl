@@ -209,7 +209,7 @@ function dqc_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bel
     python_bin = joinpath(mqt_path, ".venv/bin/python3")
     script_path =  joinpath(mqt_path, "scripts/verification_circuit.py")
     # --------- Verification Circuit --------------
-    @info "Retrieving verification circuit"
+    @info "Retrieving verification circuit..."
     verification_circ_qasm = readchomp(`$(python_bin) $(script_path) $qasm $(code_params.distance) $(method)`)
     verification_circ = qasm2.loads(verification_circ_qasm) 
     @info "Retrieved verification circuit"
