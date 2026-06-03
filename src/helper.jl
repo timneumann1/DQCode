@@ -184,7 +184,6 @@ function data_qubit_partitioning(capacities::Vector{Int}, stabilizers::Stabilize
     k = length(capacities)
     nqubits = size(stabilizers, 2)
     @assert sum(capacities) == nqubits "Register capacities must sum to code length: $(sum(capacities)) vs. $nqubits"  
-    @info stabilizers  
     # Build incidence matrix: rows=qubits (vertices), cols=stabilizers (hyperedges)
     I = Int[]
     J = Int[]
@@ -209,12 +208,10 @@ function data_qubit_partitioning(capacities::Vector{Int}, stabilizers::Stabilize
         @warn "no stabilizer supports found; returning identity mapping"
         return collect(1:nqubits)
     end
-    @info "I: $I, J: $J"
     A = sparse(I, J, ones(Int, length(I)), nqubits, e)
     h = KaHyPar.HyperGraph(A) # apply KaHyPa to partition the graph
     cfg = joinpath(@__DIR__, "km1_kKaHyPar_sea20.ini")
     partition = KaHyPar.partition(h, k; configuration=cfg)
-    @info "partition: $partition"
     assignments = partition.+1 # KaHyPar is a Python-based optimiser based on 0 indexing
     block_sizes = [count(==(b), assignments) for b in 1:k]
     if block_sizes != capacities
@@ -226,8 +223,7 @@ function data_qubit_partitioning(capacities::Vector{Int}, stabilizers::Stabilize
     end
     @assert length(mapping) == nqubits
     @assert sort(mapping) == collect(1:nqubits)
-    println("KaHyPar assignments: $assignments")
-    println("Data-qubit mapping: $mapping")
+    @info "DQC qubit mapping determined by KaHyPar: $mapping"
     return mapping
 end
 
@@ -267,7 +263,6 @@ is converted to the QASM 2.0 string
     cx q[3],q[1];
 """
 function qc_circuit_to_qasm(circ::Vector{QuantumClifford.AbstractOperation})::String
-    @info circ
     max_q = 1
     for g in circ
         if g isa AbstractSingleQubitOperator
@@ -290,7 +285,6 @@ function qc_circuit_to_qasm(circ::Vector{QuantumClifford.AbstractOperation})::St
             push!(qasm_code, "cx q[$(g.q1-1)],q[$(g.q2-1)];")
         end
     end
-    @info join(qasm_code, "\n")
     return join(qasm_code, "\n")
 end
 

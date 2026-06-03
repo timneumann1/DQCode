@@ -1,20 +1,14 @@
+# symplectic_double_code.jl
 
+"""
+Symplectic Double Code implementation, based on https://arxiv.org/pdf/2509.15457.
+"""
 module SymplecticDoubleCode
-"""
-Markus Grassl.
-"Bounds on the minimum distance of linear codes and quantum codes."
-Online available at http://www.codetables.de.
-Accessed on 2026-05-20.
-"""
-
-"""
-Discussed in https://arxiv.org/pdf/2509.15457:
-CSS code with logical ops known
-"""
-
-import QECCore: AbstractCSSCode, code_n, code_k, parity_matrix_x, parity_matrix_z, distance
 
 export SymplecticDouble
+
+import QECCore: AbstractCSSCode, code_n, parity_matrix_x, parity_matrix_z
+
 
 struct SymplecticDouble <: AbstractCSSCode end
 
@@ -50,12 +44,6 @@ _Hz = Bool[
 
 parity_matrix_x(c::SymplecticDouble) = hcat(_Hx, _Hz)
 parity_matrix_z(c::SymplecticDouble) = hcat(_Hz, _Hx)
-
-
 code_n(c::SymplecticDouble) = 30
-#code_k(c::sd30_6_5) = 6
-
-#distance(c::sd30_6_5) = 5
-
 
 end

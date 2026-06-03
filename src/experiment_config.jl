@@ -1,14 +1,19 @@
+# experiment_config.jl
+
+"""
+Stores the code-network configurations to be investigated, with `code_architecture_setup` containing
+the CSS code and GPU sizes of a setup. 
+Also allows to define hyperparameters for genetic search and MCTS for each code-network configuration.
+"""
 module ExperimentConfig
 
+export experiment_configurations
+
 using ..Types: GeneticParameters, MCTSParameters
-using QECCore: Steane7, Shor9, AbstractCSSCode, BivariateBicycleViaCirculantMat, Triangular488#, distance
 using ..TrivariateBicycleCode
 using ..SymplecticDoubleCode
 
-# This file indicates the code-network configurations we are investigating, with code and gpu_sizes indicating the differnet setups,
-# and the parameters being used as defaults for the circuit search (can be changed in scripts).
-
-export experiment_configurations
+using QECCore: Steane7, Shor9, AbstractCSSCode, BivariateBicycleViaCirculantMat, Triangular488
 
 function experiment_configurations()
 
@@ -50,13 +55,13 @@ function experiment_configurations()
 
     code_architecture_setup["trivariate_6_6"] = ( TrivariateBicycleViaCirculantMat(2, 3, [(:x, 1), (:y, 2)],[(:x, 0), (:z, 4)]), [6,6] )
     genetic_params["trivariate_6_6"] = GeneticParameters(25000, 2500, 100, 0.85, 5, 0.5, 1, [1e4, 1, 10, 5e2], "jaccard")
-    mcts_params["trivariate_6_6"] = MCTSParameters(30, [1e6,1,5,4e4], 0.99,"jaccard", true, 2, 5e4, 5.0)
+    mcts_params["trivariate_6_6"] = MCTSParameters(50, [1e6,1,5,4e4], 0.99,"jaccard", true, 2, 5e4, 5.0)
     
     # ------- Color [[17,1,5]] - [8,9] ---------
 
     code_architecture_setup["color_8_9"] = ( Triangular488(5), [8,9] )
     genetic_params["color_8_9"] = GeneticParameters(15000, 2500, 100, 0.85, 5, 0.5, 1, [2e4, 1, 10, 2e3], "jaccard")
-    mcts_params["color_8_9"] = MCTSParameters(30, [1e6,1,5,4e4], 0.99,"jaccard", false, 2, 5e4, 5.0)
+    #mcts_params["color_8_9"] = MCTSParameters(50, [1e6,1,5,2e3], 0.99, "jaccard", false, 3, 5e4, 5.0)
     
     # ------- Bivariate Bicycle [[18,4,4]] - [3,3,3,3,3,3] ---------
 
@@ -80,8 +85,7 @@ function experiment_configurations()
     # ------- Symplectic Double Code [[30,6,5]] - [15, 15] ---------
 
     code_architecture_setup["sd_15_15"] = (  SymplecticDouble(), [15,15] )
-    
-    
+
     # ------- Trivariate Bicycle [[30,4,5]] - [15,15] ---------------
 
     code_architecture_setup["trivariate_15_15"] = ( TrivariateBicycleViaCirculantMat(5, 3, [(:x, 4), (:x, 2)], [(:x, 1), (:x, 2), (:y, 1), (:z, 2), (:z, 3)]), [15,15] )
@@ -89,7 +93,6 @@ function experiment_configurations()
     # ------- Color [[31,1,7]] - [15,16] ---------
 
     code_architecture_setup["color_15_16"] = ( Triangular488(7), [15,16] )
-    
 
     # ------- Bivariate Bicycle [[36,4,6]] - [12,12,12] ---------
 
@@ -101,9 +104,8 @@ function experiment_configurations()
         BivariateBicycleViaCirculantMat(12, 6, [(:x, 3), (:y, 1), (:y, 2)], [(:y, 3), (:x, 1), (:x, 2)]),
         [12,12,12,12,12,12,12,12,12,12,12,12]
     )
-
+    
     return code_architecture_setup, genetic_params, mcts_params
-
 end
 
 
