@@ -36,7 +36,7 @@ using PyCall
 using StatsBase
 using LinearAlgebra
 
-import QuantumClifford: apply!, affectedqubits, applynoise! 
+import QuantumClifford: affectedqubits, applynoise! 
 
 qiskit = pyimport("qiskit")
 qasm2 = pyimport("qiskit.qasm2")
@@ -979,29 +979,77 @@ end
 # ------------ Noise functions for executable circuit ---------------
 
 # Depolarising channel: https://github.com/QuantumSavory/QuantumClifford.jl/blob/74ee758e87f5d7b1255d6747b346cff15ee10cea/src/noise.jl#L63-73
-function add_noise(circuit, qubits::Vector{Int}, prob::Float64; two_qubits = false) 
-    """Depolarising noise on a set of qubits"""
+"""
+    add_noise(circuit::Vector{AbstractOperation}, qubits::Vector{Int}, prob::Float64; two_qubits = false)::Vector{AbstractOperation}
+
+Add (correlated or uncorrelated) depolarising noise with a specified error probability `prob` on a set of `qubits`.
+
+### Input
+
+- `circuit` -- vector encoding the quantum circuit to which the noise is to be added
+- `qubits` -- qubits onto which the noise channel is applied
+- `prob` -- depolarising noise channel error proability
+- `two_qubits` -- (optional, default: `false`) controls whether or not to apply correlated noise on two qubits
+
+### Output
+
+Returns the DQC `circuit` with the appended noise operation.
+
+### Notes
+
+The error channel `UnbiasedUncorrelatedNoise` applies a single-qubit Pauli gate (`X`, `Y` or `Z`) on each qubit in `qubits` with probability `prob/3`.
+
+The error channel `TwoQubitDepolarisingNoise` applies a non-trivial two-qubit Pauli gate (`IX`, `IY`, ..., `ZY`, `ZZ`) on the two specificied 
+qubits in `qubits` with probability `prob/15`.
+"""
+function add_noise(circuit::Vector{AbstractOperation}, qubits::Vector{Int}, prob::Float64; two_qubits = false)::Vector{AbstractOperation}
     if prob<0 || prob > 1
         throw("Please provide a valid noise probabilty in [0,1]")
     end
     if two_qubits
-        @assert length(qubits) == 2 "Trying to apply a two-qubit channel to a system of size $(length(qubits))"
-        noise = NoiseOp(TwoQubitDepolarisingNoise(prob),qubits);
+        @assert length(qubits) == 2 "you are trying to apply a two-qubit correlated noise channel to a system of size $(length(qubits))"
+        noise = NoiseOp(TwoQubitDepolarisingNoise(prob), qubits) # apply correlated noise
     else
-        noise = NoiseOp(UnbiasedUncorrelatedNoise(prob),qubits);
+        noise = NoiseOp(UnbiasedUncorrelatedNoise(prob), qubits) # apply uncorrelated noise
     end
-
     push!(circuit, noise)
     return circuit
 end
 
 
+"""
+    TwoQubitDepolarisingNoise
+
+Type that defines a two-qubit correlated depolarising noise channel.
+
+### Fields
+
+- `p` -- error probability for depolarising noise channel
+"""
 struct TwoQubitDepolarisingNoise{T} <: QuantumClifford.AbstractNoise
     p::T
 end
+
 TwoQubitDepolarisingNoise(p::Integer) = TwoQubitDepolarisingNoise(float(p))
 
-function applynoise!(s::AbstractStabilizer, noise::TwoQubitDepolarisingNoise, indices::Tuple{Int, Int})
+
+"""
+    applynoise!(s::AbstractStabilizer, noise::TwoQubitDepolarisingNoise, indices::Tuple{Int, Int})::AbstractStabilizer
+
+Implement the circuit execution structure of two-qubit correlated depolarising noise of error
+probability `p`.
+
+### Input
+
+- `s` -- stabiliser object on which the noise channel is performed during circuit execution
+- `noise` -- noise object of type `TwoQubitDepolarisingNoise` capturing the error probability
+- `indices` -- qubit indices on which the correlated noise is applied
+
+### Output
+
+Returns the stabiliser object after the application of the noise channel.
+"""
+function applynoise!(s::AbstractStabilizer, noise::TwoQubitDepolarisingNoise, indices::Tuple{Int, Int})::AbstractStabilizer
     infid = noise.p/15
     i,j = indices[1], indices[2]
     r = rand()
@@ -1045,11 +1093,27 @@ function applynoise!(s::AbstractStabilizer, noise::TwoQubitDepolarisingNoise, in
         apply_single_y!(s,i)
         apply_single_z!(s,j)
     end
-    s
+    return s
 end
 
 
-function affectedqubits(op::ConditionalGate)
+function affectedqubits(op::AbstractSingleQubitOperator)::Vector{Int}
+    # returns the affected qubits of a single-qubit gate as vector
+    qs = Int[]
+    append!(qs, op.q)
+    return qs
+end
+
+function affectedqubits(op::AbstractTwoQubitOperator)::Vector{Int}
+    # returns the affected qubits of a two-qubit gate as vector
+    qs = Int[]
+    append!(qs, op.q1)
+    append!(qs, op.q2)
+    return qs
+end
+
+function affectedqubits(op::ConditionalGate)::Vector{Int}
+    # returns the affected qubits of a conditional gate as vector
     qs = Int[]
     append!(qs, collect(affectedqubits(op.truegate)))
     if op.falsegate !== nothing
@@ -1058,24 +1122,13 @@ function affectedqubits(op::ConditionalGate)
     return unique(qs)
 end
 
-function affectedqubits(op::AbstractSingleQubitOperator)
-    qs = Int[]
-    append!(qs, op.q)
-    return qs
-end
-
-function affectedqubits(op::sMZ)
+function affectedqubits(op::sMZ)::Vector{Int}
+    # returns the affected qubits of a measurement operation as vector
     qs = Int[]
     append!(qs, op.qubit)
     return qs
 end
 
-function affectedqubits(op::AbstractTwoQubitOperator)
-    qs = Int[]
-    append!(qs, op.q1)
-    append!(qs, op.q2)
-    return qs
-end
 
 
 

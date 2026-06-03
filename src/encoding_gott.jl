@@ -6,6 +6,7 @@ Gottesman encoding circuits and DQC compilation thereof for CSS stabiliser codes
 Credit: The implementation of `_gottesman_encoding_circuit_raw` is (up to minor details) identical to the implementation in the 
         QuantumClifford library (https://github.com/QuantumSavory/QuantumClifford.jl, https://arxiv.org/abs/2512.16752), which can
         be inspected at https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl.
+        [The QuantumClifford.jl repository is licensed under a MIT license.]
 """
 module EncodingGott
 

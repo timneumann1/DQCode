@@ -26,13 +26,13 @@ using .Types
 using .TrivariateBicycleCode
 using .SymplecticDoubleCode
 using .Helper: tableau_to_bitmatrix, data_qubit_partitioning, perm_to_transpositions, create_lookup_array,
-    verify_success, execute_circuit, code_dirname, save_txt, save_circuit_diagram, qc_circuit_to_qasm
+                verify_success, code_dirname, save_txt, save_circuit_diagram, qc_circuit_to_qasm
 using .ExperimentConfig: experiment_configurations
 using .EncodingGott: encoding_gott
 using .Genetic: genetic_search
 using .BaselineEncoding: run_qiskit_baseline, run_mqt_baseline
 using .MonteCarloTreeSearch: monte_carlo_tree_search
-using .DQCodeSimulator: dqc_ft_encoding_simulation
+using .DQCodeSimulator: dqc_ft_encoding_simulation, dqc_non_ft_encoding_simulation 
 using .ResourceEstimation: estimate_resources_encoding_circuit, estimate_resources_measurement_based_encoding
 
 using QECCore
@@ -625,7 +625,7 @@ function resource_estimation(exp_label::String)::String
         code_params = deserialize( joinpath(folder, "code_params.jls"))
         dir = joinpath(folder, "simulation_FT")
         ancilla_map = deserialize(joinpath(dir, "ancilla_map.jls"))
-        qpu_sizes = cfg.qpu_sizes .+ network_specs.num_comm_qubits/network_specs.num_registers # accounting for data + communication qubits
+        qpu_sizes = cfg.qpu_sizes .+ Int(network_specs.num_comm_qubits/network_specs.num_registers) # accounting for data + communication qubits
         (
             num_ancillas_circ, 
             circuit_depth, 

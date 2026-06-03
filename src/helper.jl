@@ -15,6 +15,7 @@ export save_circuit_diagram, code_dirname, save_txt
 using ..Types
 
 using QuantumClifford
+using QECCore
 using KaHyPar
 using SparseArrays
 using Quantikz: savecircuit, @with, classicalbitslayout
@@ -400,7 +401,7 @@ Returns a 3-element integer vector `[num_single, num_local_two_qubit, num_telega
 `sSWAP` gates are decomposed into three CNOTs when counting, since we can decompose 
 `sSWAP(i,j) = sCNOT(i,j)sCNOT(j,i)sCNOT(i,j)`.
 """
-function gate_counts(circuit::Vector{AbstractOperation}, n::NetworkSpecifications)::Vector{Int}    
+function gate_counts(circuit::Vector{QuantumClifford.AbstractOperation}, n::NetworkSpecifications)::Vector{Int}    
     mapping = copy(n.inv_map)
     gate_counts = [0,0,0]
     for op in circuit
@@ -432,7 +433,7 @@ end
 
 
 """
-    save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)::nothing
+    save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
 
 Render and save a circuit diagram to disk using the `Quantikz`
 library (https://arxiv.org/abs/1809.03842, https://github.com/QuantumSavory/Quantikz.jl).
@@ -448,7 +449,7 @@ library (https://arxiv.org/abs/1809.03842, https://github.com/QuantumSavory/Quan
 For moderate register sizes (~ < 15 qubits), the saving works well, yet for larger registers we Quantikz 
 memory capacity might be exceeded, in which case we skip the saving.
 """
-function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)::nothing
+function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
     @with classicalbitslayout => :expanded begin
         try
         savecircuit(
@@ -483,7 +484,7 @@ Returns `true` if the circuit encodes the target logical zero state, `false` oth
 Verification appends a `VerifyOp` to the circuit and uses `mctrajectory!` for simulation, and
 throws an `ErrorException` if the simulation terminates with an unexpected status.
 """
-function verify_success(circuit::Vector{AbstractOperation}, target_state::Stabilizer, n::NetworkSpecifications)::Bool
+function verify_success(circuit::Vector{QuantumClifford.AbstractOperation}, target_state::Stabilizer, n::NetworkSpecifications)::Bool
     verification_circuit = copy(circuit)
     push!(verification_circuit, VerifyOp(target_state, n.data_qubits))
     initial_state = Register(one(MixedDestabilizer, n.num_data_and_comm_qubits),n.num_registers*(n.num_registers-1))
@@ -524,7 +525,7 @@ end
 
 
 """
-    save_txt(folder::String, title::String, obj::Any)::nothing
+    save_txt(folder::String, title::String, obj::Any)
 
 Serialise all fields of a struct to a plain-text file.
 
@@ -538,14 +539,13 @@ Serialise all fields of a struct to a plain-text file.
 
 Each line of the output file has the form `fieldname = repr(value)`.
 """
-function save_txt(folder::String, title::String, obj::Any)::nothing
+function save_txt(folder::String, title::String, obj::Any)
     open(joinpath(folder, title), "w") do io
         for fn in fieldnames(typeof(obj))
             println(io, fn, " = ", repr(getfield(obj, fn)))
         end
     end
 end
-
 
 
 function QuantikzOp(op::ConditionalGate)
