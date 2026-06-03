@@ -429,6 +429,7 @@ If the decoder can make an error guess, we expose two different methods as proxi
         error degeneracy of the code (applying an even number of operations that anti-commute with the logical operator overall cancels out). This is desirable as 
         long as there was actually no logical X error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j] again. Otherwise,
         a logical failure is recorded.
+        In the end, the logical error rate is derived as the mean of all `k` logical Z observable error rates, conditioned on the accepted runs.
             
     (ii) Alternatively, we can also apply the correction gate inferred by the LUT decoder, and then measure the fidelity of the resulting state with our target state.
         Therefore, we apply the correction gate (https://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl)
@@ -436,46 +437,19 @@ If the decoder can make an error guess, we expose two different methods as proxi
         call `dot` between the corrected `corrected_state_data_qubits` state and the target state `code_params.target_state`. We update fidelities per sample in order to
         avoid having to save the fidelity for each of the samples. This is done using the update equation
 
-            `avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples → avg_fidelity += (x-avg_fidelity)/samples`
+            `avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples → avg_fidelity += (x-avg_fidelity)/samples`,
+        
+        where `samples` is replaced with `sample-discarded_runs`.
 
 In the entire procedure, there are two main sources of uncertainty: the probabilistic noise sampling of errors in the circuit, and the measurement of the logical Z operators. 
 In a real-life experiment, both sources of errors exist (where probabilistically measuring the correct state implies that the system indeed is in the correct state afterwards),
-and method (i) mimics this closely. With method (ii), we eliminate the second source of uncertainty by determining a precise fidelity.
+and method (i) mimics this closely. With method (ii), we eliminate the second source of uncertainty by determining a precise fidelity. 
 
+Capping a simulation when a specified number of logical errors has been registered helps to decrease overall runtime (this reduces execution time at
+the cost of granularity in the high-noise regime, which is reasonable).
 
-
-
-
-
-
-
-
-
-CSS Table decoder returns the X and Z lookup table decoders for the degenerate Hx and Hz that we defined in the code.
-The decode() function later uses precisely this and the degenerate parity checks (H is build in css.jl from the Hx and Hz, which are degeneate as defined in the code file 
-to given an erorro guess, and the error guess will be evaluated against
-        the fault matrix. Now the fault matrix is actually computetd based on the non-degenerate version (internally it is made so),
-        even though we pass the degenerate version. But that is not a problem, since the fault matrix will only be compared against the 
-        error guess, and for the error guess we have already fully comnsumed the degenerated version (implemetned by decode)
-        We are noisefree anyways, but in a real round of distnruted stab msms., we would probably also prefer to have the degenerate version since
-        the mapping is optimised for it and its low weight for qLDPC codes.
-
-   
-            ## since we encode the logical zero state, the bit value is effectively a fault value: 0 means logical Z, 1 means logical -Z, which is a fault in the respective qubit
-        logical error rate is extract the mean logical error rate across all logical qubits conditioned on not being discarded
- > later compare to initialisation failure prop of a single physical qubit
-
-
-
-        if error guess is not nothing, then DecoderCorrectionGate will have a valud correction (even if it is trivial), if error guess is notingt than also no correction gate can fic it
-        # For a given p, under linear scaling (~upper bound) we roughly expect n_samples*p errors. Thus, we take a mid-range p and limit the execution for all larger p, once this
-            # number of logical failures has been recordedFor the upper half of physical noise values, we 
-            # In the given noise regime, we expect logical error rates on the order of 1e-4 to 5e-3, which corresponds to 50 to 1000 logical errors for the noisiest Z logical observable over 5e5 executions.
-            # Thus, collecting 200 errors (MQT QECC:500) at most should give us a good estimate of the true error rate.
-            # This helps to decreae overall runtime, since it reduces the execution time particularly in the high-noise regime, in which we are less interested.
-
-
-    """
+Overall, we can then use the information extracted from this function to compare logical initialisation error rates with the physical initialisation error rate `p`.
+"""
 function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verification_circuit::Vector{AbstractOperation}, 
                                 num_ancillas::Int, ancilla_map::Vector{Int}, code_params::CodeParameters, network_specs::NetworkSpecifications,
                                 noise::NoiseSpecs)::Tuple{Vector{Int}, Float64, Float64, Float64, Float64, Float64, Int, Int, Vector{Int}, Vector{Int}, Vector{Int}, Int, Vector{AbstractOperation}}
@@ -528,7 +502,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         state_post_syndrome, stats = mctrajectory!(copy(initial_state), circuit)
         verification_bits = @view state_post_syndrome.bits[network_specs.num_comm_qubits+1:network_specs.num_comm_qubits+num_ancillas] # extract verification bits
         syndrome = @view state_post_syndrome.bits[noisefree_syndrome_bits] # extract syndrome bits
-        if any(verification_bits)  # determine whether or not to discard the run
+        if any(verification_bits)  # determine whether or not to discard the run (any bit is `true` → verification stabiliser measurement was triggered, indicating a harmful error)
             discarded_runs +=1
             continue
         end
