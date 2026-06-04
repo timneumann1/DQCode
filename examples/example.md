@@ -72,7 +72,7 @@ include("scripts/execution/dqc_qiskit_baseline.jl")
 This saves the qiskit baseline data to `data/Steane/[4, 3]/qiskit_encoding`.
 Here, you should fine the encoding circuit produced by Qiskit
 
-<img src="../data/Steane/[4, 3]/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="450"/>
+<img src="../data/Steane/%5B4,%203%5D/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="450"/>
 
 You can also take a look at the gate counts here:
 [Qiskit encoding circuit gate counts](/data/Steane/[4,%203]/qiskit_encoding/qiskit_encoding_stats.csv).
