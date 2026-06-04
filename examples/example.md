@@ -68,7 +68,7 @@ include("scripts/execution/dqc_qiskit_baseline.jl")
 This saves the qiskit baseline data to `data/Steane/[4, 3]/qiskit_encoding`.
 Here, you should fine the encoding circuit produced by Qiskit
 
-![Qiskit encoding circuit](/data/Steane/[4,%203]/qiskit_encoding/qiskit_encoding_circuit.png)
+<img src="../data/Steane/[4, 3]/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="450"/>
 
 You can also take a look at the gate counts here:
 [Qiskit encoding circuit gate counts](/data/Steane/[4,%203]/qiskit_encoding/qiskit_encoding_stats.csv).
@@ -81,7 +81,7 @@ include("scripts/execution/dqc_mqt_baseline.jl")
 
 Here, we chose the `heuristic` method for the verification circuit, yielding the circuit 
 
-![MQT encoding circuit](/data/Steane/[4,%203]/mqt_encoding/mqt_encoding_circuit.png).
+<img src="../data/Steane/[4, 3]/mqt_encoding/mqt_encoding_circuit.png" alt="MQT encoding circuit" width="250"/>
 
 ## Monte Carlo Tree Search
 
@@ -105,7 +105,7 @@ include("scripts/execution/dqc_mcts.jl")
 
 Let's take a look at the optimised circuit the genetic search produced:
 
-![MCTS encoding circuit](/data/Steane/[4,%203]/mcts/MCTS_circuit.png).
+<img src="../data/Steane/[4, 3]/mcts/MCTS_circuit.png" alt="MCTS encoding circuit" width="320"/>
 
 How did the optimisation perform in a DQC setting? Find out in the [MCTS statistics data .csv file](/data/Steane/[4,%203]/mcts/mcts_stats.csv).
 
@@ -135,15 +135,15 @@ include("scripts/execution/dqc_gott_ga.jl")
 
 The genetic search can take some time to complete. Once it completes, it has saved all relevant data from the genetic search to the `/data/Steane/[4, 3]/warmstart_ga/` folder. We first inspect the Gottesman encoding circuit:
 
-![Gottesman encoding circuit](/data/Steane/[4,%203]/warmstart_ga/gott_encoding_circuit.png).
+<img src="../data/Steane/[4, 3]/warmstart_ga/gott_encoding_circuit.png" alt="Gottesman encoding circuit" width="350"/>
 
 Then the DQC-compiled version of it:
 
-![DQC-compiled Gottesman encoding circuit](/data/Steane/[4,%203]/warmstart_ga/gott_circuit_dqc_compiled.png).
+<img src="../data/Steane/[4, 3]/warmstart_ga/gott_circuit_dqc_compiled.png" alt="DQC-compiled Gottesman encoding circuit" width="300"/>
 
 Finally, let's take a look at the optimised circuit the genetic search produced:
 
-![Warm-start GA encoding circuit](/data/Steane/[4,%203]/warmstart_ga/GA_circuit.png).
+<img src="../data/Steane/[4, 3]/warmstart_ga/GA_circuit.png" alt="Warm-start GA encoding circuit" width="320"/>
 
 How did the optimisation perform in a DQC setting? Find out in the [GA statistics data .csv file](/data/Steane/[4,%203]/warmstart_ga/warm_start_ga_stats.csv).
 
@@ -157,9 +157,12 @@ With the `/scripts/analysis/optimiser_evolution.jl` script, we can visualise the
 include("scripts/analysis/optimiser_evolution.jl")
 ```
 
+
+
+
 This produces 
 
-![Optimiser Evolution](/data/Steane/[4,%203]/warmstart_ga/optimisation_evolution.png).
+<img src="../data/Steane/[4, 3]/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="400"/>
 
 
 ## DQC Simulation
@@ -177,7 +180,7 @@ include("scripts/execution/dqc_sim.jl")
 
 This saves the simulation data to `/data/Steane/[4, 3]/simulation_FT'. Let us inspect the verification circuit that was appended to our optimised circuit in order to make it fault-tolerant.
 
-![Verification circuit](/data/Steane/[4,%203]/simulation_FT/verification_circuit.png).
+<img src="../data/Steane/[4, 3]/simulation_FT/verification_circuit.png" alt="Verification circuit" width="150"/>
 
 We can see that the verification circuit for the Steane code is fairly simple: we check for logical X errors via Z-type ancilla measurement. The canonical logical X operator is $X_3X_5X_6$, but recalling the quotient group equivalence, it is equivalent to $(X_3X_5X_6)(X_2X_3X_6X_7) = X_2X_5X_7$, where $X_2X_3X_6X_7$ is a stabiliser of the code. (The above circuit measures $X_2X_5X_7$).
 
@@ -186,7 +189,7 @@ as or the flag qubit.
 
 Since in the DQC simulation, we simulate the execution of the raw encoding circuit and the verification circuit on the distributed architecture, let us take a look at the DQC executable circuit. This includes the circuit-level noise and Bell pair initialisation noise we wish to examine.
 
-![DQC circuit](/data/Steane/[4,%203]/simulation_FT/DQC_circuit.png).
+<img src="../data/Steane/[4, 3]/simulation_FT/DQC_circuit.png" alt="DQC circuit" width="750"/>
 
 There's a lot going on in this circuit. Firstly, the first seven qubits are our data qubits. The (noiseless) SWAP operations at the very beginning of the circuit serve to visualise that we have mapped our qubits in a specific way (based on the hypergraph partitioning determined by distributed QEC cycles). (The SWAP operations are noiseless, since in a real experiment, one would simply relabel the qubits at the beginning of the circuit; this is different from SWAP operations that occur in the middle of the circuit, which might necessitate tele-operations). Additionally, we find two communication qubits (qubits $8$ and $9$), which enable our telegates between the two cores. Earlier, we identified that two CNOT gates are telegates: CNOT(1,3) and CNOT(4,7). These telegates have been replaced with the corresponding the EJPP protocol, making use of the respective communication qubits. The $10^{\text{th}}$ qubit stems from the verification circuit, and is used to discard runs that violated the FT criterion (and resulted in harmful errors from low-weight errors). Also, there are classical lines storing the measurement information from the circuit.
 
@@ -204,13 +207,14 @@ include("scripts/analysis/logical_rate.jl")
 
 This saves a log-log plot containing the logical initialisation error scaling per physical initialisation error rate `p`
 
-![log-log plot](/data/Steane/[4,%203]/simulation_FT/qec_threshold.png)
+<img src="../data/Steane/[4, 3]/simulation_FT/qec_threshold.png" alt="log-log plot" width="350"/>
 
 as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/simulation_FT`.
 
-![2d](/data/Steane/[4,%203]/simulation_FT/2d_heatmap.png)
+<img src="../data/Steane/[4, 3]/simulation_FT/2d_heatmap.png" alt="2d" width="450"/>
 
-![2d_ratio](/data/Steane/[4,%203]/simulation_FT/2d_heatmap_ratio.png)
+<img src="../data/Steane/[4, 3]/simulation_FT/2d_heatmap_ratio.png" alt="2d ratio" width="450"/>
+
 
 We can also create other visualisations based on the data. (to be extended)
 
