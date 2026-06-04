@@ -89,7 +89,6 @@ Type that collects optimisation parameters for the genetic search.
 - `max_len` -- maximum allowed number of gates in each circuit individual
 - `mutation_rate` -- probability of an offspring individual undergoing mutation after crossover
 - `tournament_size` -- number of candidate individuals participating in tournament selection
-- `selection_ratio` -- fraction of the population selected as parents for the next generation
 - `num_elite` -- number of best-performing individuals passed directly into the next generation unmodified
 - `fitness_weights` -- vector of weight coefficients for the multi-objective fitness function, weighing single-, two-qubit and telegates
 - `tableau_metric` -- string identifier for the metric used to evaluate proximity of the current tableau to the target state
@@ -100,7 +99,6 @@ struct GeneticParameters
     max_len::Int
     mutation_rate::Float64
     tournament_size::Int
-    selection_ratio::Float64
     num_elite::Int
     fitness_weights::Vector{Float64}
     tableau_metric::String

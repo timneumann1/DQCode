@@ -24,7 +24,6 @@ using CairoMakie
 import Quantikz: QuantikzOp, ClassicalDecision
 
 
-
 """
     create_lookup_array(num_data_qubits_per_register::Vector{Int})::Tuple{Vector{Int}, Int, Int}
 
@@ -427,38 +426,6 @@ end
 
 
 """
-    save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
-
-Render and save a circuit diagram to disk using the `Quantikz`
-library (https://arxiv.org/abs/1809.03842, https://github.com/QuantumSavory/Quantikz.jl).
-
-### Input
-
-- `circuit` -- the quantum circuit to render
-- `directory` -- path to the output directory
-- `label` -- filename (without path) for the saved diagram
-
-### Notes
-
-For moderate register sizes (~ < 15 qubits), the saving works well, yet for larger registers we Quantikz 
-memory capacity might be exceeded, in which case we skip the saving.
-"""
-function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
-    @with classicalbitslayout => :expanded begin
-        try
-        savecircuit(
-            circuit,
-            joinpath(directory, label);
-            scale = 1
-        )
-        catch 
-            @warn "Saving circuit picture failed. The most likely cause is the large circuit size." 
-        end
-    end
-end
-
-
-"""
     verify_success(circuit::Vector{AbstractOperation}, target_state::Stabilizer, n::NetworkSpecifications)::Bool
 
 Verify whether a given circuit successfully prepares the target logical zero state.
@@ -542,12 +509,45 @@ function save_txt(folder::String, title::String, obj::Any)
 end
 
 
+"""
+    save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
+
+Render and save a circuit diagram to disk using the `Quantikz`
+library (https://arxiv.org/abs/1809.03842, https://github.com/QuantumSavory/Quantikz.jl).
+
+### Input
+
+- `circuit` -- the quantum circuit to render
+- `directory` -- path to the output directory
+- `label` -- filename (without path) for the saved diagram
+
+### Notes
+
+For moderate register sizes (~ < 15 qubits), the saving works well, yet for larger registers we Quantikz 
+memory capacity might be exceeded, in which case we skip the saving.
+"""
+function save_circuit_diagram(circuit::Vector{QuantumClifford.AbstractOperation}, directory::String, label::String)
+    try
+        @with classicalbitslayout => :expanded begin   
+            savecircuit(
+                circuit,
+                joinpath(directory, label);
+                scale = 1
+            )
+        end
+    catch e
+        @warn "saving circuit in $label failed" exception=e
+    end
+end
+
+
 function QuantikzOp(op::ConditionalGate)
     # Maps a ConditionalGate to a Quantikz ClassicalDecision for circuit diagram rendering.
     targets = collect(affectedqubits(op.truegate))
     label = _conditional_gate_label(op.truegate)
     return ClassicalDecision(label, targets, op.controlbit)
 end
+
 
 function _conditional_gate_label(g::QuantumClifford.AbstractOperation)
     # Returns the single-character Pauli/gate label for a conditional gate operand.
@@ -565,6 +565,7 @@ function _conditional_gate_label(g::QuantumClifford.AbstractOperation)
     end
     return "U"
 end
+
 
 
 end
