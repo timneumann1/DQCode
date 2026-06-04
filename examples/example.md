@@ -1,13 +1,17 @@
 # DQCode Pipeline
 DQCode can be used to find optimised encoding circuits for logical $|0\rangle_L$ states of Quantum Error Correction CSS codes on distributed Type-II architectures. The $\texttt{scripts/}$ folder exposes the core functionalities of the search and evaluation pipeline. In this tutorial, we contextualise these scripts to demonstrate the pipeline for the Steane [[7,1,3]] code on a 2-core architecture.
 
-__DISCLAIMER__: The purpose of this markdown scripts is to show how the DQCode scripts work together, and how to navigate the repository. However, it is not devised as a stand-alone executable. We thus ask the user to view this file as a guideline of how to use the scripts provided in the $\texttt{scripts/}$ folder in the Julia REPL. To this end, we outline the pipeline, and at every step indicate which commands to run in the REPL. For the general setup instructions, please refer to the README.md file. Having executed these instructions, one can proceed with this tutorial.
+> [!IMPORTANT] 
+> The purpose of this markdown scripts is to show how the DQCode scripts work together, and how to navigate the repository. However, it is not devised as a stand-alone executable. We thus ask the user to view this file as a guideline of how to use the scripts provided in the $\texttt{scripts/}$ folder in the Julia REPL. To this end, we outline the pipeline, and at every step indicate which commands to run in the REPL. For the general setup instructions, please refer to the README.md file. Having executed these instructions, one can proceed with this tutorial.
 
 Visualisations and results shown below are extracted from the data/ folder, to which DQCode automatically writes (Note: running the listed commands will write data to your disk.)
 
 Throughout this tutorial, we assume that the user runs the respective indicated scripts, adapting the scripts per the code in questions. For this notebook, we set the experiment label in $\texttt{/scripts/dqc\_setup.jl}$ and all other scripts to $\texttt{steane\_4\_3}$.
 
 ## Setting up CSS code and Type-II architecture
+
+> [!WARNING]
+> Following the steps outlined below will result in data to be written to your disk.
 
 In your terminal, navigate to your `DQCode` folder. Once you entered it, activate the Julia REPL by calling 
 ```
@@ -216,7 +220,9 @@ as well as 2d heatmaps including the Bell state initialisation error probability
 <img src="../data/Steane/[4, 3]/simulation_FT/2d_heatmap_ratio.png" alt="2d ratio" width="450"/>
 
 
-We can also create other visualisations based on the data. (to be extended)
+We can also create other visualisations based on the data. 
+
+(TODO: Add latest results and other visualisation)
 
 ## Resource estimation
 Finally, let's analyse the resources that the FT encoding circuit consumes. For this, set the correct label in the [GA script](`/scripts/execution/dqc_resource.jl') and run
