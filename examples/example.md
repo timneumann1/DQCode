@@ -18,7 +18,7 @@ In your terminal, navigate to your `DQCode` folder. Once you entered it, activat
 julia
 ] activate .
 ```
-Leave the package manager by pressing the Del key. Now set the correct label in the [setup script](`/scripts/execution/dqc_setup.jl'). Back in your Julia REPL, run
+Leave the package manager by pressing the Del key. Now set the correct label in the [setup script](/scripts/execution/dqc_setup.jl). Back in your Julia REPL, run
 
 ```
 include("scripts/execution/dqc_setup.jl")
@@ -51,7 +51,7 @@ Let's inspect the mapping determined by the hypergraph partitioning algorithm fu
 
 ```
 for (idx, core_size) in enumerate(network_specs.register_sizes)
-    println("Core $idx contains qubits $(network_specs.mapping[ (idx>1 ? sum(network_specs.register_sizes[1:idx-1]) +1 : 1 )    : (idx>1 ? sum(network_specs.register_sizes[1:idx-1]) +1 : 1 )  + core_size-1]  )")
+    println("Core $idx contains qubits $(network_specs.mapping[ (idx>1 ? sum(network_specs.register_sizes[1:idx-1]) +1 : 1 ) : (idx>1 ? sum(network_specs.register_sizes[1:idx-1]) +1 : 1 ) + core_size-1]  )")
 end
 ```
 ```
@@ -63,7 +63,7 @@ Core 2 contains qubits [1, 4, 5]
 
 Next, we use the qiskit library to obtain a baseline encoding. The method exposed in qiskit is meant to synthesised general stabiliser tableaus on a monolithic all-to-all architecture, so we expect it to perform poorly when evaluated with respect to telegates.
 
-Setting the correct label in the [Qiskit baseline script](`/scripts/execution/dqc_qiskit_baseline.jl'), we run
+Setting the correct label in the [Qiskit baseline script](/scripts/execution/dqc_qiskit_baseline.jl), we run
 
 ```
 include("scripts/execution/dqc_qiskit_baseline.jl")
@@ -77,7 +77,7 @@ Here, you should fine the encoding circuit produced by Qiskit
 You can also take a look at the gate counts here:
 [Qiskit encoding circuit gate counts](/data/Steane/%5B4,%20%33%5D/qiskit_encoding/qiskit_encoding_stats.csv).
 
-Similarly, you can perform the MQT-QECC baseline encoding by changing the label in the [MQT baseline script](`/scripts/execution/dqc_mqt_baseline.jl') and running
+Similarly, you can perform the MQT-QECC baseline encoding by changing the label in the [MQT baseline script](/scripts/execution/dqc_mqt_baseline.jl) and running
 
 ```
 include("scripts/execution/dqc_mqt_baseline.jl")
@@ -89,7 +89,7 @@ Here, we chose the `heuristic` method for the verification circuit, yielding the
 
 ## Monte Carlo Tree Search
 
-Having explored the baselines, we now perform a Monte Carlo Tree Search for an efficient $|0\rangle_L$ encoding circuit. For this, set the correct label in the [GA script](`/scripts/execution/dqc_mcts.jl') and set your the MCTS hyperparameters in the [experiment configuration file](`/src/experiment_config.jl'). In the current configuration, we use the hyperparameters
+Having explored the baselines, we now perform a Monte Carlo Tree Search for an efficient $|0\rangle_L$ encoding circuit. For this, set the correct label in the [GA script](/scripts/execution/dqc_mcts.jl) and set your the MCTS hyperparameters in the [experiment configuration file](/src/experiment_config.jl). In the current configuration, we use the hyperparameters
 
 ```
 max_steps=15
@@ -119,7 +119,7 @@ As the file reveals, we need four telegates for the distributed implementation!
 
 As a second optimiser, it is time initialise our genetic algorithm, which is seeded with optimised Gottesman encoding circuits as warm-start circuit. 
 
-For this, set the correct label in the [GA script](`/scripts/execution/dqc_gott_ga.jl') and set your the genetic search hyperparameters in the [experiment configuration file](`/src/experiment_config.jl') . In the current configuration, we use the hyperparameters
+For this, set the correct label in the [GA script](/scripts/execution/dqc_gott_ga.jl) and set your the genetic search hyperparameters in the [experiment configuration file](/src/experiment_config.jl) . In the current configuration, we use the hyperparameters
 
 ```
 num_individuals=7500
@@ -172,8 +172,8 @@ This produces
 ## DQC Simulation
 
 Using the optimised GA circuit, we now run the DQC simulation. In 
-the [DQC simulation script](`/scripts/execution/dqc_sim.jl')
-$\texttt{scripts/dqc\_sim.jl}$, we can set the corresponding noise range. For the below results, we swept noise $p \in [5e-5,1e-3]$, with $p_{Bell} \in [1e-3, 5e-2]$, with $15$ values each. We have further set the telegate idle depth to $10$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$.
+the [DQC simulation script](/scripts/execution/dqc_sim.jl)
+`scripts/dqc_sim.jl`, we can set the corresponding noise range. For the below results, we swept noise $p \in [5e-5,1e-3]$, with $p_{Bell} \in [1e-3, 5e-2]$, with $15$ values each. We have further set the telegate idle depth to $10$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$.
 
 For the simulation, we take the optimmised encoding circuit for the logical zero state, append a (flag-based) verification circuit from the Munich Quantum Toolkit QECC package, and then determine the logical error rate of the fault-tolerant encoding under circuit-level and Bell pair initialisation noise, mimicing realistic noise channels under telegate execution. In this example, we choose the `optimal` verification method from MQT-QECC.
 
@@ -225,7 +225,7 @@ We can also create other visualisations based on the data.
 (TODO: Add latest results and other visualisation)
 
 ## Resource estimation
-Finally, let's analyse the resources that the FT encoding circuit consumes. For this, set the correct label in the [GA script](`/scripts/execution/dqc_resource.jl') and run
+Finally, let's analyse the resources that the FT encoding circuit consumes. For this, set the correct label in the [GA script](/scripts/execution/dqc_resource.jl) and run
 
 ```
 include("scripts/execution/dqc_resource.jl")
