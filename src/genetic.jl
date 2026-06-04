@@ -76,8 +76,10 @@ function genetic_search(code_params::CodeParameters, network_specs::NetworkSpeci
         push!(gate_count_evolution, circuit_sizes[best_index])
         push!(fidelity_evolution, best_fidelity)
         push!(fitness_evolution, fitness_scores[best_index])
-        selected_individuals = selection(population, fitness_scores; tournament_size = genetic_params.tournament_size, selection_ratio = genetic_params.selection_ratio, num_elite = genetic_params.num_elite)
-        population = crossover(genetic_params.num_individuals, selected_individuals, genetic_params.mutation_rate, network_specs.num_data_qubits, genetic_params.max_len, code_params.num_X_checks) 
+        selected_individuals = selection(population, fitness_scores; tournament_size = genetic_params.tournament_size,
+                                            num_elite = genetic_params.num_elite)
+        population = crossover(genetic_params.num_individuals, selected_individuals, genetic_params.mutation_rate, 
+                                network_specs.num_data_qubits, genetic_params.max_len, code_params.num_X_checks) 
     end
     finish!(p)
     GA_circ = best_circ_ind    
@@ -221,7 +223,7 @@ end
 
 """
     selection(generation::Vector{Vector{AbstractOperation}}, fitness_scores::Vector{Float64}; 
-                    tournament_size::Int=5, selection_ratio::Float64=0,5, num_elite::Int = 1)::Vector{Vector{AbstractOperation}}
+                    tournament_size::Int=5, num_elite::Int = 1)::Vector{Vector{AbstractOperation}}
 
 Select the highest-performing individuals from the current generation to form the parents of the next generation.
 
@@ -229,17 +231,17 @@ Select the highest-performing individuals from the current generation to form th
 - `generation` -- vector of circuits representing the current population pool
 - `fitness_scores` -- vector of corresponding numerical fitness scores for the population
 - `tournament_size` -- (optional, default: `5`) number of randomly chosen individuals to compete in each tournament round
-- `selection_ratio` -- (optional, default: `0.5`) proportion of the population to select as parents
 - `num_elite` -- (optional, default: `1`) number of top-performing individuals guaranteed to survive to the next generation
 
 ### Output
 A vector containing the selected `best_individuals` (circuits) that will act as parents for the subsequent crossover stage.
+We select half of the current population to serve as the parent population for the next generation.
 """
 function selection(generation::Vector{Vector{AbstractOperation}}, fitness_scores::Vector{Float64}; 
-                    tournament_size::Int=5, selection_ratio::Float64=0.5, num_elite::Int = 1)::Vector{Vector{AbstractOperation}}
+                    tournament_size::Int=5, num_elite::Int = 1)::Vector{Vector{AbstractOperation}}
     length_generation = length(generation) 
     @assert length_generation == length(fitness_scores)
-    num_selected = Int(floor(length_generation * selection_ratio))
+    num_selected = Int(floor(1/2*length_generation))
     elite_idx = sortperm(fitness_scores, rev=true)[1:num_elite]    
     best_individuals = generation[elite_idx]
     remaining = setdiff(collect(eachindex(generation)), elite_idx)
@@ -250,6 +252,7 @@ function selection(generation::Vector{Vector{AbstractOperation}}, fitness_scores
         push!(best_individuals, generation[best_idx])
         deleteat!(remaining, findfirst(==(best_idx), remaining))
     end
+    @assert length(best_individuals) == num_selected
     return best_individuals
 end
 
@@ -314,7 +317,7 @@ function crossover(num_individuals::Int, selected_individuals::Vector{Vector{Abs
         push!(new_generation, child1, child2)
         i += 2
     end
-    if length(parents)%2 != 0
+    if num_individuals%2 != 0 # `2*length(parents) = num_individuals-1`
         child = copy(parents[end])
         child = mutation(child, mutation_rate, num_data_qubits)
         child = _clean_circuit(child)
@@ -322,7 +325,7 @@ function crossover(num_individuals::Int, selected_individuals::Vector{Vector{Abs
         child = _cap_individual_size(child, max_len)
         push!(new_generation, child)
     end
-    @assert length(new_generation) == num_individuals
+    @assert length(new_generation) == num_individuals "generation size is not constant"
     return new_generation
 end
 
