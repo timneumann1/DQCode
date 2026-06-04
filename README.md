@@ -80,6 +80,8 @@ Congrats, you've made it through; this completes the setup. (If you choose to al
 
 ## Usage
 
+*Note:* Here we briefly introduce how to use DQCode. For an overview over the entire pipeline, with sample outputs based on the Steane [[7,1,3]] code on two QPUs, please refer to the [examples](examples/example.ipynb) notebook. This notebook provides an overview over the entire pipeline and contextualises the role of each of the scripts in DQCode. 
+
 Available code-network configurations are defined (and can easily be appended) in the [experiment configuration](src/experiment_config.jl) file. 
 
 To initialise a specific code-architecture configuration, indicate the corresponding configuration string in the [setup script](scripts/execution/dqc_setup.jl) and run
@@ -89,7 +91,7 @@ julia
 ] activate .
 include("scripts/execution/dqc_setup.jl")
 ```
-which stores the `NetworkingSpecifications` and `CodeParameters` to the `data/`folder.
+which stores the `NetworkingSpecifications` and `CodeParameters` to the `data/`folder (Note: running the listed commands will write data to your disk),
 
 Using `DQCode.jl` as entrypoint to the DQCode functionalities, the `scripts/execution` folder contains the scripts needed to execute the entire DQCode pipeline, making optimisations and simulations accessible from the REPL. 
 
@@ -106,7 +108,6 @@ include("scripts/execution/dqc_gott_ga.jl")
 ```
 
 
-
 - For the [DQC simulation](src/dqc_simulator.jl), individual noise sweeps can be specified in `scripts/execution/dqc_sim.jl` and executed via
 
 ```
@@ -114,8 +115,6 @@ include("scripts/execution/dqc_sim.jl")
 ```
 
 Plotting capabilities are exposed in the `scripts/analysis` folder, allowing insight into [optimiser statistics](scripts/analysis/optimiser_evolution.jl) and [logical rate analysis](scripts/analysis/logical_rate.jl).
-
-For an overview over the entire pipeline, with sample outputs based on the Steane [[7,1,3]] code on two QPUs, please refer to the [examples](examples/example.ipynb) notebook. This notebook provides an overview over the entire pipeline and contextualises the role of each of the scripts in DQCode. 
 
 
 ## Reproducibility Information
