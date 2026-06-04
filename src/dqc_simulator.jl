@@ -155,8 +155,8 @@ end
     dqc_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bells::Vector{Float64}, 
                                     telegate_idle_depth::Int, p_single_ratio::Float64, p_idle_ratio::Float64,
                                     code_params::CodeParameters, network_specs::NetworkSpecifications, mqt_path::String,
-                                    circuit::Vector{AbstractOperation}, method::String)::Tuple{Any, Vector{AbstractOperation}, Vector{AbstractOperation}, 
-                                                                                                Vector{AbstractOperation}, Int, Int, Int, Vector{Int}}
+                                    circuit::Vector{AbstractOperation}, method::String)::Tuple{Any, Vector{AbstractOperation}, Vector{AbstractOperation}, Vector{AbstractOperation}, 
+                                                                                                    Vector{AbstractOperation}, Int, Int, Int, Vector{Int}}
 
 Append the optimised encoding circuit with a FT gadget and simulate the resulting fault-tolerant encoding circuit
 in a DQC environment under circuit-level Bell pair initialisation noise, gathering statistics about
@@ -202,8 +202,8 @@ and disregard the effect of crosstalk.
 function dqc_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bells::Vector{Float64}, 
                                     telegate_idle_depth::Int, p_single_ratio::Float64, p_idle_ratio::Float64,
                                     code_params::CodeParameters, network_specs::NetworkSpecifications, mqt_path::String,
-                                    circuit::Vector{AbstractOperation}, method::String)::Tuple{Any, Vector{AbstractOperation}, Vector{AbstractOperation}, 
-                                                                                                Vector{AbstractOperation}, Int, Int, Int, Vector{Int}}
+                                    circuit::Vector{AbstractOperation}, method::String)::Tuple{Any, Vector{AbstractOperation}, Vector{AbstractOperation}, Vector{AbstractOperation}, 
+                                                                                                    Vector{AbstractOperation}, Int, Int, Int, Vector{Int}}
     data_circuit = deepcopy(circuit)
     qasm = qc_circuit_to_qasm(circuit)
     python_bin = joinpath(mqt_path, ".venv/bin/python3")
@@ -1010,7 +1010,11 @@ function add_noise(circuit::Vector{AbstractOperation}, qubits::Vector{Int}, prob
         @assert length(qubits) == 2 "you are trying to apply a two-qubit correlated noise channel to a system of size $(length(qubits))"
         noise = NoiseOp(TwoQubitDepolarisingNoise(prob), qubits) # apply correlated noise
     else
-        noise = NoiseOp(UnbiasedUncorrelatedNoise(prob), qubits) # apply uncorrelated noise
+        if !isempty(qubits)
+            noise = NoiseOp(UnbiasedUncorrelatedNoise(prob), qubits) # apply uncorrelated noise
+        else
+            return circuit # no qubits suffer from noise 
+        end
     end
     push!(circuit, noise)
     return circuit

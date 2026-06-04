@@ -10,11 +10,8 @@ module BaselineEncoding
 
 export run_qiskit_baseline, run_mqt_baseline
 
-include("types.jl")
-include("trivariate_bicycle_code.jl")
-include("helper.jl")
-
 using ..Types
+using ..TrivariateBicycleCode
 using ..Helper
 
 using QuantumClifford
