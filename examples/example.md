@@ -153,20 +153,17 @@ How did the optimisation perform in a DQC setting? Find out in the [GA statistic
 
 As the file reveals, we need two telegates for the distributed implementation!
 
-We can also inspect how the optimiser reached its goal.
-
-With the `/scripts/analysis/optimiser_evolution.jl` script, we can visualise the evolution of fitness and fidelities. For this, enter the code (here: "Steane") and the qpu_size (here: "[4, 3]") in the [optimiser_evolution script](/scripts/analysis/optimiser_evolution.jl) and run
+We can also inspect how the optimiser reached its goal; using the `/scripts/analysis/optimiser_evolution.jl` script, we can visualise the evolution of fitness and fidelities. For this, enter the code (here: "Steane") and the qpu_size (here: "[4, 3]") in the [optimiser_evolution script](/scripts/analysis/optimiser_evolution.jl) and run
 
 ```
 include("scripts/analysis/optimiser_evolution.jl")
 ```
 
-
-
-
 This produces 
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="400"/>
+</p>
 
 
 ## DQC Simulation
@@ -184,7 +181,9 @@ include("scripts/execution/dqc_sim.jl")
 
 This saves the simulation data to `/data/Steane/[4, 3]/simulation_FT'. Let us inspect the verification circuit that was appended to our optimised circuit in order to make it fault-tolerant.
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/simulation_FT/verification_circuit.png" alt="Verification circuit" width="150"/>
+</p>
 
 We can see that the verification circuit for the Steane code is fairly simple: we check for logical X errors via Z-type ancilla measurement. The canonical logical X operator is $X_3X_5X_6$, but recalling the quotient group equivalence, it is equivalent to $(X_3X_5X_6)(X_2X_3X_6X_7) = X_2X_5X_7$, where $X_2X_3X_6X_7$ is a stabiliser of the code. (The above circuit measures $X_2X_5X_7$).
 
@@ -193,8 +192,9 @@ as or the flag qubit.
 
 Since in the DQC simulation, we simulate the execution of the raw encoding circuit and the verification circuit on the distributed architecture, let us take a look at the DQC executable circuit. This includes the circuit-level noise and Bell pair initialisation noise we wish to examine.
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/simulation_FT/DQC_circuit.png" alt="DQC circuit" width="750"/>
-
+</p>
 There's a lot going on in this circuit. Firstly, the first seven qubits are our data qubits. The (noiseless) SWAP operations at the very beginning of the circuit serve to visualise that we have mapped our qubits in a specific way (based on the hypergraph partitioning determined by distributed QEC cycles). (The SWAP operations are noiseless, since in a real experiment, one would simply relabel the qubits at the beginning of the circuit; this is different from SWAP operations that occur in the middle of the circuit, which might necessitate tele-operations). Additionally, we find two communication qubits (qubits $8$ and $9$), which enable our telegates between the two cores. Earlier, we identified that two CNOT gates are telegates: CNOT(1,3) and CNOT(4,7). These telegates have been replaced with the corresponding the EJPP protocol, making use of the respective communication qubits. The $10^{\text{th}}$ qubit stems from the verification circuit, and is used to discard runs that violated the FT criterion (and resulted in harmful errors from low-weight errors). Also, there are classical lines storing the measurement information from the circuit.
 
 The full circuit, including noise-free stabiliser measurements, is stored as a [.tex file](/data/Steane/[4,%203]/simulation_FT/full_circuit.tex).
@@ -211,14 +211,19 @@ include("scripts/analysis/logical_rate.jl")
 
 This saves a log-log plot containing the logical initialisation error scaling per physical initialisation error rate `p`
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/simulation_FT/qec_threshold.png" alt="log-log plot" width="350"/>
+</p>
 
 as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/simulation_FT`.
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/simulation_FT/2d_heatmap.png" alt="2d" width="450"/>
+</p>
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/simulation_FT/2d_heatmap_ratio.png" alt="2d ratio" width="450"/>
-
+</p>
 
 We can also create other visualisations based on the data. 
 
