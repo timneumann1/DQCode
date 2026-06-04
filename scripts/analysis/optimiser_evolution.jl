@@ -29,7 +29,7 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
 
     rowgap!(fig.layout, 10)
 
-    outpath = joinpath(dir, "Optimisation_Evolution.png")
+    outpath = joinpath(dir, "optimisation_evolution.png")
     save(outpath, fig)
 end
 

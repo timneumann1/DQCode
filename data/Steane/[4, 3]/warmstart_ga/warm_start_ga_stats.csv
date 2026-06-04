@@ -1,0 +1,4 @@
+method,verified,gate_counts
+Gottesman,true,"[3, 5, 4]"
+dqc_compiled,true,"[3, 5, 3]"
+GA,true,"[3, 6, 2]"
