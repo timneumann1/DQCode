@@ -577,6 +577,7 @@ function dqc_simulation(
             save_circuit_diagram(quantum_clifford_verification_circ, dir, "verification_circuit.png")
             serialize( joinpath(dir, "DQC_circuit.jls"), DQC_circuit )
             save_circuit_diagram(DQC_circuit, dir, "DQC_circuit.png")
+            save_circuit_diagram(DQC_circuit, dir, "DQC_circuit.tex")
             serialize( joinpath(dir, "full_circuit.jls"), full_circuit )
             save_circuit_diagram(full_circuit, dir, "full_circuit.tex")
             ancilla_info = (; num_ancillas, num_z_anc, num_x_anc, ancilla_map)
