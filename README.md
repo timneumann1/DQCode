@@ -78,6 +78,45 @@ Now PyCall acts as the bridge, making the Python repository readable and usable 
 
 Congrats, you've made it through; this completes the setup. (If you choose to alter the Python repository, e.g., by pulling new additions to the original library, these changes will be reflected from Julia directly). 
 
+On the DQCode side, you should now see this file structure:
+
+.
+├── examples
+│   └── example.md
+├── LICENSE
+├── Manifest.toml
+├── Project.toml
+├── README.md
+├── scripts
+│   ├── analysis
+│   │   ├── logical_rate.jl
+│   │   └── optimiser_evolution.jl
+│   └── execution
+│       ├── dqc_gott_ga.jl
+│       ├── dqc_mcts.jl
+│       ├── dqc_mqt_baseline.jl
+│       ├── dqc_qiskit_baseline.jl
+│       ├── dqc_resource.jl
+│       ├── dqc_setup.jl
+│       ├── dqc_sim.jl
+│       └── exec_exp.sh
+└── src
+    ├── baseline_encoding.jl
+    ├── dqc_simulator.jl
+    ├── DQCode.jl
+    ├── dtsim.jl
+    ├── encoding_gott.jl
+    ├── experiment_config.jl
+    ├── genetic.jl
+    ├── helper.jl
+    ├── km1_kKaHyPar_sea20.ini
+    ├── mcts.jl
+    ├── resource_estimate.jl
+    ├── symplectic_double_code.jl
+    ├── Tests.jl
+    ├── trivariate_bicycle_code.jl
+    └── types.jl
+
 ## Usage
 
 *Note:* Here we briefly introduce how to use DQCode. For an overview over the entire pipeline, with sample outputs based on the Steane [[7,1,3]] code on two QPUs, please refer to the [examples](examples/example.ipynb) notebook. This notebook provides an overview over the entire pipeline and contextualises the role of each of the scripts in DQCode. 
