@@ -162,7 +162,7 @@ include("scripts/analysis/optimiser_evolution.jl")
 This produces 
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="400"/>
+<img src="../data/Steane/%5B4,%203%5D/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="350"/>
 </p>
 
 
@@ -193,7 +193,7 @@ as or the flag qubit.
 Since in the DQC simulation, we simulate the execution of the raw encoding circuit and the verification circuit on the distributed architecture, let us take a look at the DQC executable circuit. This includes the circuit-level noise and Bell pair initialisation noise we wish to examine.
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/simulation_FT/DQC_circuit.png" alt="DQC circuit" width="750"/>
+<img src="../data/Steane/%5B4,%203%5D/simulation_FT/DQC_circuit.png" alt="DQC circuit" width="1250"/>
 </p>
 There's a lot going on in this circuit. Firstly, the first seven qubits are our data qubits. The (noiseless) SWAP operations at the very beginning of the circuit serve to visualise that we have mapped our qubits in a specific way (based on the hypergraph partitioning determined by distributed QEC cycles). (The SWAP operations are noiseless, since in a real experiment, one would simply relabel the qubits at the beginning of the circuit; this is different from SWAP operations that occur in the middle of the circuit, which might necessitate tele-operations). Additionally, we find two communication qubits (qubits $8$ and $9$), which enable our telegates between the two cores. Earlier, we identified that two CNOT gates are telegates: CNOT(1,3) and CNOT(4,7). These telegates have been replaced with the corresponding the EJPP protocol, making use of the respective communication qubits. The $10^{\text{th}}$ qubit stems from the verification circuit, and is used to discard runs that violated the FT criterion (and resulted in harmful errors from low-weight errors). Also, there are classical lines storing the measurement information from the circuit.
 
