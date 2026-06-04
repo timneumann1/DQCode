@@ -80,7 +80,7 @@ Congrats, you've made it through; this completes the setup. (If you choose to al
 
 On the DQCode side, you should now see this file structure:
 
-.
+```
 ├── examples
 │   └── example.md
 ├── LICENSE
@@ -116,6 +116,7 @@ On the DQCode side, you should now see this file structure:
     ├── Tests.jl
     ├── trivariate_bicycle_code.jl
     └── types.jl
+```
 
 ## Usage
 
