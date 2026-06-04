@@ -13,6 +13,8 @@ using Statistics
 function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, logical_error_rate, acceptance_ratio)#, power_exp, power_interc)
 
     # ---------------------- Pre-Processing ----------------------
+    df.logical_error_rate = ifelse.(df.logical_error_rate .== 0.0, 1 / df.n_samples[1], df.logical_error_rate)
+
     ps_all = sort(unique(Float64.(df.p)))
     p_range = range(minimum(ps_all), maximum(ps_all), length=300)
     p_bells = sort(unique(Float64.(df.p_bell)))
@@ -32,11 +34,14 @@ function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, l
     ys = filter(x -> x > 0, Float64.(df.logical_error_rate))
     minexp = floor(Int, log10(minimum(ys)))
     maxexp = ceil(Int,  log10(maximum(ys)))
+    @info "min: $minexp"
     ytick_vals = 10.0 .^ (minexp:maxexp)
     ytick_labels = power_of_10_label.(ytick_vals)
 
     ax1  = Axis(fig[1, 1], ylabel = L"\text{Logical } |0 \rangle_L \text{ initialisation error}",  title = L"\text{Logical vs. Physical Initialisation Error}",
-        xscale  = log10, yscale  = log10, yticks = (ytick_vals, ytick_labels), ylabelsize = 22, titlesize = 28,
+        xscale  = log10, yscale  = log10,
+        yticks = (ytick_vals, ytick_labels), 
+        ylabelsize = 22, titlesize = 28,
         xgridvisible= true, ygridvisible = true, xminorgridvisible  = true, yminorgridvisible  = true, xminorticksvisible = true, yminorticksvisible = true,
         xminorticks = IntervalsBetween(9), yminorticks = IntervalsBetween(9))
 
@@ -45,6 +50,7 @@ function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, l
         xgridvisible = true, ygridvisible = true,  xminorgridvisible = true,  yminorgridvisible = true,   xminorticksvisible = true, yminorticksvisible = true,
         xminorticks = IntervalsBetween(9), yminorticks = IntervalsBetween(9))
     
+    ylims!(ax2, min( minimum(df.acceptance_ratio), 0.75), 1.0)
     linkxaxes!(ax1, ax2)
 
     # p_L = p  (slope 1 in log-log)
@@ -59,11 +65,15 @@ function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, l
     for (idx,p_bell) in enumerate(p_bells_plot)
 
         df_bell = copy(df[(df.p_bell .== p_bell), :])
+        @info minimum(df_bell.logical_error_rate)
         df_ = copy(df_bell[(df_bell.logical_error_rate.>0.0), :])
         @info "Deleted $(nrow(df_bell)-nrow(df_)) row(s) because of 0.0 logical error rate"
+        @info minimum(df_.logical_error_rate)
+        @info minimum(df_.acceptance_ratio)
         sort!(df_, :p)
         df_.diff_logical_phys = df_.logical_error_rate .- df_.p  
         df_.std_error = sqrt.(1/5e5 .* (df_.logical_error_rate) .* (1 .- df_.logical_error_rate))
+        # assumes monotonous scaling
         pseudo_thresh_ind = findfirst(i -> df_.diff_logical_phys[i] * df_.diff_logical_phys[i+1] < 0, 1:length(df_.diff_logical_phys)-1)
         pseudo_thresh = isnothing(pseudo_thresh_ind) ? nothing : df_.p[pseudo_thresh_ind]
         
@@ -87,7 +97,7 @@ function log_log_plot(df, data_path; monolithic = false)#telegate_error_rates, l
         end
   
         # data
-        errorbars!(ax1, df_.p, df_.logical_error_rate, df_.std_error; color =colors[idx], label=L"\sigma^2(LER)")
+        #errorbars!(ax1, df_.p, df_.logical_error_rate, df_.std_error; color =colors[idx], label=L"\sigma^2(LER)")
         scatterlines!(ax1, df_.p, df_.logical_error_rate, color = colors[idx],markersize = 10, linewidth  = 2, label = data_label)
 
         scatterlines!(ax2, df_.p, df_.acceptance_ratio, color = colors[idx], markersize = 10, linewidth = 2,  label = acc_label )

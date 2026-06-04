@@ -68,22 +68,20 @@ function plot_evolution(dir, optimiser_label::String, fidelities, gate_counts)#,
 
     rowgap!(fig.layout, 10)
 
-    outpath = joinpath(dir, "Optimisation_Evolution.png")
+    outpath = joinpath(dir, "optimisation_evolution.png")
     save(outpath, fig)
 end
 
-
-ga_dir = "/Users/tim/Tim/projects/DQCode/data/TrivariateBicycle/[6, 6]/warmstart_ga"
+code = "Steane"
+qpu_sizes = "[4, 3]"
+ga_dir = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "warmstart_ga")
 ga_evol = CSV.read(joinpath(ga_dir,"genetic_evolution.csv"), DataFrame)
-
 
 fitness_evolution = ga_evol.fitness_evolution
 fidelity_evolution = ga_evol.fidelity_evolution
 single_count = ga_evol.single_count
 two_qubit_count = ga_evol.two_qubit_count
 telegate_count = ga_evol.telegate_count
-
-
 
 plot_evolution(ga_dir, "Warm-Start Genetic Algorithm", fitness_evolution, fidelity_evolution, single_count,two_qubit_count,telegate_count)
 
