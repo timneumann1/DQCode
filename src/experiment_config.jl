@@ -61,18 +61,18 @@ function experiment_configurations()
 
     code_architecture_setup["color_8_9"] = ( Triangular488(5), [8,9] )
     genetic_params["color_8_9"] = GeneticParameters(15000, 2500, 100, 0.85, 5, 1, [2e4, 1, 10, 2e3], "jaccard")
-    #mcts_params["color_8_9"] = MCTSParameters(50, [1e6,1,5,2e3], 0.99, "jaccard", false, 3, 5e4, 5.0)
+    mcts_params["color_8_9"] = MCTSParameters(50, [1e6,1,5,1e1], 0.999, "jaccard", false, 5, 5e4, 5.0)
     
     # ------- Bivariate Bicycle [[18,4,4]] - [3,3,3,3,3,3] ---------
 
     code_architecture_setup["bivariate_3_3_3_3_3_3"] = ( BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]), [3,3,3,3,3,3] )
-    genetic_params["bivariate_3_3_3_3_3_3"] = GeneticParameters(15000, 5000, 100, 0.85, 5, 1, [3e4, 1, 10, 1e3], "jaccard")
+    genetic_params["bivariate_3_3_3_3_3_3"] = GeneticParameters(15000, 5000, 500, 0.85, 5, 1, [3e4, 1, 10, 1e3], "jaccard")
     mcts_params["bivariate_3_3_3_3_3_3"] = MCTSParameters(70, [1e6,1,5,5e3], 0.999, "jaccard", false, 3, 5e4, 10.0)
     
     # ------- Bivariate Bicycle [[18,4,4]] - [6,6,6] ---------
 
     code_architecture_setup["bivariate_6_6_6"] = ( BivariateBicycleViaCirculantMat(3, 3, [(:x, 0), (:x, 1), (:y, 1)], [(:y, 0), (:x, 2), (:y, 2)]), [6,6,6] )
-    genetic_params["bivariate_6_6_6"] = GeneticParameters(15000, 5000, 100, 0.85, 5, 1, [4e4, 1, 10, 1e3], "jaccard")
+    genetic_params["bivariate_6_6_6"] = GeneticParameters(15000, 5000, 500, 0.85, 5, 1, [4e4, 1, 10, 1e3], "jaccard")
     mcts_params["bivariate_6_6_6"] = MCTSParameters(70, [1e6,1,5,2e3], 0.999, "jaccard", false, 3, 5e4, 10.0)
 
     # ------- Bivariate Bicycle [[18,4,4]] - [9,9] ---------

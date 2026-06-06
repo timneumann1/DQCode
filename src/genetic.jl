@@ -386,8 +386,8 @@ adjacent pairs of repeated gates to minimize the gate count of the individual.
 An equivalent/cleaned circuit with no consecutive gate redundancy.
 
 ### Notes
-Since `H` and `CNOT` are not only unitary but also involutory, they are self-inverse; thus, a sequence
-H-H-CNOT-CNOT reduces to the identity.
+Since `H` and `CNOT` are not only unitary but also involutory, they are self-inverse; for example, 
+the sequence H-H-CNOT-CNOT reduces to the identity.
 """
 function _clean_circuit(circuit::Vector{AbstractOperation})::Vector{AbstractOperation}
     # Removes gate duplicates
@@ -399,7 +399,6 @@ function _clean_circuit(circuit::Vector{AbstractOperation})::Vector{AbstractOper
             push!(clean_circuit, gate)
         end
     end
-   
     return clean_circuit
 end
 
@@ -442,6 +441,7 @@ function mutation(individual::Vector{AbstractOperation}, mutation_rate::Float64,
     end
     return individual
 end
+
 
 """
     _random_two_qubit_gate(num_data_qubits::Int)::AbstractTwoQubitOperator
