@@ -452,12 +452,14 @@ function circuit_search_mcts(exp_label::String)::String
         serialize( joinpath(dir, "MCTS_circuit.jls"), MCTS_circuit )
         save_circuit_diagram(MCTS_circuit, dir, "MCTS_circuit.png")
         save_txt(dir, "mcts_parameters.txt", mcts_params)
-        df_evol = DataFrame(
+        df_mcts = DataFrame(
             fidelity_evolution = fidelity_evolution, 
-            gate_count_evolution = gate_count_evolution,
+            single_count = [gc[1] for gc in gate_count_evolution],
+            two_qubit_count = [gc[2] for gc in gate_count_evolution],
+            telegate_count = [gc[3] for gc in gate_count_evolution],
             reward_evolution = reward_evolution
         )
-        CSV.write(joinpath(dir, "mcts_evolution.csv"), df_evol)
+        CSV.write(joinpath(dir, "mcts_evolution.csv"), df_mcts)
         df = DataFrame(method = ["MCTS"], verified = [verification_MCTS_logical_state], gate_counts = [MCTS_gate_counts])
         CSV.write(joinpath(dir, "mcts_stats.csv"), df)
         return dir
@@ -633,12 +635,13 @@ function resource_estimation(exp_label::String)::String
             circuit_depth, 
             total_gate_counts_circ, 
             total_number_measurements_circ, 
-            qpu_core_sizes_circ
+            qpu_core_sizes_circ,
+            acceptance_ratio
         ) = estimate_resources_encoding_circuit(dir, copy(qpu_sizes), ancilla_map) # FT encoding circuit resource estimate
         # ----- Data Storage ----------
         resources_info_circ = (; network_specs.num_comm_qubits, network_specs.num_registers, 
                                     num_ancillas_circ, circuit_depth, total_gate_counts_circ,
-                                    total_number_measurements_circ, qpu_core_sizes_circ)
+                                    total_number_measurements_circ, qpu_core_sizes_circ, acceptance_ratio)
         save_txt(dir, "resources_info_circ.txt", resources_info_circ)
         resources_info_circ_df = DataFrame(
             num_comm_qubits = [network_specs.num_comm_qubits],
@@ -651,6 +654,7 @@ function resource_estimation(exp_label::String)::String
             telegates = [total_gate_counts_circ[3]],
             measurements = [total_number_measurements_circ],
             qpu_core_sizes = [join(qpu_core_sizes_circ, ";")],
+            acceptance_ratio = acceptance_ratio
         )
         CSV.write(joinpath(dir, "resources_info_circ.csv"), resources_info_circ_df)
         (

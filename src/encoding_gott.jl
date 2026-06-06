@@ -287,7 +287,7 @@ function overlap_compilation(circuit::Vector{QuantumClifford.AbstractOperation},
         push!(singular_gates, sCNOT(i,k))
         filter!(g -> g != CX_ik, remaining_gates)
     end
-    compiled_circ = vcat(compiled_circ, singular_gates,phase_correction_gates)
+    compiled_circ = vcat(compiled_circ, singular_gates, phase_correction_gates)
     # retrieve the update gate counts
     gate_counts = [0,0,0]
     for op in compiled_circ
