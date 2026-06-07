@@ -644,6 +644,7 @@ function resource_estimation(exp_label::String)::String
                                     total_number_measurements_circ, qpu_core_sizes_circ, acceptance_ratio)
         save_txt(dir, "resources_info_circ.txt", resources_info_circ)
         resources_info_circ_df = DataFrame(
+            method = "encoding_circ",
             num_comm_qubits = [network_specs.num_comm_qubits],
             num_registers = [network_specs.num_registers],
             num_ancillas = [num_ancillas_circ],
@@ -669,6 +670,7 @@ function resource_estimation(exp_label::String)::String
                                     depth_meas,  gate_counts_meas, total_number_measurements_meas, qpu_core_sizes_meas)
         save_txt(dir, "resources_info_meas.txt", resources_info_meas)
         resources_info_meas_df = DataFrame(
+            method = "stabiliser_measurement",
             num_comm_qubits = [network_specs.num_comm_qubits],
             num_registers = [network_specs.num_registers],
             num_ancillas = [num_ancillas_meas],

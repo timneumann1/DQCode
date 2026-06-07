@@ -6,17 +6,9 @@ using LsqFit
 using CSV, DataFrames
 using Statistics
 
-struct SimConfig
-    code::String          
-    architecture::String  
-    label::String         # for plot legend
-    data_path::String     # for data storage
-end
-
 # ---------------------------------------------------------------
 # ------------------ Scaling & Threshold ------------------------
 # ---------------------------------------------------------------
-
 
 function log_log_plot(df, data_path; monolithic = false)
     @info "Creating log-log plot..."
@@ -42,9 +34,11 @@ function log_log_plot(df, data_path; monolithic = false)
     xtick_labels = power_of_10_label.(xtick_vals,2)
     ytick_vals = 10.0 .^ (minexp:maxexp)
     ytick_labels = power_of_10_label.(ytick_vals,2)
+    _code_architecture_label = df.code_architecture_label[1]#replace(df.code_architecture_label[1], "_" => "\\_")
     ax1  = Axis(fig[1, 1],
         ylabel = L"\text{Logical } |0 \rangle_L \text{ initialisation error}",  
         title = L"\text{Logical vs. Physical Initialisation Error}",
+        subtitle  = L"%$(_code_architecture_label)",
         xscale  = log10, 
         yscale  = log10,
         xticks = (xtick_vals, xtick_labels), 
@@ -119,7 +113,8 @@ function log_log_plot(df, data_path; monolithic = false)
     end
     axislegend(ax1, position = :rb)
     axislegend(ax2, position = :rb)
-    save(joinpath(data_path,"..", "qec_threshold.png"), fig)
+    save(joinpath(data_path, "../..", "qec_threshold.png"), fig)
+    @info "Saved qec_threshold.png"
 end
 
 
@@ -146,12 +141,14 @@ function two_d_plot(df, data_path)
         ratio[p_to_i[r.p], pb_to_j[r.p_bell]] = r.ratio_logical_phys
         LER[p_to_i[r.p], pb_to_j[r.p_bell]] = r.logical_error_rate
     end
+    _code_architecture_label = df.code_architecture_label[1]#_code_architecture_label = replace(df.code_architecture_label[1], "_" => "\\_")
     # ---------------------- Plot 2D Heatmap ----------------------
     fig = Figure(size = (800, 600))
     ax = Axis(fig[1, 1]; 
             xlabel = L"\text{Physical error rate } p",  
             ylabel = L"p_{Bell}", 
-            title  = L"\text{Logical } |0 \rangle_L \text{ per physical initialisation error and p_{Bell}}",   
+            title  = L"\text{Logical } |0 \rangle_L \text{ per physical initialisation error and p_{Bell}}", 
+            subtitle  = L"%$(_code_architecture_label)",  
             xscale = log10, 
             yscale = log10, 
             xgridvisible = true, 
@@ -195,7 +192,8 @@ function two_d_plot(df, data_path)
             label = L"\log_{10}(\text{LER}/p) \approx 0")
         axislegend(ax, position = :lt)
     end
-    save(joinpath(data_path,"..", "2d_heatmap_ratio.png"), fig)
+    save(joinpath(data_path,"../..", "2d_heatmap_ratio.png"), fig)
+    @info "2d_heatmap_ratio.png"
     # ---------------------- Plot 2D Ratio Heatmap ----------------------
     fig = Figure(size = (800, 600))
     ax = Axis(fig[1, 1]; 
@@ -220,7 +218,8 @@ function two_d_plot(df, data_path)
     maxabs = isempty(vals) ? 1.0 : maximum(abs, vals)
     hm = heatmap!(ax, ps, p_bells, log_LER; colormap = cgrad(:viridis, rev=true), colorrange = (-maxabs, 0))
     Colorbar(fig[1, 2], hm; label = L"\log_{10}(\text{LER})", labelsize = 22)
-    save(joinpath(data_path,"..", "2d_heatmap.png"), fig)
+    save(joinpath(data_path,"../..", "2d_heatmap.png"), fig)
+    @info "2d_heatmap.png"
 end
 
 function power_law_fit(physical_noise, logical_noise)
@@ -272,8 +271,11 @@ function pre_decoding_vs_logical_plot(df, data_path)
         xminorticks = IntervalsBetween(9),
         yminorticks = IntervalsBetween(9),
     )
-    ax1 = Axis(fig[1, 1]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[1],2))", ax_kwargs...)  
-    ax2 = Axis(fig[1, 2]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[2],2))", ax_kwargs...)
+    _code_architecture_label = df.code_architecture_label[1]#_code_architecture_label = replace(df.code_architecture_label[1], "_" => "\\_")
+    ax1 = Axis(fig[1, 1]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[1],2))",
+                            subtitle  = L"%$(_code_architecture_label)", ax_kwargs...)  
+    ax2 = Axis(fig[1, 2]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[2],2))",
+                            subtitle  = L"%$(_code_architecture_label)", ax_kwargs...)
     col_pre_x   = RGBf(255/255, 177/255,  42/255) 
     col_pre_z   = RGBf( 0/255, 154/255, 207/255)
     col_logical = RGBf(255/255, 177/255,  42/255) 
@@ -295,7 +297,8 @@ function pre_decoding_vs_logical_plot(df, data_path)
     hideydecorations!(ax2, grid = false, minorgrid = false)
     axislegend(ax1, position = :lt)
     axislegend(ax2, position = :rb)
-    save(joinpath(data_path, "..", "pre_decoding_x_vs_logical.png"), fig)
+    save(joinpath(data_path, "../..", "pre_decoding_x_vs_logical.png"), fig)
+    @info "Saved pre_decoding_x_vs_logical.png"
 end
 
 
@@ -324,17 +327,19 @@ function per_qubit_fidelity_bar_plot(df, data_path)
     end
     ps     = Float64.(df.p)
     n_p    = length(ps)
-    qubit_colors = [RGBf(255/255, 177/255,  42/255), RGBf( 0/255, 154/255, 207/255), RGBf(96/255, 184/255,  72/255) , RGBf(180/255, 120/255, 210/255)]
     # ---------------------- Plotting ----------------------
+    qubit_colors = [RGBf(255/255, 177/255,  42/255), RGBf( 0/255, 154/255, 207/255), RGBf(96/255, 184/255,  72/255) , RGBf(180/255, 120/255, 210/255)]
     log_ps     = log10.(ps)
     bar_width  = 0.7 * minimum(diff(log_ps)) 
     slot_width = bar_width / k_log_qubits
     offsets = [(i - (k_log_qubits + 1) / 2) * slot_width for i in 1:k_log_qubits]
+    _code_architecture_label = df.code_architecture_label[1]#_code_architecture_label = replace(df.code_architecture_label[1], "_" => "\\_")
     fig = Figure(size = (max(600, n_p * 55), 520), fontsize = 13)
     ax = Axis(fig[1, 1],
         xlabel     = L"\text{Physical error rate } p",
         ylabel     = L"1 - \text{LER} / fidelity",
         title      = L"\text{Per-qubit } (1 - \text{LER}) \text{ and Fidelity vs. } p for p_{bell}=%$( power_of_10_label(p_bell,2))",
+        subtitle  = L"%$(_code_architecture_label)",
         xlabelsize = 22, ylabelsize = 22, titlesize = 22,
         xgridvisible = false, ygridvisible = true,
         yminorgridvisible = true, yminorticksvisible = true,
@@ -373,7 +378,8 @@ function per_qubit_fidelity_bar_plot(df, data_path)
     ylo = floor(minimum(all_vals), digits = 4)
     ylims!(ax, max(0.0, ylo - 1/25*(1.0-ylo)), 1.0)
     axislegend(ax, position = :lb)
-    save(joinpath(data_path, "..", "per_qubit_ler_fidelity_bars.png"), fig)
+    save(joinpath(data_path, "../..", "per_qubit_ler_fidelity_bars.png"), fig)
+    @info "Saved per_qubit_ler_fidelity_bars.png"
 end
 
 
@@ -383,9 +389,10 @@ end
 
 
 function compare_logical_error_rate(df)
+    # ---------------------- Plotting ----------------------
     ps_all = sort(unique(Float64.(df.p)))
     p_range = range(minimum(ps_all), maximum(ps_all), length=300)
-    labels  = unique(df.config_label)   # one line per config
+    labels  = unique(df.code_architecture_label) 
     colors = [RGBf(255/255, 177/255,  42/255), RGBf( 0/255, 154/255, 207/255), RGBf(96/255, 184/255,  72/255) , RGBf(180/255, 120/255, 210/255)]
     all_ys = filter(x -> x > 0, Float64.(df.logical_error_rate))
     minexp = floor(Int, log10(minimum(all_ys)))
@@ -414,31 +421,29 @@ function compare_logical_error_rate(df)
                yminorticksvisible = true,
                xminorticks = IntervalsBetween(9), 
                yminorticks = IntervalsBetween(9))
-    #ylo = floor(minimum(df.logical_error_rate), digits = 4)
-    #yhi = floor(maximum(df.logical_error_rate), digits = 4)
-    #ylims!(ax, minimum(all_ys), maximum(all_ys) + 0.1)
     # p_L = p  (slope 1 in log-log)
     lines!(ax, p_range, p_range, color = :gray60,  linestyle = :dash, linewidth = 1.5,  label = L"p_L \sim p")
     # p_L = p²  (slope 2 in log-log)
     lines!(ax, p_range, p_range.^2, color = :gray40, linestyle = :dot, linewidth = 1.5, label = L"p_L \sim p^2")
     for (idx, config_label) in enumerate(labels)
-        df_ = df[df.config_label .== config_label, :]
+        df_ = df[df.code_architecture_label .== config_label, :]
         p_bell_min = minimum(df_.p_bell)
         df_ = df_[df_.p_bell .== p_bell_min, :]
         sort!(df_, :p)
         df_.var = 1 ./ (df_.n_samples-df_.discarded_runs) .* (df_.logical_error_rate) .* (1 .- df_.logical_error_rate)
         df_.std_error = sqrt.(max.(df_.var, 0.0))
-        _config_label = replace(config_label, "_" => "\\_")
-        data_label = L"\text{Logical initialisation noise for %$(_config_label)}"
+        data_label = L"\text{Logical initialisation noise for %$(config_label)}"
         errorbars!(ax, df_.p, df_.logical_error_rate, df_.std_error; color =colors[idx], label=idx == 1 ? L"\sigma(LER)" : nothing)
         scatterlines!(ax, df_.p, df_.logical_error_rate;
                         color = colors[idx], linewidth = 2, markersize = 8, label = data_label)
     end
     axislegend(ax, position = :rb)
-    save(joinpath(@__DIR__, "data/../../../data/comparison_ler.png"), fig)
+    @info @__DIR__
+    save(joinpath(@__DIR__, "../../data/comparison_ler.png"), fig)
+    @info "Saved comparison_ler.png"
 end
 
-   
+
 # ------------------------------------------
 # ------------------ Helper ----------------
 # ------------------------------------------
@@ -450,26 +455,33 @@ function power_of_10_label(val::Float64, round_to_digits::Int)
     return L"10^{%$n}"
 end
 
-function load_configs(configs::Vector{SimConfig})::DataFrame
+
+struct Config
+    code::String          
+    architecture::String  
+    code_architecture_label::String    # for plot legend
+    data_path::String     # for data storage
+end
+
+function load_configs(configs::Vector{Config})::DataFrame
     dfs = map(configs) do cfg
         df = CSV.read(cfg.data_path, DataFrame)
         df.code         = fill(cfg.code,         nrow(df))
         df.architecture = fill(cfg.architecture, nrow(df))
-        df.config_label = fill(cfg.label,        nrow(df))
+        df.code_architecture_label = fill(cfg.code_architecture_label, nrow(df))
         df
     end
     return vcat(dfs...; cols = :union) 
 end
 
 
-
 # ------------------------------------------
 # --------------- Execution ----------------
 # ------------------------------------------
 
-function analysis(configs)
+
+function analysis_dqc_sim(configs)
     df = load_configs(configs)
-    #@info df
     if length(configs) == 1
         log_log_plot(df, configs[1].data_path) # can add optional keyword monolithic=true
         two_d_plot(df, configs[1].data_path)
@@ -480,12 +492,13 @@ function analysis(configs)
     end
 end
 
-configs = [
-    SimConfig("Steane", "[4,3]", "Steane_4_3",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
-    SimConfig("Steane", "[4,3]", "Steane_4_3",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
+
+configs_dqc_sim = [
+    Config("Steane", "[4,3]", L"\text{Steane }[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
+    Config("Steane", "[4,3]", L"\text{Steane }[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
 ]
 
-analysis(configs)
+analysis_dqc_sim(configs_dqc_sim)
 
 
 

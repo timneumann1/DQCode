@@ -1,2 +1,2 @@
-num_comm_qubits,num_registers,num_ancillas,depth_cx_layers,depth_telegate_layers,single_qubit_gates,cx_gates,telegates,measurements,qpu_core_sizes,acceptance_ratio
-2,2,1,8,3,3,8,3,1,6;4,0.99736
+method,num_comm_qubits,num_registers,num_ancillas,depth_cx_layers,depth_telegate_layers,single_qubit_gates,cx_gates,telegates,measurements,qpu_core_sizes,acceptance_ratio
+encoding_circ,2,2,1,8,3,3,8,3,1,6;4,0.99736

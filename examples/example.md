@@ -212,17 +212,17 @@ include("scripts/analysis/logical_rate.jl")
 This saves a log-log plot containing the logical initialisation error scaling per physical initialisation error rate `p`
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/simulation_FT/qec_threshold.png" alt="log-log plot" width="350"/>
+<img src="../data/Steane/%5B4,%203%5D/qec_threshold.png" alt="log-log plot" width="350"/>
 </p>
 
-as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/simulation_FT`.
+as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/`.
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/simulation_FT/2d_heatmap.png" alt="2d" width="450"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap.png" alt="2d" width="450"/>
 </p>
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/simulation_FT/2d_heatmap_ratio.png" alt="2d ratio" width="450"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio.png" alt="2d ratio" width="450"/>
 </p>
 
 We can also create other visualisations based on the data. 
@@ -236,7 +236,13 @@ Finally, let's analyse the resources that the FT encoding circuit consumes. For 
 include("scripts/execution/dqc_resource.jl")
 ```
 
-This saves data into our `/data/Steane/[4, 3]/simulation_FT` folder, containing the number of ancillas, depth, gate counts and effective required QPU sizes (including ancilla qubits) for both the [FT encoding circuit](/data/Steane/%5B4,%20%33%5D/simulation_FT/resources_info_circ.csv) and a [1-round distributed stabiliser measurement approach](/data/Steane/%5B4,%20%33%5D/simulation_FT/resources_info_circ.csv).
+This saves data into our `/data/Steane/[4, 3]` folder, containing the number of ancillas, depth, gate counts and effective required QPU sizes (including ancilla qubits) for both the [FT encoding circuit](/data/Steane/%5B4,%20%33%5D/simulation_FT/resources_info_circ.csv) and a [1-round distributed stabiliser measurement approach](/data/Steane/%5B4,%20%33%5D/simulation_FT/resources_info_circ.csv).
 
 For the Steane-code, we find that the FT encoding circuit needs less telegates and also less telegate layers, while only using one additional ancilla, compared to one round of distributed stabiliser measurements (which would not be FT per se). Also, we find that the ancilla from verification can be reused as an ancilla for distributed stabiliser measurement!
+
+A visualisation of the resource estimation gives insight into how quantum operation counts and depth compare between the Fault-tolerant logical zero state encoding and the distributed stabiliser measurement initialisation approach. It should be noted that fault tolerance in the unitary encoding circuit approach comes at the cost of post-selection (see information about `acceptance ratio` in the plot), whereas to achieve fault-tolerance with repeated stabiliser measurements, one commonly performs `d` rounds of stabiliser measurements, where `d` stands for the distance of the code (`distance = 3` for the Steane code).
+
+<p align="center">
+<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="450"/>
+</p>
 
