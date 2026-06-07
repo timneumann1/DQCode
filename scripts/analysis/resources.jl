@@ -85,7 +85,7 @@ function compare_resources(df, data_path)
         RGBf(  0/255, 154/255, 207/255),     
         RGBf(255/255, 177/255,  42/255), 
     ]
-    encoding_labels = [latexstring(L"\text{FT encoding circuit (acceptance ratio =}%$(df.acceptance_ratio[1]))"), latexstring(L"\text{Stabiliser Measurements (1 round)}")]
+    encoding_labels = [latexstring(L"\text{FT encoding circuit (acceptance ratio =}%$( round( df.acceptance_ratio[1], digits=3)) \text{ for p=}%$(power_of_10_label(df.p[1], 3)) \text{, p_{Bell}=} %$( power_of_10_label(df.p_bell[1], 3) ))"), latexstring(L"\text{Distributed Stabiliser Measurements (per round)}")]
     function get_val(method, col)
         rows = df[df.method .== method, :]
         isempty(rows) && return NaN
@@ -175,6 +175,12 @@ function load_configs(configs::Vector{Config})::DataFrame
     return vcat(dfs...; cols = :union) 
 end
 
+function power_of_10_label(val::Float64, round_to_digits::Int)
+    val > 0 || return L""
+    n = round(log10(val),digits=round_to_digits)
+    return L"10^{%$n}"
+end
+
 
 # ------------------------------------------
 # --------------- Execution ----------------
@@ -225,7 +231,7 @@ configs_optimiser = [
     
 ]
 
-analysis_optimiser(configs_optimiser)
+#analysis_optimiser(configs_optimiser)
 
 
 configs_resources = [

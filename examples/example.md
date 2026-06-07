@@ -243,6 +243,6 @@ For the Steane-code, we find that the FT encoding circuit needs less telegates a
 A visualisation of the resource estimation gives insight into how quantum operation counts and depth compare between the Fault-tolerant logical zero state encoding and the distributed stabiliser measurement initialisation approach. It should be noted that fault tolerance in the unitary encoding circuit approach comes at the cost of post-selection (see information about `acceptance ratio` in the plot), whereas to achieve fault-tolerance with repeated stabiliser measurements, one commonly performs `d` rounds of stabiliser measurements, where `d` stands for the distance of the code (`distance = 3` for the Steane code).
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="450"/>
+<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="1000"/>
 </p>
 

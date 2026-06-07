@@ -19,7 +19,7 @@ using CSV, DataFrames
 
 """
     estimate_resources_encoding_circuit(folder::String, qpu_sizes::Vector{Int},
-                                        ancilla_map::Vector{Int})::Tuple{Int, Vector{Int}, Vector{Int}, Int, Vector{Int}, Float64}
+                                        ancilla_map::Vector{Int})::Tuple{Int, Vector{Int}, Vector{Int}, Int, Vector{Int}, Float64, Float64, Float64}
 
 Load and summarise the resource requirements of the fault-tolerant encoding circuit from simulation data.
 
@@ -36,7 +36,7 @@ Returns a 6-element tuple containing the number of ancilla qubits, circuit depth
 number of measurements, total qubit count per register (code + communication + ancilla qubits) and `acceptance_ratio`.
 """
 function estimate_resources_encoding_circuit(folder::String, qpu_sizes::Vector{Int}, 
-                                                ancilla_map::Vector{Int})::Tuple{Int, Tuple{Int, Int}, Tuple{Int, Int, Int}, Int, Vector{Int}, Float64}
+                                                ancilla_map::Vector{Int})::Tuple{Int, Tuple{Int, Int}, Tuple{Int, Int, Int}, Int, Vector{Int}, Float64, Float64, Float64}
     df = CSV.read(joinpath(folder, "dqc_sim_data.csv"), DataFrame)
     depth_cx_layers = df.depth_cx_layers[1]
     depth_telegate_layers = df.depth_telegate_layers[1]
@@ -45,6 +45,8 @@ function estimate_resources_encoding_circuit(folder::String, qpu_sizes::Vector{I
     total_telegate_count = df.total_telegate_count[1]
     num_meas = df.num_meas[1]
     acceptance_ratio = df.acceptance_ratio[1]
+    p = df.p[1]
+    p_bell = df.p_bell[1]
     ancilla_distr = zeros(Int, length(qpu_sizes))
     for core in ancilla_map # iterate over all entries in the ancilla map list
         ancilla_distr[core] += 1 # increase the respective core in ancilla_dist
@@ -55,7 +57,7 @@ function estimate_resources_encoding_circuit(folder::String, qpu_sizes::Vector{I
             $total_two_qubit_count CX gates, $total_telegate_count telegates as well as $num_meas measurements."
     @info "The depth is ($depth_cx_layers, $depth_telegate_layers), and the total qubit counts per core is $qpu_core_sizes.\n"
     return length(ancilla_map), (depth_cx_layers, depth_telegate_layers), (total_single_qubit_count, total_two_qubit_count, total_telegate_count),
-                num_meas, qpu_core_sizes, acceptance_ratio
+                num_meas, qpu_core_sizes, acceptance_ratio, p, p_bell
 end
    
     

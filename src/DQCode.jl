@@ -636,12 +636,14 @@ function resource_estimation(exp_label::String)::String
             total_gate_counts_circ, 
             total_number_measurements_circ, 
             qpu_core_sizes_circ,
-            acceptance_ratio
+            acceptance_ratio,
+            p, p_bell
         ) = estimate_resources_encoding_circuit(dir, copy(qpu_sizes), ancilla_map) # FT encoding circuit resource estimate
         # ----- Data Storage ----------
         resources_info_circ = (; network_specs.num_comm_qubits, network_specs.num_registers, 
                                     num_ancillas_circ, circuit_depth, total_gate_counts_circ,
-                                    total_number_measurements_circ, qpu_core_sizes_circ, acceptance_ratio)
+                                    total_number_measurements_circ, qpu_core_sizes_circ,
+                                    acceptance_ratio, p, p_bell)
         save_txt(dir, "resources_info_circ.txt", resources_info_circ)
         resources_info_circ_df = DataFrame(
             method = "encoding_circ",
@@ -655,7 +657,9 @@ function resource_estimation(exp_label::String)::String
             telegates = [total_gate_counts_circ[3]],
             measurements = [total_number_measurements_circ],
             qpu_core_sizes = [join(qpu_core_sizes_circ, ";")],
-            acceptance_ratio = acceptance_ratio
+            acceptance_ratio = acceptance_ratio,
+            p=p,
+            p_bell=p_bell
         )
         CSV.write(joinpath(dir, "resources_info_circ.csv"), resources_info_circ_df)
         (
