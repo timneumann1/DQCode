@@ -72,7 +72,9 @@ include("scripts/execution/dqc_qiskit_baseline.jl")
 This saves the qiskit baseline data to `data/Steane/[4, 3]/qiskit_encoding`.
 Here, you should fine the encoding circuit produced by Qiskit
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="450"/>
+</p>
 
 You can also take a look at the gate counts here:
 [Qiskit encoding circuit gate counts](/data/Steane/%5B4,%20%33%5D/qiskit_encoding/qiskit_encoding_stats.csv).
@@ -85,8 +87,9 @@ include("scripts/execution/dqc_mqt_baseline.jl")
 
 Here, we chose the `heuristic` method for the verification circuit, yielding the circuit 
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/mqt_encoding/mqt_encoding_circuit.png" alt="MQT encoding circuit" width="250"/>
-
+</p>
 ## Monte Carlo Tree Search
 
 Having explored the baselines, we now perform a Monte Carlo Tree Search for an efficient $|0\rangle_L$ encoding circuit. For this, set the correct label in the [GA script](/scripts/execution/dqc_mcts.jl) and set your the MCTS hyperparameters in the [experiment configuration file](/src/experiment_config.jl). In the current configuration, we use the hyperparameters
@@ -109,7 +112,9 @@ include("scripts/execution/dqc_mcts.jl")
 
 Let's take a look at the optimised circuit the genetic search produced:
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/mcts/MCTS_circuit.png" alt="MCTS encoding circuit" width="320"/>
+</p>
 
 How did the optimisation perform in a DQC setting? Find out in the [MCTS statistics data .csv file](/data/Steane/%5B4,%20%33%5D/mcts/mcts_stats.csv).
 
@@ -139,16 +144,19 @@ include("scripts/execution/dqc_gott_ga.jl")
 
 The genetic search can take some time to complete. Once it completes, it has saved all relevant data from the genetic search to the `/data/Steane/[4, 3]/warmstart_ga/` folder. We first inspect the Gottesman encoding circuit:
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/warmstart_ga/gott_encoding_circuit.png" alt="Gottesman encoding circuit" width="350"/>
-
+</p>
 Then the DQC-compiled version of it:
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/warmstart_ga/gott_circuit_dqc_compiled.png" alt="DQC-compiled Gottesman encoding circuit" width="300"/>
-
+</p>
 Finally, let's take a look at the optimised circuit the genetic search produced:
 
+<p align="center">
 <img src="../data/Steane/%5B4,%203%5D/warmstart_ga/GA_circuit.png" alt="Warm-start GA encoding circuit" width="320"/>
-
+</p>
 How did the optimisation perform in a DQC setting? Find out in the [GA statistics data .csv file](/data/Steane/%5B4,%20%33%5D/warmstart_ga/warm_start_ga_stats.csv).
 
 As the file reveals, we need two telegates for the distributed implementation!
