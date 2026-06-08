@@ -6,7 +6,7 @@ for a logical zero state, simulate the DQC execution including telegates under c
 and Bell pair initialisation noise, and collect corresponding statistics, e.g. on logical error rates.
 
 Credit: 
-- The pipeline for logical evaluation (`dqc_logical_evaluation`) is largely based on the implementation
+- The pipeline for the evaluation of the logical rate (`dqc_logical_evaluation`) is largely based on the implementation
 provided as part of the QuantumClifford library (https://github.com/QuantumSavory/QuantumClifford.jl/blob/2664eba07a461441ea051a17cad7c725f9576176/src/ecc/decoder_pipeline.jl),
 with functions for the noiseless encoding circuits being based on https://github.com/QuantumSavory/QuantumClifford.jl/blob/master/src/ecc/circuits.jl.
 [The QuantumClifford.jl library is licensed under a MIT license.]
@@ -139,8 +139,8 @@ function dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p
             full_circuit
         ) = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, 
                                     ancilla_map, code_params, network_specs, noise_model) 
-        push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
-                    discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
+        push!(data, (p=p, p_bell=p_bell, p_single_ratio=p_single_ratio, p_idle_ratio=p_idle_ratio, telegate_idle_depth=telegate_idle_depth, logical_error_rate=logical_error_rate, 
+                    acceptance_ratio=acceptance_ratio, discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
                     avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
                     depth_cx_layers=depth[1], depth_telegate_layers=depth[2], encoding_circ_gate_counts = encoding_circ_gate_counts,
                     total_single_qubit_count=gate_counts[1], total_two_qubit_count=gate_counts[2], total_telegate_count=gate_counts[3], num_meas=num_meas))
@@ -373,8 +373,8 @@ function dqc_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bel
             full_circuit
         ) = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, 
                                     ancilla_map, code_params, network_specs, noise_model)
-        push!(data, (p=p, p_bell=p_bell, logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, 
-                    discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
+        push!(data, (p=p, p_bell=p_bell, p_single_ratio=p_single_ratio, p_idle_ratio=p_idle_ratio, telegate_idle_depth=telegate_idle_depth,
+                    logical_error_rate=logical_error_rate, acceptance_ratio=acceptance_ratio, discarded_runs=discarded_runs, n_samples=n_samples, logical_failures=logical_failures,
                     avg_fidelity=avg_fidelity, z_error_pre_decoding_rate=z_error_pre_decoding_rate, x_error_pre_decoding_rate=x_error_pre_decoding_rate,
                     depth_cx_layers=depth[1], depth_telegate_layers=depth[2], encoding_circ_gate_counts = encoding_circ_gate_counts,
                     total_single_qubit_count=gate_counts[1], total_two_qubit_count=gate_counts[2], total_telegate_count=gate_counts[3], num_meas=num_meas))
@@ -416,7 +416,7 @@ we setup a noisefree QEC cycle / syndrome decoding routine.  For the noise-free 
 Simulating a number of Monte Carlo trajectories, we sample from the noise distribution and gather statistics about the quality of FT encoding.
 Here, we first discard runs according to `verification_bits`, then identify pre-decoding X- and Z- errors, and then determine logical X errors, 
 i.e., errors in the logical Z observables (note that for the logical Z state, logical Z errors cannot occur).
-Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome` (`error_guess` collects `n`` guesses for X-errors
+Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome` (`error_guess` collects `n` guesses for X-errors
 and `n` guesses for Z errors -- we are interested in the first `n` guesses, i.e., whether the decoder predicts that a certain physical X error happened).
 If the decoder cannot infer an error guess, we register a logical error on all logical qubits, and a fidelity of `0.0` for this run (since the
 resulting state lives outside of the codespace and cannot be corrected). 

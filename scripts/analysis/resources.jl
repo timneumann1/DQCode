@@ -36,9 +36,10 @@ function compare_telegate_counts(df)
     code_architecture_positions = collect(1:num_code_architectures)  
     fig = Figure(size = (max(640, num_code_architectures * 160), 560), fontsize = 14)
     ax = Axis(fig[1, 1];
-        title          = L"\text{Telegate Count per Optimisation Method and Code–Architecture}",
+        title          = L"\text{Telegate Count per Optimisation Method and Code–Architecture Pair}",
         ylabel         = L"\text{Telegate count}",
         titlesize      = 24,
+        titlegap       = 12,
         xlabelsize     = 20,
         ylabelsize     = 20,
         xticks         = (Float64.(code_architecture_positions), latexstring.(code_architecture_labels)),
@@ -47,7 +48,7 @@ function compare_telegate_counts(df)
         ygridvisible   = true,
         yminorgridvisible  = true,
         yminorticksvisible = true,
-        yminorticks    = IntervalsBetween(5),
+        yminorticks    = IntervalsBetween(10),
     )
     for (mi, method) in enumerate(opt_methods)
         xs   = Float64[]
@@ -85,7 +86,8 @@ function compare_resources(df, data_path)
         RGBf(  0/255, 154/255, 207/255),     
         RGBf(255/255, 177/255,  42/255), 
     ]
-    encoding_labels = [latexstring(L"\text{FT encoding circuit (acceptance ratio =}%$( round( df.acceptance_ratio[1], digits=3)) \text{ for p=}%$(power_of_10_label(df.p[1], 3)) \text{, p_{Bell}=} %$( power_of_10_label(df.p_bell[1], 3) ))"), latexstring(L"\text{Distributed Stabiliser Measurements (per round)}")]
+    encoding_labels = [latexstring(L"\text{FT encoding circuit (acceptance rate=}"*"$( round( df.acceptance_ratio[1], digits=3))"*L"\text{ for } p="*"$(power_of_10_label(df.p[1], 3))"*L"\text{, }p_{\text{Bell}}="*"$( power_of_10_label(df.p_bell[1], 3) ))"), 
+                        latexstring(L"\text{Distributed Stabiliser Measurements (per round)}")]
     function get_val(method, col)
         rows = df[df.method .== method, :]
         isempty(rows) && return NaN
@@ -109,14 +111,14 @@ function compare_resources(df, data_path)
         ygridvisible       = true,
         yminorgridvisible  = true,
         yminorticksvisible = true,
-        yminorticks        = IntervalsBetween(5),
+        yminorticks        = IntervalsBetween(10),
         ylabelsize         = 16,
         titlesize          = 16,
     ) 
     _code_architecture_label = df.code_architecture_label[1]
     fig = Figure(size = (1200, 760), fontsize = 14)
-    Label(fig[1, 1:3], "Resource Comparison: Post-selection FT encoding circuit vs. measurement-based initialisation",
-            fontsize = 20, tellwidth = false)
+    Label(fig[1, 1:3], L"\text{Resource Comparison: Postselected FT encoding circuit vs. distributed stabiliser measurement initialisation}",
+            fontsize = 24, tellwidth = false)
     Label(fig[2, 1:3], latexstring("$(_code_architecture_label)"),
             fontsize = 18, tellwidth = false)
     function draw_panel!(fig_pos, col_key, title_str, ylabel_str; show_legend = false)
@@ -132,11 +134,11 @@ function compare_resources(df, data_path)
             barplot!(ax, [bar_xs[mi]], [v];
                 width = 0.5,
                 color = colors[mi],
-                label = encoding_labels[mi],
+                label = encoding_labels[mi]
             )
         end
         ylims!(ax, 0, nothing)
-        show_legend && Legend(fig[5, 1:3], ax,  framevisible = true, labelsize = 12)
+        show_legend && Legend(fig[5, 1:3], ax,  framevisible = true, labelsize = 16)
         return ax
     end
     for (ci, (col_key, title_str, y_label)) in enumerate(row1_metrics)
@@ -228,7 +230,6 @@ configs_optimiser = [
     Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
     Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
     Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/mcts/mcts_stats.csv"),
-    
 ]
 
 #analysis_optimiser(configs_optimiser)

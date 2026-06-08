@@ -24,50 +24,55 @@ function log_log_plot(df, data_path; monolithic = false)
         p_bells_plot = [minimum(p_bells), p_bells[Int(floor(end/2))], maximum(p_bells)]
     end
     # ---------------------- Plot ----------------------
-    fig = Figure(size = (640, 1120), fontsize = 14)
+    fig = Figure(size = (900, 1120), fontsize = 14)
     log_err = filter(x -> x > 0, Float64.(df.logical_error_rate))
     minexp = floor(Int, log10(minimum(log_err)))
     maxexp = ceil(Int,  log10(maximum(log_err)))
     minexp_x = floor(Int, log10(minimum(ps_all)))
     maxexp_x = ceil(Int,  log10(maximum(ps_all)))
     xtick_vals   = 10.0 .^ (minexp_x:maxexp_x)
-    xtick_labels = power_of_10_label.(xtick_vals,2)
+    xtick_labels = power_of_10_label.(xtick_vals,4)
     ytick_vals = 10.0 .^ (minexp:maxexp)
-    ytick_labels = power_of_10_label.(ytick_vals,2)
-    _code_architecture_label = df.code_architecture_label[1]#replace(df.code_architecture_label[1], "_" => "\\_")
+    ytick_labels = power_of_10_label.(ytick_vals,4)
+    _code_architecture_label = df.code_architecture_label[1]
     ax1  = Axis(fig[1, 1],
-        ylabel = L"\text{Logical } |0 \rangle_L \text{ initialisation error}",  
+        ylabel = L"\text{Logical } |0\rangle_L \text{ initialisation error}",  
         title = L"\text{Logical vs. Physical Initialisation Error}",
-        subtitle  = L"%$(_code_architecture_label)",
+        subtitle = latexstring(_code_architecture_label * "; " *L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"),
+        titlegap = 12,
+        subtitlegap = 10,
         xscale  = log10, 
         yscale  = log10,
-        xticks = (xtick_vals, xtick_labels), 
+        xticks = (xtick_vals, xtick_labels),
+        xticklabelsize = 20, 
         yticks = (ytick_vals, ytick_labels), 
+        yticklabelsize = 20, 
         ylabelsize = 22, 
         titlesize = 28,
+        subtitlesize = 16,
         xgridvisible= true, 
         ygridvisible = true, 
         xminorgridvisible  = true, 
         yminorgridvisible  = true, 
         xminorticksvisible = true, 
         yminorticksvisible = true,
-        xminorticks = IntervalsBetween(9), 
-        yminorticks = IntervalsBetween(9)
+        xminorticks = IntervalsBetween(10), 
+        yminorticks = IntervalsBetween(10)
     )
     ax2 = Axis(fig[2, 1],  
-            xlabel = L"\text{Physical error rate } p", 
-            ylabel = L"\text{Acceptance ratio}",
-            xscale = log10, 
-            xlabelsize = 22, 
-            ylabelsize = 22,
-            xgridvisible = true, 
-            ygridvisible = true,  
-            xminorgridvisible = true,  
-            yminorgridvisible = true,   
-            xminorticksvisible = true, 
-            yminorticksvisible = true,
-            xminorticks = IntervalsBetween(9), 
-            yminorticks = IntervalsBetween(9))
+        xlabel = L"\text{Physical initialisation error rate } p", 
+        ylabel = L"\text{Acceptance rate}",
+        xscale = log10, 
+        xlabelsize = 22, 
+        ylabelsize = 22,
+        xgridvisible = true, 
+        ygridvisible = true,  
+        xminorgridvisible = true,  
+        yminorgridvisible = true,   
+        xminorticksvisible = true, 
+        yminorticksvisible = true,
+        xminorticks = IntervalsBetween(10), 
+        yminorticks = IntervalsBetween(10))
     ylims!(ax2, min( minimum(df.acceptance_ratio), 0.75), 1.0)
     linkxaxes!(ax1, ax2)
     # p_L = p  (slope 1 in log-log)
@@ -91,21 +96,21 @@ function log_log_plot(df, data_path; monolithic = false)
             if monolithic # bell pair noise is irrelevant in this case
                 fit_label = L"\text{Power law fit: p_L=%$(round(a, digits=2))\, p^{%$( round(b, digits=2))} }"
             else
-                fit_label = L"\text{PL fit for p_{bell}}=%$(power_of_10_label(p_bell,2)): p_L=%$(round(a, digits=2))\, p^{%$( round(b, digits=2))}"
+                fit_label = latexstring(L"\text{PL fit for }p_{\text{Bell}}="*"=$(power_of_10_label(p_bell,4))"*L": p_L="*"$(round(a, digits=2))p^{$( round(b, digits=2))}")
             end
             # fitted line:  p_L = a*p^b
             lines!(ax1, p_range, a .* p_range .^ b, color = colors[idx], linestyle = :dashdot, linewidth = 2, label = fit_label)
         end
         if monolithic
-            data_label = L"\text{Logical initialisation noise}"
-            acc_label  = L"\text{Acceptance ratio}"
+            data_label = L"\text{Logical initialisation error}"
+            acc_label  = L"\text{Acceptance rate}"
         else
-            data_label = L"\text{Logical initialisation noise for p_{bell}}=%$( power_of_10_label(p_bell,2))"
-            acc_label  = L"\text{Acceptance ratio for p_{bell}}=%$( power_of_10_label(p_bell,2))"
+            data_label = latexstring(L"\text{Logical initialisation error for } p_{\text{Bell}}="*"$(power_of_10_label(p_bell,4))")
+            acc_label  = latexstring(L"\text{Acceptance rate for } p_{\text{Bell}}="*"$(power_of_10_label(p_bell,4))")
         end
         errorbars!(ax1, df_.p, df_.logical_error_rate, df_.std_error; color=colors[idx], label= idx == 1 ? L"\sigma(LER)" : nothing)
-        scatterlines!(ax1, df_.p, df_.logical_error_rate, color = colors[idx], markersize = 10, linewidth  = 2, label = data_label)
-        scatterlines!(ax2, df_.p, df_.acceptance_ratio, color = colors[idx], markersize = 10, linewidth = 2,  label = acc_label )
+        scatterlines!(ax1, df_.p, df_.logical_error_rate, color = colors[idx], markersize = 8, linewidth  = 2, label = data_label)
+        scatterlines!(ax2, df_.p, df_.acceptance_ratio, color = colors[idx], markersize = 8, linewidth = 2,  label = acc_label )
         if pseudo_thresh !== nothing && idx ==1
             vlines!(ax1, [pseudo_thresh], color= colors[idx], linestyle=:dash)
             vlines!(ax2, [pseudo_thresh], color= colors[idx], linestyle=:dash)
@@ -141,35 +146,40 @@ function two_d_plot(df, data_path)
         ratio[p_to_i[r.p], pb_to_j[r.p_bell]] = r.ratio_logical_phys
         LER[p_to_i[r.p], pb_to_j[r.p_bell]] = r.logical_error_rate
     end
-    _code_architecture_label = df.code_architecture_label[1]#_code_architecture_label = replace(df.code_architecture_label[1], "_" => "\\_")
+    _code_architecture_label = df.code_architecture_label[1]
     # ---------------------- Plot 2D Heatmap ----------------------
-    fig = Figure(size = (800, 600))
+    fig = Figure(size = (800, 600), fontsize = 14)
     ax = Axis(fig[1, 1]; 
-            xlabel = L"\text{Physical error rate } p",  
-            ylabel = L"p_{Bell}", 
-            title  = L"\text{Logical } |0 \rangle_L \text{ per physical initialisation error and p_{Bell}}", 
-            subtitle  = L"%$(_code_architecture_label)",  
+            xlabel = L"\text{Physical initialisation error rate } p",  
+            ylabel = L"\text{Bell pair initialisation error rate }p_{\text{Bell}}",  
+            title = L"\text{Logical } |0\rangle_L\text{ Initialisation Error Rate (LIER) vs. } (p,p_{\text{Bell}})",
+            subtitle  =  latexstring(_code_architecture_label * "; " *L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"),
+            titlegap = 12,
+            subtitlegap = 10,
             xscale = log10, 
             yscale = log10, 
             xgridvisible = true, 
             ygridvisible  = true, 
             xlabelsize = 22, 
-            ylabelsize = 22, 
-            titlesize = 26,
+            ylabelsize = 22,
+            xticklabelsize = 20,  
+            yticklabelsize = 20, 
+            titlesize = 28,
+            subtitlesize = 16,
             xminorgridvisible  = true, 
             yminorgridvisible  = true, 
             xminorticksvisible = true, 
             yminorticksvisible = true, 
-            xminorticks = IntervalsBetween(9),  
-            yminorticks = IntervalsBetween(9),
+            xminorticks = IntervalsBetween(10),  
+            yminorticks = IntervalsBetween(10),
     )
     log_ratio = map(z -> (z > 0.0) ? log10(z) : NaN, ratio) # for plotting, we use the log of the ratio
     vals = filter(x -> !isnan(x), vec(log_ratio))
     maxabs = isempty(vals) ? 1.0 : maximum(abs, vals)
     hm = heatmap!(ax, ps, p_bells, log_ratio; colormap = cgrad([:blue, :white, :red]), colorrange = (-maxabs, maxabs))
-    Colorbar(fig[1, 2], hm; label = L"\log_{10}(\text{LER}/p)", labelsize = 22)
+    Colorbar(fig[1, 2], hm; label = L"\log_{10}(\text{LIER}/p)", labelsize = 22)
     # Pseudothreshold frontier
-    ε = 0.05
+    ε = 0.01
     iso_xs = Float64[]
     iso_ys = Float64[]
     for i in eachindex(ps)
@@ -181,43 +191,54 @@ function two_d_plot(df, data_path)
         end
     end
     if !isempty(iso_xs)
+        # Order pseudothreshold locations and filter one data point per x-coordinate (lowest y value)
         order = sortperm(iso_xs)
         iso_xs = iso_xs[order]
         iso_ys = iso_ys[order]
+        unique_indices = unique(i -> iso_xs[i], eachindex(iso_xs))
+        iso_xs = iso_xs[unique_indices]
+        iso_ys = iso_ys[unique_indices]
         _color = RGBf( 74/255, 163/255, 209/255)
         lines!(ax, iso_xs, iso_ys;
             color = _color, linewidth = 2, linestyle = :solid)
         scatter!(ax, iso_xs, iso_ys;
             color = _color, markersize = 10, marker = :circle,
-            label = L"\log_{10}(\text{LER}/p) \approx 0")
+            label = L"\log_{10}(\text{LIER}/p) \approx 0")
         axislegend(ax, position = :lt)
     end
     save(joinpath(data_path,"../..", "2d_heatmap_ratio.png"), fig)
     @info "2d_heatmap_ratio.png"
     # ---------------------- Plot 2D Ratio Heatmap ----------------------
-    fig = Figure(size = (800, 600))
+    fig = Figure(size = (900, 600))
     ax = Axis(fig[1, 1]; 
-            xlabel = L"\text{Physical error rate } p",  
-            ylabel = L"p_{Bell}", title  = L"\text{Logical } |0 \rangle_L \text{ per physical initialisation error and p_{Bell}}",   
+            title = L"\text{Logical } |0\rangle_L\text{ Initialisation Error Rate (LIER) vs. } (p,p_{\text{Bell}})",
+            subtitle  =  latexstring(_code_architecture_label * "; " *L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"),
+            xlabel = L"\text{Physical initialisation error rate } p",  
+            ylabel = L"\text{Bell pair initialisation error rate }p_{\text{Bell}}",  
             xscale = log10, 
             yscale = log10,
+            titlegap = 12,
+            subtitlegap = 10,
             xgridvisible = true, 
             ygridvisible  = true, 
             xlabelsize = 22, 
             ylabelsize = 22,
-            titlesize = 26,
+            xticklabelsize = 20,  
+            yticklabelsize = 20, 
+            titlesize = 28,
+            subtitlesize = 16,
             xminorgridvisible  = true, 
             yminorgridvisible  = true, 
             xminorticksvisible = true, 
             yminorticksvisible = true,
-            xminorticks = IntervalsBetween(9),  
-            yminorticks = IntervalsBetween(9),
+            xminorticks = IntervalsBetween(10),  
+            yminorticks = IntervalsBetween(10),
     )
     log_LER = map(z -> (z > 0) ? log10(z) : NaN, LER) # for plotting, we use the log of the ratio
     vals = filter(x -> !isnan(x), vec(log_LER))
     maxabs = isempty(vals) ? 1.0 : maximum(abs, vals)
     hm = heatmap!(ax, ps, p_bells, log_LER; colormap = cgrad(:viridis, rev=true), colorrange = (-maxabs, 0))
-    Colorbar(fig[1, 2], hm; label = L"\log_{10}(\text{LER})", labelsize = 22)
+    Colorbar(fig[1, 2], hm; label = L"\log_{10}(\text{LIER})", labelsize = 22)
     save(joinpath(data_path,"../..", "2d_heatmap.png"), fig)
     @info "2d_heatmap.png"
 end
@@ -252,30 +273,33 @@ function pre_decoding_vs_logical_plot(df, data_path)
     minexp = floor(Int, log10(minimum(all_ys)))
     maxexp = ceil(Int,  log10(maximum(all_ys)))
     ytick_vals   = 10.0 .^ (minexp:maxexp)
-    ytick_labels = power_of_10_label.(ytick_vals,2)
+    ytick_labels = power_of_10_label.(ytick_vals,4)
     minexp_x = floor(Int, log10(minimum(ps_all)))
     maxexp_x = ceil(Int,  log10(maximum(ps_all)))
     xtick_vals   = 10.0 .^ (minexp_x:maxexp_x)
-    xtick_labels = power_of_10_label.(xtick_vals,2)
-    fig = Figure(size = (1600, 560), fontsize = 14)
+    xtick_labels = power_of_10_label.(xtick_vals,4)
+    fig = Figure(size = (1600, 640), fontsize = 14)
     ax_kwargs = (
-        xlabel     = L"\text{Physical error rate } p",
+        xlabel     = L"\text{Physical initialisation error rate } p",
         ylabel     = L"\text{Error rate}",
         xscale     = log10, yscale = log10,
         xticks     = (xtick_vals, xtick_labels),
         yticks     = (ytick_vals, ytick_labels),
-        xlabelsize = 22, ylabelsize = 22, titlesize = 24,
+        titlegap = 12,
+        subtitlegap = 10,
+        xlabelsize = 22, ylabelsize = 22,
+        titlesize = 20,
         xgridvisible = true, ygridvisible = true,
         xminorgridvisible = true, yminorgridvisible = true,
         xminorticksvisible = true, yminorticksvisible = true,
-        xminorticks = IntervalsBetween(9),
-        yminorticks = IntervalsBetween(9),
+        xminorticks = IntervalsBetween(10),
+        yminorticks = IntervalsBetween(10),
     )
-    _code_architecture_label = df.code_architecture_label[1]#_code_architecture_label = replace(df.code_architecture_label[1], "_" => "\\_")
-    ax1 = Axis(fig[1, 1]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[1],2))",
-                            subtitle  = L"%$(_code_architecture_label)", ax_kwargs...)  
-    ax2 = Axis(fig[1, 2]; title = L"\text{Logical error rate for p_{bell}}=%$( power_of_10_label(p_bells_plot[2],2))",
-                            subtitle  = L"%$(_code_architecture_label)", ax_kwargs...)
+    _code_architecture_label = df.code_architecture_label[1]
+    Label(fig[0, 1:2], L"\text{Pre-Decoding and Logical Error Rates vs. Physical Initialisation Error}"; fontsize = 28, tellwidth = false)
+    Label(fig[1, 1:2], latexstring(_code_architecture_label * "; " *L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"); fontsize = 16, tellwidth = false)
+    ax1 = Axis(fig[2, 1]; title = latexstring(L"p_{\text{Bell}}="*"$(power_of_10_label(p_bells_plot[1],4))"), ax_kwargs...)  
+    ax2 = Axis(fig[2, 2]; title = latexstring(L"p_{\text{Bell}}="*"$(power_of_10_label(p_bells_plot[2],4))"), ax_kwargs...)
     col_pre_x   = RGBf(255/255, 177/255,  42/255) 
     col_pre_z   = RGBf( 0/255, 154/255, 207/255)
     col_logical = RGBf(255/255, 177/255,  42/255) 
@@ -286,11 +310,11 @@ function pre_decoding_vs_logical_plot(df, data_path)
         df_ = df_b[df_b.logical_error_rate .> 0.0 .&& df_b.x_error_pre_decoding_rate .> 0.0 .&& df_b.z_error_pre_decoding_rate .> 0.0, :]
         @info "Deleted $(nrow(df_b)-nrow(df_)) row(s) because of 0.0 logical or pre-decoding error rate"
         sort!(df_, :p)
-        lines!(ax, df_.p, df_.x_error_pre_decoding_rate; color = col_pre_x, linestyle=linestyles[1], linewidth = 2, label="Pre-decoding physical X error rate")
+        lines!(ax, df_.p, df_.x_error_pre_decoding_rate; color = col_pre_x, linestyle=linestyles[1], linewidth = 2, label=L"\text{Pre-decoding physical X error rate}")
         scatter!(ax, df_.p, df_.x_error_pre_decoding_rate; color = col_pre_x, marker = :circle, markersize = 12)
-        lines!(ax, df_.p, df_.z_error_pre_decoding_rate; color = col_pre_z, linestyle=linestyles[2], linewidth = 2, label="Pre-decoding physical Z error rate")
+        lines!(ax, df_.p, df_.z_error_pre_decoding_rate; color = col_pre_z, linestyle=linestyles[2], linewidth = 2, label=L"\text{Pre-decoding physical Z error rate}")
         scatter!(ax, df_.p, df_.z_error_pre_decoding_rate; color = col_pre_z, marker = :circle, markersize = 12)
-        lines!(ax, df_.p, df_.logical_error_rate; color = col_logical,linestyle=linestyles[3], linewidth = 2, label="Logical error rate")
+        lines!(ax, df_.p, df_.logical_error_rate; color = col_logical,linestyle=linestyles[3], linewidth = 2, label=L"\text{Logical } |0\rangle_L \text{ initialisation error rate}"), 
         scatter!(ax, df_.p, df_.logical_error_rate; color = col_logical, marker = :diamond, markersize = 12)
     end
     linkyaxes!(ax1, ax2)
@@ -337,15 +361,18 @@ function per_qubit_fidelity_bar_plot(df, data_path)
     fig = Figure(size = (max(600, n_p * 55), 520), fontsize = 13)
     ax = Axis(fig[1, 1],
         xlabel     = L"\text{Physical error rate } p",
-        ylabel     = L"1 - \text{LER} / fidelity",
-        title      = L"\text{Per-qubit } (1 - \text{LER}) \text{ and Fidelity vs. } p for p_{bell}=%$( power_of_10_label(p_bell,2))",
-        subtitle  = L"%$(_code_architecture_label)",
-        xlabelsize = 22, ylabelsize = 22, titlesize = 22,
+        ylabel     = L"1 - \text{LIER or Fidelity}",
+        title      = latexstring(L"\text{Logical qubit } (1 - \text{LIER}) \text{ and Fidelity vs. } p \text{ for }p_{\text{Bell}}="*"$(power_of_10_label(p_bell,4))"), 
+        subtitle  =  latexstring(_code_architecture_label * "; " *L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"),
+        xlabelsize = 24, ylabelsize = 24,
+        titlesize = 28, subtitlesize = 18,
+        titlegap = 12,
+        subtitlegap = 10,
         xgridvisible = false, ygridvisible = true,
         yminorgridvisible = true, yminorticksvisible = true,
-        yminorticks = IntervalsBetween(5),
+        yminorticks = IntervalsBetween(10),
     )
-    ax.xticks = (log_ps, power_of_10_label.(ps,2))
+    ax.xticks = (log_ps, power_of_10_label.(ps,4))
     ax.xticklabelrotation = π / 4
     for k in 1:k_log_qubits
         col   = "ler_qubit_$k"
@@ -400,27 +427,31 @@ function compare_logical_error_rate(df)
     minexp_x = floor(Int, log10(minimum(ps_all)))
     maxexp_x = ceil(Int,  log10(maximum(ps_all)))
     xtick_vals   = 10.0 .^ (minexp_x:maxexp_x)
-    xtick_labels = power_of_10_label.(xtick_vals,2)
+    xtick_labels = power_of_10_label.(xtick_vals,4)
     ytick_vals = 10.0 .^ (minexp:maxexp)
-    ytick_labels = power_of_10_label.(ytick_vals,2)
-    fig = Figure(size = (800, 560), fontsize = 14)
+    ytick_labels = power_of_10_label.(ytick_vals,4)
+    fig = Figure(size = (720, 540), fontsize = 14)
     ax  = Axis(fig[1,1],
                xscale = log10, 
                yscale = log10,
-               xlabel = L"p", 
-               ylabel = L"\text{Logical error rate}", 
-               title = L"\text{Logical |0\rangle state initialisation error}",
+               ylabel = L"\text{Logical } |0\rangle_L \text{ initialisation error}",  
+               title = L"\text{Logical vs. Physical Initialisation Error}",
+               subtitle = latexstring(L"p_{\text{two-qubit gate}}=p_{\text{meas}}=p_{\text{init}}=p;"*" "*L"p_{\text{single-qubit gate}}="*"$(df.p_single_ratio[1])"*L"p;"*" "*L"p_{\text{idle}}="*"$(df.p_idle_ratio[1])"*L"p;"*" "*L"\text{depth_{telegate}}="*"$(df.telegate_idle_depth[1])"),
+               xlabel = L"\text{Physical initialisation error rate } p", 
                xticks = (xtick_vals, xtick_labels), 
                yticks = (ytick_vals, ytick_labels), 
-               ylabelsize = 22, titlesize = 28,
+               ylabelsize = 22, xlabelsize = 22, titlesize = 28,
+               subtitlesize=16,
                xgridvisible= true, 
                ygridvisible = true, 
                xminorgridvisible  = true, 
                yminorgridvisible  = true, 
                xminorticksvisible = true, 
                yminorticksvisible = true,
-               xminorticks = IntervalsBetween(9), 
-               yminorticks = IntervalsBetween(9))
+               xminorticks = IntervalsBetween(10), 
+               yminorticks = IntervalsBetween(10),
+               titlegap = 12,
+               subtitlegap = 10)
     # p_L = p  (slope 1 in log-log)
     lines!(ax, p_range, p_range, color = :gray60,  linestyle = :dash, linewidth = 1.5,  label = L"p_L \sim p")
     # p_L = p²  (slope 2 in log-log)
@@ -432,7 +463,7 @@ function compare_logical_error_rate(df)
         sort!(df_, :p)
         df_.var = 1 ./ (df_.n_samples-df_.discarded_runs) .* (df_.logical_error_rate) .* (1 .- df_.logical_error_rate)
         df_.std_error = sqrt.(max.(df_.var, 0.0))
-        data_label = L"\text{Logical initialisation noise for %$(config_label)}"
+        data_label = L"\text{%$(config_label)}"
         errorbars!(ax, df_.p, df_.logical_error_rate, df_.std_error; color =colors[idx], label=idx == 1 ? L"\sigma(LER)" : nothing)
         scatterlines!(ax, df_.p, df_.logical_error_rate;
                         color = colors[idx], linewidth = 2, markersize = 8, label = data_label)
@@ -496,6 +527,11 @@ end
 configs_dqc_sim = [
     Config("Steane", "[4,3]", L"\text{Steane }[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
     Config("Steane", "[4,3]", L"\text{Steane }[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
+    # Config("Shor", "[3,3,3]", L"\text{Shor }[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
+    # Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/simulation_FT/dqc_sim_data.csv"),
+    # Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/dqc_sim_data.csv"),
+    # Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
+    
 ]
 
 analysis_dqc_sim(configs_dqc_sim)

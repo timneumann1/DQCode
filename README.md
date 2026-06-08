@@ -22,7 +22,9 @@ Next, clone the Python repository via
 git clone https://github.com/timneumann1/qecc.git
 ```
 
-To harness the capabilities of this software toolkit, install the required dependencies in a virtual environment
+To harness the capabilities of this software toolkit, we need a working Python version. Please make sure that you have Python $3$ available on your system, or install it from https://www.python.org/downloads/. (This code
+has been tested on MacOS for Python $3.13.13$, but should be functional for other Python $3$ releases as well.)
+Once Python is available, install the required dependencies in a virtual environment.
 
 ```
 cd qecc
@@ -40,7 +42,8 @@ git clone https://github.com/timneumann1/DQCode.git
 cd DQCode
 ```
 
-To install the required Julia dependencies, enter the Julia REPL, activate the default project location and install the required dependencies via
+Before we install the required Julia dependencies, first make sure that you have Julia installed on your system. Instructions for the installation are available via the official Julia language distribution
+https://julialang.org/downloads/. This code has been tested on MacOS for `julia 1.12.6` (the latest stable Julia release as of May 2026). Once available, enter the Julia REPL, activate the default project location and install the required dependencies via
 ```
 julia 
 ] activate .

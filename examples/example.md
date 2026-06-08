@@ -168,16 +168,18 @@ This produces
 
 ## DQC Simulation
 
-Using the optimised GA circuit, we now run the DQC simulation. In 
-the [DQC simulation script](/scripts/execution/dqc_sim.jl)
-`scripts/dqc_sim.jl`, we can set the corresponding noise range. For the below results, we swept noise $p \in [5e-5,1e-3]$, with $p_{Bell} \in [1e-3, 5e-2]$, with $15$ values each. We have further set the telegate idle depth to $10$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$.
+Using the optimised GA circuit, we now run the DQC simulation. In the [DQC simulation script](/scripts/execution/dqc_sim.jl)`scripts/dqc_sim.jl`, we can set the corresponding noise parameters and range. For the below results, we swept noise $p \in [5e-4,1e-2]$, with $p_{Bell} \in [1e-3, 5e-2]$, over $35$ values each. In this study, we sample 250,000 Monte Carlo trajectories of the $35^2 = 1225$ configurations. For each configuration across all experiments, we set the telegate idle depth to $25$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$. (For larger codes, it might be necessary to adjust the noise range for $p$ and $p_{Bell} to be swept in order to find pseudothresholds.)
 
-For the simulation, we take the optimmised encoding circuit for the logical zero state, append a (flag-based) verification circuit from the Munich Quantum Toolkit QECC package, and then determine the logical error rate of the fault-tolerant encoding under circuit-level and Bell pair initialisation noise, mimicing realistic noise channels under telegate execution. In this example, we choose the `optimal` verification method from MQT-QECC.
+For the simulation, we take the optimised encoding circuit for the logical zero state, append a (flag-based) verification circuit from the Munich Quantum Toolkit QECC package, and then determine the logical error rate of the fault-tolerant encoding under circuit-level and Bell pair initialisation noise, mimicing realistic noise channels under telegate execution. In this example, we choose the `optimal` verification method from MQT-QECC.
 
 Then we run 
 ```
 include("scripts/execution/dqc_sim.jl")
 ```
+
+> [!WARNING]
+> The DQC simulation is quite compute-intense and can last several hours. You may want to skip this step and simply work with the sample data that has already been uploaded to the repository.
+
 
 This saves the simulation data to `/data/Steane/[4, 3]/simulation_FT'. Let us inspect the verification circuit that was appended to our optimised circuit in order to make it fault-tolerant.
 
