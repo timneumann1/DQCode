@@ -188,7 +188,7 @@ ancilla register.
 # Procedure: We pass a qasm string with the optimised encoding circuit, and get back a qasm string with the verification 
     #(in MQT QECC, the result was a qiskit circuit, which was then converted to qasm in order to make the output stream usable, and then converted to qiskit here again)
     # The verification measurements are composed of some stabilisers of the zero state (X checks, Z checks and logical Zs, which are all stabilising), correcting for hook errors
-    # our initial definition of logical still applies and can be used for the noiseless extraction of logical X error rate
+    # our initial definition of logical still applies and can be used for the noiseless extraction of logical Z observable error rate
 We then parse through this, doing a lot of indexing acrobatics to finally have the encoding circuit in our desired format, where
 data qubits come first, then communication qubits, then ancilla qubits (and lastly ancillas for the noisefree syndrome extraction)
 
@@ -414,8 +414,8 @@ In this function, we first retrieve the DQC-executable circuit `DQC_circuit` fro
 we setup a noisefree QEC cycle / syndrome decoding routine.  For the noise-free decoding, we use a CSS Lookup Table Decoder. 
 
 Simulating a number of Monte Carlo trajectories, we sample from the noise distribution and gather statistics about the quality of FT encoding.
-Here, we first discard runs according to `verification_bits`, then identify pre-decoding X- and Z- errors, and then determine logical X errors, 
-i.e., errors in the logical Z observables (note that for the logical Z state, logical Z errors cannot occur).
+Here, we first discard runs according to `verification_bits`, then identify pre-decoding X- and Z- errors, and then determine logical Z observable errors, 
+i.e., errors caused by logical X or Y operators (note that for the logical Z state, logical Z errors cannot occur).
 Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome` (`error_guess` collects `n` guesses for X-errors
 and `n` guesses for Z errors -- we are interested in the first `n` guesses, i.e., whether the decoder predicts that a certain physical X error happened).
 If the decoder cannot infer an error guess, we register a logical error on all logical qubits, and a fidelity of `0.0` for this run (since the
@@ -428,12 +428,12 @@ If the decoder can make an error guess, we expose two different methods as proxi
         Z operators / logical Z observables via anti-commutation. The logic here is as follows: 
         If `sum_mod += faults_matrix_z[j, q] * error_guess[q]` is 1, then there is an odd number of indices that are jointly supported by both `faults_matrix_z`
         and `error_guess` for the given `j`th logical Z operator. In this case, correcting based on `error_guess` will flip the `k`th logical Z operator. This
-        is only desirable if there actually was a logical X error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j]`. Otherwise,
+        is only desirable if there actually was a logical Z observable error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j]`. Otherwise,
         a logical failure is recorded.
         If `sum_mod += faults_matrix_z[j, q] * error_guess[q]` is 0, then there is an even number of indices that are jointly supported by both `faults_matrix_z`
         and `error_guess` for the given `j`th logical Z operator. In this case, correcting based on `error_guess` will not flip the `k`th logical Z operator by 
         error degeneracy of the code (applying an even number of operations that anti-commute with the logical operator overall cancels out). This is desirable as 
-        long as there was actually no logical X error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j] again. Otherwise,
+        long as there was actually no logical Z observable error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j] again. Otherwise,
         a logical failure is recorded.
         In the end, the logical error rate is derived as the mean of all `k` logical Z observable error rates, conditioned on the accepted runs.
             
