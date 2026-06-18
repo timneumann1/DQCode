@@ -222,17 +222,17 @@ include("scripts/analysis/logical_rate.jl")
 This saves a log-log plot containing the logical initialisation error scaling per physical initialisation error rate `p`
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/qec_threshold.png" alt="log-log plot" width="700"/>
+<img src="../data/Steane/%5B4,%203%5D/qec_threshold_FT.png" alt="log-log plot" width="700"/>
 </p>
 
 as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/`.
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/2d_heatmap.png" alt="2d" width="700"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_FT.png" alt="2d" width="700"/>
 </p>
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio.png" alt="2d ratio" width="700"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="700"/>
 </p>
 
 We can also create other visualisations based on the data. 
