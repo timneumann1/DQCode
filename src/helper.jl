@@ -291,7 +291,7 @@ end
 """
     tableau_to_bitmatrix(tableau::QuantumClifford.Tableau)::Matrix{Int}
 
-Convert a stabilizer `Tableau` to an integer bit-matrix representation.
+Convert a stabilizer `Tableau` to a matrix representation, where integers encode the Pauli operators.
 
 ### Input
 
@@ -325,6 +325,11 @@ is converted to the bitmatrix
     2  0  0  0  0  2  2  0
     1  0  1  0  1  0  1  0
 
+### Notes
+
+The resulting matrix is evidently not a 'bitmatrix'; yet, we stick to this terminology, alluding to 
+https://doi.org/10.1103/gqpr-dgz7, in which a tableau has `2n` columns (separating X and Z part), rather 
+than `n` columns, as in the QuantumClifford representation.
 """
 function tableau_to_bitmatrix(tableau::QuantumClifford.Tableau{<:AbstractVector{UInt8}, <:AbstractMatrix{<:Unsigned}})::Matrix{Int}
     rows, cols = size(tableau)

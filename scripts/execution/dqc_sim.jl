@@ -9,12 +9,11 @@ exp_label = "steane_4_3" # available configurations are stored and can be adapte
 circuit_path = "warmstart_ga/GA_circuit.jls" # set circuit path (within {code}/{architecture}/ folder) pointing to the circit to simulate
 method = "optimal" # "optimal", "heuristic" or "none" 
 
-num_samples = 2.5e5
-ps = 10 .^ range(log10(5e-4),log10(1e-2),length=35)
-p_bells = 10 .^ range(log10(1e-3),log10(5e-2), length = 35)  
-telegate_idle_depth = 25
-p_single_ratio = 1/100
-p_idle_ratio = 1/10
+num_samples = 5e5                                               # FIXED to 5e5
+ps = 10 .^ range(log10(1.25e-3),log10(1e-2),length=24)         # FIXED to 24
+p_bells = 10 .^ range(log10(1e-2),log10(3e-2), length=24)   # FIXED to 24
+telegate_idle_depth = 12                                        # FIXED
+p_single_ratio = 1/100                                          # FIXED
+p_idle_ratio = 1/10                                             # FIXED
 DQCode.dqc_simulation(exp_label, mqt_path, circuit_path, Int(num_samples), ps, p_bells,
                         telegate_idle_depth, p_single_ratio, p_idle_ratio, method) # perform the DQC simulation
-
