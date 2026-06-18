@@ -89,9 +89,9 @@ function dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p
     @info "Noiseless testing of raw encoding circuit ..."
     noise_verif = NoiseSpecs(1e2,0,0,0,0,0) # performing a small number of runs without noise
     quantum_clifford_verification_circ = Vector{AbstractOperation}() # no verification circuit → non-FT
-    DQC_circuit,_,_,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, 0, [], network_specs, noise_verif)
     num_ancillas = 0
     ancilla_map = Vector{Int}()
+    DQC_circuit,_,_,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map, network_specs, noise_verif)
     initial_state = Register(one(MixedDestabilizer, network_specs.num_data_and_comm_qubits+num_ancillas),
                                 network_specs.num_comm_qubits + num_ancillas)
     state, stat = mctrajectory!(initial_state, vcat(DQC_circuit, VerifyOp(code_params.target_state, network_specs.data_qubits))) 
@@ -105,7 +105,7 @@ function dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p
         acceptance_ratio, 
         discarded_runs,
         _,_,_,_,_,_
-    ) = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, 0, [],
+    ) = dqc_logical_evaluation(data_circuit, quantum_clifford_verification_circ, num_ancillas, ancilla_map,
                                 code_params, network_specs, noise_verif)
     @assert z_error_pre_decoding_rate == 0.0
     @assert x_error_pre_decoding_rate == 0.0
@@ -543,7 +543,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         corrected_state_data_qubits = stabilizerview( ptrace(copy(corrected_state.stab), collect(network_specs.num_data_qubits+1:total_number_qubits)) )
         post_decoding_fidelity = dot(corrected_state_data_qubits, code_params.target_state)
         avg_fidelity += (post_decoding_fidelity-avg_fidelity)/(sample-discarded_runs)
-        if maximum(logical_failures) >= 500
+        if mean(logical_failures) >= 500
             @info "For physical error rate $(noise.p) and Bell state error rate $(noise.p_bell), we collected $(maximum(logical_failures)) logical failures after $sample iterations."
             n_samples = sample
             break

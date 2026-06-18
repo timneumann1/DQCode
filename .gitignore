@@ -2,3 +2,6 @@
 .DS_Store
 .github
 data/
+# data/*
+# !data/Steane/
+# !data/Steane/**
