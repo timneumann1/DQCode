@@ -1,7 +1,14 @@
 # trivariate_bicycle_code.jl
 
 """
-Implementation of the trivariate bicycle code as discussed in https://arxiv.org/abs/2601.18879 and https://arxiv.org/pdf/2507.09690.
+Implementation of the trivariate bicycle code as discussed in https://arxiv.org/pdf/2406.19151 and https://arxiv.org/abs/2601.18879.
+This implementation is based on the bivariate case, implemented in 
+https://github.com/QuantumSavory/QuantumClifford.jl/blob/2b6cee1f2db6b2c781c4b0d168b9c07b10d47888/lib/QECCore/src/codes/quantum/generalized_circulant_bivariate_bicycle.jl.
+
+We define three variates `x`, `y` and `z` based on parameters `l` and `m` as 
+`x = S_l ⊗ I_m`, `y = I_l ⊗ S_m` and `z = S_l ⊗ S_m`, where `S_i` denotes the cyclic shift matrix of dimension `i`, 
+and `I_i` is the `i×i` identity matrix. The matrices `A` and `B` are polynomials in those variables, from which we form the CSS code
+stabiliser matrix with `H_X = [A|B]` and `H_Z = [B^t|A^t]`.
 """
 module TrivariateBicycleCode
 
