@@ -235,9 +235,9 @@ as well as 2d heatmaps including the Bell state initialisation error probability
 <img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="700"/>
 </p>
 
-We can also create other visualisations based on the data. 
+We can also create other visualisations (see `data/`), based on the data that has been gathered in the optimisation and evaluation runs.
 
-(TODO: Add latest results and other visualisation)
+
 
 ## Resource estimation
 Finally, let's analyse the resources that the FT encoding circuit consumes. For this, set the correct label in the [GA script](/scripts/execution/dqc_resource.jl) and run
