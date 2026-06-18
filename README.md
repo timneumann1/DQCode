@@ -155,12 +155,15 @@ Plotting functions are accessible via the `scripts/analysis` folder, allowing in
 
 ## Acknowledgements
 
-$\texttt{DQCode}$ draws upon a rich collection of software for quantum information science, including
+$\texttt{DQCode}$ draws upon a rich collection of (general and quantum information) software, including
 - `QuantumClifford`: https://github.com/QuantumSavory/QuantumClifford.jl, https://arxiv.org/abs/2512.16752
 - `Munich Quantum Toolkit QECC` : https://github.com/munich-quantum-toolkit/qecc/tree/03a62ca1d3ccbe690265d6b5a7c59c5f72681793, https://arxiv.org/abs/2408.11894
-- `Karlsruhe Hypergraph Partitioning (KaHyPar)`: https://kahypar.org, https://github.com/kahypar/kahypar
 - `Qiskit`: https://github.com/Qiskit/qiskit/blob/stable/2.4/qiskit/synthesis/clifford/clifford_decompose_bm.py#L25-L48
 - `QuantikZ`: arXiv:1809.03842
+- `HiGHS`: https://doi.org/10.1007/s12532-017-0130-5
+- `Karlsruhe Hypergraph Partitioning (KaHyPar)`: https://kahypar.org, https://github.com/kahypar/KaHyPar.jl
+> [!NOTE]
+> The `KaHyPar C++` library is licensed with the GPL License: https://github.com/kahypar/KaHyPar.jl?tab=License-1-ov-file 
 
 ### Reproducibility Information
 
@@ -185,7 +188,7 @@ Functionality has been tested for MacOS.
 
 ### Citation
 ```
-{author}: Tim Neumann
-{title}: Simulating DQC-optimised fault-tolerant logical $|0\rangle_L$ state encoding
-{year}: 2026
+author: {Tim Neumann}
+title: {Simulating DQC-optimised fault-tolerant logical $|0\rangle_L$ state encoding}
+year: {2026}
 ```

@@ -1,0 +1,14 @@
+qec_code = QECCore.Steane7()
+num_X_checks = 3
+logical_Zs = + _Z_Z_Z_
+target_state = + X_X_X_X
++ _XX__XX
++ ___XXXX
++ Z_ZZ_Z_
++ ZZ__ZZ_
++ ZZ_Z__Z
++ _Z_Z_Z_
+target_bit_matrix = [0 0 0 2 2 2 2 0; 0 0 0 1 1 1 1 0; 0 0 2 0 2 2 0 0; 0 2 0 0 2 0 2 0; 0 1 1 0 0 1 1 0; 2 0 0 0 0 2 2 0; 1 0 1 0 1 0 1 0]
+n = 7
+k = 1
+distance = 3
