@@ -9,6 +9,8 @@ We define three variates `x`, `y` and `z` based on parameters `l` and `m` as
 `x = S_l ⊗ I_m`, `y = I_l ⊗ S_m` and `z = S_l ⊗ S_m`, where `S_i` denotes the cyclic shift matrix of dimension `i`, 
 and `I_i` is the `i×i` identity matrix. The matrices `A` and `B` are polynomials in those variables, from which we form the CSS code
 stabiliser matrix with `H_X = [A|B]` and `H_Z = [B^t|A^t]`.
+
+The code is defined on `n = 2*c.l*c.m` qubits, while the dimension of the encoded logical space equals the kernel dimension of the parity check matrix.
 """
 module TrivariateBicycleCode
 
