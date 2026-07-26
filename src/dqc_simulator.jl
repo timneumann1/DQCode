@@ -417,8 +417,9 @@ Simulating a number of Monte Carlo trajectories, we sample from the noise distri
 Here, we first discard runs according to `verification_bits` (these runs do not further impact the fidelity or logical error count),
 then identify pre-decoding X- and Z- errors, and then determine logical Z observable errors, i.e., errors caused by logical X or Y operators (note
 that for the logical Z state, logical Z errors cannot occur).
-Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome` (`error_guess` collects `n` guesses for X-errors
-and `n` guesses for Z errors -- we are interested in the first `n` guesses, i.e., whether the decoder predicts that a certain physical X error happened).
+Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome`. The array `error_guess` collects `n` guesses for X-errors
+and `n` guesses for Z errors -- we are primarily interested in the first `n` guesses, i.e., whether the decoder predicts that a certain physical X error happened
+(the second half of the array contains guesses for Z errors, which cannot induce a logical error on the logical Z observable).
 If the decoder cannot infer an error guess, we register a logical error on all logical qubits, and a fidelity of `0.0` for this run (since the
 resulting state lives outside of the codespace and cannot be corrected). 
 
@@ -426,13 +427,14 @@ If the decoder can make an error guess, we expose two different methods, the fir
 defined, and the second (fidelity) as further metric for comparison.
 
     (i) We noiselessly measure the logical Z observables and compute the logical error rate based on the `measured_logical_Z_bits` as well as 
-        `faults_matrix_z` (a `k \times n` matrix), which collects information about which (of the `n`) physical errors flip which (of the `k`) logical
+        `faults_matrix_z` (a `k \times 2n` matrix), which collects information about which of the physical errors (first `n` columns regarding physical `X`, 
+        last `n` columns regarding physical `Z` errors, matching the ordering in `error_guess`) flip which of the `k` logical
         Z operators / logical Z observables via anti-commutation. The logic here is as follows: 
-        If `sum_mod += faults_matrix_z[j, q] * error_guess[q]` is 1, then there is an odd number of indices that are jointly supported by both `faults_matrix_z`
+        If the j-th `sum_mod = sum_q ( faults_matrix_z[j, q] * error_guess[q] ) mod 2` is 1, then there is an odd number of indices that are jointly supported by both `faults_matrix_z`
         and `error_guess` for the given `j`th logical Z operator. In this case, correcting based on `error_guess` will flip the `k`th logical Z operator. This
         is only desirable if there actually was a logical Z observable error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j]`. Otherwise,
         a logical failure is recorded.
-        If `sum_mod += faults_matrix_z[j, q] * error_guess[q]` is 0, then there is an even number of indices that are jointly supported by both `faults_matrix_z`
+        If the j-th `sum_mod = sum_q ( faults_matrix_z[j, q] * error_guess[q] ) mod 2` is 0, then there is an even number of indices that are jointly supported by both `faults_matrix_z`
         and `error_guess` for the given `j`th logical Z operator. In this case, correcting based on `error_guess` will not flip the `k`th logical Z operator by 
         error degeneracy of the code (applying an even number of operations that anti-commute with the logical operator overall cancels out). This is desirable as 
         long as there was actually no logical Z observable error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j] again. Otherwise,
@@ -442,8 +444,8 @@ defined, and the second (fidelity) as further metric for comparison.
     (ii) For the fidelity measurement, we apply the correction gate inferred by the LUT decoder, and then measure the fidelity of the resulting state with our target state.
         Therefore, we apply the correction gate (https://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl)
         that maps the quantum state back to the codespace (since there is a correctable syndrome, we know that the inferred correction maps back to the codespace) and 
-        call `dot` between the corrected `corrected_state_data_qubits` state and the target state `code_params.target_state`. We update fidelities per sample in order to
-        avoid having to save the fidelity for each of the samples. This is done using the update equation
+        call `dot` between the corrected `corrected_state_data_qubits` state and the target state `code_params.target_state`. We update fidelities (the squared dot, or inner, product)
+        per sample in order to avoid having to save the fidelity for each of the samples. This is done using the update equation
 
             `avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples → avg_fidelity += (x-avg_fidelity)/samples`,
         
@@ -490,7 +492,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
     # determine `faults_matrix_z` -- the fault matrix is a (2k)x(2n) dimensional matrix → last k rows specify logical Z part
     faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] 
     k = size(faults_matrix_z, 1) 
-    n = size(faults_matrix_z, 2)
+    n = size(faults_matrix_z, 2) # n=2*code_params.n, but we define it as n for convenience in later iteration
     @assert k == code_params.k
     @assert n == 2*code_params.n
     noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, 
@@ -528,7 +530,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         error_guess = decode(css_lut_decoder, syndrome) # retrieve the error guess from the LUT decoder, given the syndrome
         # `decode` function expected syndrome of form [`syndrome X-type checks` | `syndrome Z-type checks`], which is satisfied by the ordering of `H`
         # `error_guess` is of the form (guess_x, guess_z), where `guess_x` is the error guess of X errors, and `guess_z` for Z errors
-        if isnothing(error_guess) # if no error guess can be extracted from the Lookup table, we collect a logical error on all logical qubits and fidelity 0.0
+        if isnothing(error_guess) # if no error guess can be extracted from the lookup table, we collect a logical error on all logical qubits and fidelity 0.0
             logical_failures .+= 1
             avg_fidelity -= avg_fidelity / (sample-discarded_runs) # if execution reaches this line, we know that sample \neq discarded_runs holds
             continue
@@ -536,7 +538,8 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         #-------- (i) Analytical logical error rate computation --------
         for j in 1:k # iterate over the k logical Z operators
             sum_mod = 0
-            @inbounds @simd for q in 1:n # iterate over all the physical qubits/error locations
+            # iterate over all the `n=2*code_params.n` physical qubits error locations, the physical Z-errors stored at indices `code_params.n+1:2*code_params.n` should be zero, since they commute with the logical Z operators
+            @inbounds @simd for q in 1:n 
                 sum_mod += faults_matrix_z[j, q] * error_guess[q] 
             end
             sum_mod %= 2 
