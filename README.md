@@ -1,4 +1,4 @@
-# DQCode: Simulating DQC-optimised fault-tolerant logical $|0\rangle_L$ state encoding
+# DQCode: Synthesis of Fault-Tolerant $|0\rangle_L^{\otimes k}$ State Preparation Circuits for Small qLDPC-CSS Codes On Distributed Quantum Architectures
 
 This repository investigates fault-tolerant logical zero state encoding of quantum CSS codes on distributed Type-II quantum architectures. It contributes two main functionalities: 
 1. Circuit Search, allowing the user to optimise unitary encoding circuits for arbitrary CSS stabiliser codes, and
@@ -151,6 +151,8 @@ include("scripts/execution/dqc_sim.jl")
 
 Plotting functions are accessible via the `scripts/analysis` folder, allowing insight into [optimiser statistics](scripts/analysis/optimiser_evolution.jl) and [logical rate analysis](scripts/analysis/logical_rate.jl).
 
+> [!IMPORTANT]
+> We refer to `small' encoding circuits in the title explicitly, since the GA and MCTS in their current form don't scale well beyond the ~20 qubit regime, and since we have capped the number of flag qubits for the verification circuit synthesis to $75$ to not allow a disproportionately high verification overhead.
 
 
 ## Acknowledgements
@@ -158,12 +160,14 @@ Plotting functions are accessible via the `scripts/analysis` folder, allowing in
 $\texttt{DQCode}$ draws upon a rich collection of (general and quantum information) software, including
 - `QuantumClifford`: https://github.com/QuantumSavory/QuantumClifford.jl, https://arxiv.org/abs/2512.16752
 - `Munich Quantum Toolkit QECC` : https://github.com/munich-quantum-toolkit/qecc/tree/03a62ca1d3ccbe690265d6b5a7c59c5f72681793, https://arxiv.org/abs/2408.11894
-- `Qiskit`: https://github.com/Qiskit/qiskit/blob/stable/2.4/qiskit/synthesis/clifford/clifford_decompose_bm.py#L25-L48
+- `POMDPs`: https://github.com/JuliaPOMDP/MCTS.jl 
+- `Qiskit`: https://github.com/Qiskit/qiskit/blob/main/qiskit/synthesis/clifford/clifford_decompose_full.py
 - `QuantikZ`: arXiv:1809.03842
 - `HiGHS`: https://doi.org/10.1007/s12532-017-0130-5
 - `Karlsruhe Hypergraph Partitioning (KaHyPar)`: https://kahypar.org, https://github.com/kahypar/KaHyPar.jl
 > [!NOTE]
-> The `KaHyPar C++` library is licensed with the GPL License: https://github.com/kahypar/KaHyPar.jl?tab=License-1-ov-file 
+> The `POMDPs` library as well as the `KaHyPar.jl` library are licensed under a MIT "Expat" license. The `KaHyPar C++` library is licensed under the GPL License: https://github.com/kahypar/KaHyPar.jl?tab=License-1-ov-file.
+> The `Qiskit` library is licensed under an Apache 2.0 license.
 
 ### Reproducibility Information
 
