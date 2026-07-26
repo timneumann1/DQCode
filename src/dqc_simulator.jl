@@ -85,7 +85,7 @@ function dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p
                                         code_params::CodeParameters, network_specs::NetworkSpecifications, 
                                         circuit::Vector{AbstractOperation})::Tuple{Any, Vector{AbstractOperation}, Vector{AbstractOperation}, Vector{AbstractOperation}}
     data_circuit = deepcopy(circuit)
-    #------------ Noiseless verification -------------
+    #------------ Noiseless Testing -------------
     @info "Noiseless testing of raw encoding circuit ..."
     noise_verif = NoiseSpecs(1e2,0,0,0,0,0) # performing a small number of runs without noise
     quantum_clifford_verification_circ = Vector{AbstractOperation}() # no verification circuit → non-FT
@@ -323,7 +323,7 @@ function dqc_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bel
     end
     num_ancillas = length(ancilla_map) # collects all ancillas that have partaken in some interaction
     @info "Verification circuit uses $num_ancillas ancillas, with $num_z_anc z-ancillas, $num_x_anc x-ancillas, and $(num_ancillas-num_z_anc-num_x_anc) flag qubits"
-    #------------ Noiseless verification -------------
+    #------------ Noiseless Testing -------------
     @info "Noiseless testing of FT encoding circuit ..."
     noise_verif = NoiseSpecs(1e2,0,0,0,0,0) # perform a small number of runs without noise
     DQC_circuit,_,_,_,_ = construct_DQC_executable_circuit(data_circuit, quantum_clifford_verification_circ, num_ancillas, 
@@ -414,14 +414,16 @@ In this function, we first retrieve the DQC-executable circuit `DQC_circuit` fro
 we setup a noisefree QEC cycle / syndrome decoding routine.  For the noise-free decoding, we use a CSS Lookup Table Decoder. 
 
 Simulating a number of Monte Carlo trajectories, we sample from the noise distribution and gather statistics about the quality of FT encoding.
-Here, we first discard runs according to `verification_bits`, then identify pre-decoding X- and Z- errors, and then determine logical Z observable errors, 
-i.e., errors caused by logical X or Y operators (note that for the logical Z state, logical Z errors cannot occur).
+Here, we first discard runs according to `verification_bits` (these runs do not further impact the fidelity or logical error count),
+then identify pre-decoding X- and Z- errors, and then determine logical Z observable errors, i.e., errors caused by logical X or Y operators (note
+that for the logical Z state, logical Z errors cannot occur).
 Therefore, we collect the `error_guess` by providing the decoder with the measured `syndrome` (`error_guess` collects `n` guesses for X-errors
 and `n` guesses for Z errors -- we are interested in the first `n` guesses, i.e., whether the decoder predicts that a certain physical X error happened).
 If the decoder cannot infer an error guess, we register a logical error on all logical qubits, and a fidelity of `0.0` for this run (since the
 resulting state lives outside of the codespace and cannot be corrected). 
 
-If the decoder can make an error guess, we expose two different methods as proxies for the logical initialisation error rate:
+If the decoder can make an error guess, we expose two different methods, the first (Z-observable inconsistency) to approximate the logical initialisation error rate as 
+defined, and the second (fidelity) as further metric for comparison.
 
     (i) We noiselessly measure the logical Z observables and compute the logical error rate based on the `measured_logical_Z_bits` as well as 
         `faults_matrix_z` (a `k \times n` matrix), which collects information about which (of the `n`) physical errors flip which (of the `k`) logical
@@ -437,7 +439,7 @@ If the decoder can make an error guess, we expose two different methods as proxi
         a logical failure is recorded.
         In the end, the logical error rate is derived as the mean of all `k` logical Z observable error rates, conditioned on the accepted runs.
             
-    (ii) Alternatively, we can also apply the correction gate inferred by the LUT decoder, and then measure the fidelity of the resulting state with our target state.
+    (ii) For the fidelity measurement, we apply the correction gate inferred by the LUT decoder, and then measure the fidelity of the resulting state with our target state.
         Therefore, we apply the correction gate (https://github.com/QuantumSavory/QuantumClifford.jl/blob/444f341a50d2926b16b63d98586b8b06a7b6ac10/src/ecc/decoder_correction_gate.jl)
         that maps the quantum state back to the codespace (since there is a correctable syndrome, we know that the inferred correction maps back to the codespace) and 
         call `dot` between the corrected `corrected_state_data_qubits` state and the target state `code_params.target_state`. We update fidelities per sample in order to
@@ -449,7 +451,8 @@ If the decoder can make an error guess, we expose two different methods as proxi
 
 In the entire procedure, there are two main sources of uncertainty: the probabilistic noise sampling of errors in the circuit, and the measurement of the logical Z operators. 
 In a real-life experiment, both sources of errors exist (where probabilistically measuring the correct state implies that the system indeed is in the correct state afterwards),
-and method (i) mimics this closely. With method (ii), we eliminate the second source of uncertainty by determining a precise fidelity. 
+and method (i) mimics this closely, and allows us to extract the logical initialisation error rate per qubit. With method (ii), we eliminate the second source of uncertainty,
+but measure the fidelity of the entire resulting state with our target state (not per logical qubit).
 
 Capping a simulation when a specified number of logical errors has been registered helps to decrease overall runtime (this reduces execution time at
 the cost of granularity in the high-noise regime, which is reasonable).
@@ -470,7 +473,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
     # Lookup Table Decoder for noiseless syndrome decoding
     css_lut_decoder = CSSTableDecoder(code_params.qec_code, error_weight =  Int(floor((code_params.distance-1)/2)) )
     # determine x-type stabilisers for downstream analysis (by the virtue of CSS codes stabiliser types in canonical form are cleanly separated)
-    H = parity_checks(css_lut_decoder)
+    H = parity_checks(css_lut_decoder) # stacks `Hx` and `Hz` horizontally (X-type stabiliser checks come first)
     nrows = length(H)
     ncols = nqubits(H)
     Z_type_indices = Set{Int}()
@@ -482,7 +485,8 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
             push!(X_type_indices,i)
         end
     end 
-    @assert setdiff(Z_type_indices, X_type_indices) == Z_type_indices # there were mixed Pauli strings amongst the stabiliser generators
+    @assert maximum(X_type_indices) < minimum(Z_type_indices) "the X-type parity checks should be listed first to guarantee correct functioning of our syndrome extraction pipeline"
+    @assert setdiff(Z_type_indices, X_type_indices) == Z_type_indices "there were mixed Pauli strings amongst the stabiliser generators - please check the CSS code structure"
     # determine `faults_matrix_z` -- the fault matrix is a (2k)x(2n) dimensional matrix → last k rows specify logical Z part
     faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] 
     k = size(faults_matrix_z, 1) 
@@ -491,6 +495,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
     @assert n == 2*code_params.n
     noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, 
                                                                                                             network_specs.num_comm_qubits + num_ancillas + 1, network_specs)
+    # by ordering of `H`, X-type syndrome measurements are performed first
     noisefree_logical_Z_circ, num_noisefree_logical_Z_ancillas, noisefree_logical_Z_bits = syndrome_circuit(code_params.logical_Zs,
                                                                                                             network_specs.num_data_and_comm_qubits + num_ancillas + num_noisefree_syndrome_ancillas + 1, 
                                                                                                             last(noisefree_syndrome_bits)+1, network_specs )
@@ -500,7 +505,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
     discarded_runs = 0
     z_errors_pre_decoding = 0
     x_errors_pre_decoding = 0
-    logical_failures = zeros(code_params.k) # track logical Z failures per qubit
+    logical_failures = zeros(code_params.k) # track logical Z-observable failures per qubit
     avg_fidelity = 0.0
     n_samples = noise.n_samples
     initial_state = Register(one(MixedDestabilizer,total_number_qubits), total_number_classical_regs)
@@ -520,7 +525,9 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         if any(syndrome[collect(X_type_indices)]) 
             z_errors_pre_decoding +=1 # track pre-encoding Z error if any X-type stabiliser among the parity checks is triggered
         end
-        error_guess = decode(css_lut_decoder, syndrome) # retrieve the error guess from the LUT decoder 
+        error_guess = decode(css_lut_decoder, syndrome) # retrieve the error guess from the LUT decoder, given the syndrome
+        # `decode` function expected syndrome of form [`syndrome X-type checks` | `syndrome Z-type checks`], which is satisfied by the ordering of `H`
+        # `error_guess` is of the form (guess_x, guess_z), where `guess_x` is the error guess of X errors, and `guess_z` for Z errors
         if isnothing(error_guess) # if no error guess can be extracted from the Lookup table, we collect a logical error on all logical qubits and fidelity 0.0
             logical_failures .+= 1
             avg_fidelity -= avg_fidelity / (sample-discarded_runs) # if execution reaches this line, we know that sample \neq discarded_runs holds
@@ -541,7 +548,7 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         correction_gate = DecoderCorrectionGate(css_lut_decoder, network_specs.data_qubits, noisefree_syndrome_bits ) 
         corrected_state,_ = mctrajectory!(copy(state_post_syndrome),[correction_gate]) 
         corrected_state_data_qubits = stabilizerview( ptrace(copy(corrected_state.stab), collect(network_specs.num_data_qubits+1:total_number_qubits)) )
-        post_decoding_fidelity = dot(corrected_state_data_qubits, code_params.target_state)
+        post_decoding_fidelity = dot(corrected_state_data_qubits, code_params.target_state)^2
         avg_fidelity += (post_decoding_fidelity-avg_fidelity)/(sample-discarded_runs)
         if mean(logical_failures) >= 500
             @info "For physical error rate $(noise.p) and Bell state error rate $(noise.p_bell), we collected $(maximum(logical_failures)) logical failures after $sample iterations."
