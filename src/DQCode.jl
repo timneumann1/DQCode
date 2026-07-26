@@ -255,7 +255,7 @@ function baseline_encoding_qiskit(exp_label::String)::String
         cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
@@ -303,7 +303,7 @@ function baseline_encoding_mqt(exp_label::String, mqt_path:: String, prep_method
         cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
@@ -358,7 +358,7 @@ function circuit_search_gott_ga(exp_label::String)::String
         genetic_params = genetic_parameters[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
@@ -435,7 +435,7 @@ function circuit_search_mcts(exp_label::String)::String
         mcts_params = mcts_parameters[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
@@ -464,7 +464,7 @@ function circuit_search_mcts(exp_label::String)::String
         CSV.write(joinpath(dir, "mcts_stats.csv"), df)
         return dir
     else
-        error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data() first.")
+        error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
     end
 
 end
@@ -534,7 +534,7 @@ function dqc_simulation(
         cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))
@@ -623,7 +623,7 @@ function resource_estimation(exp_label::String)::String
         cfg = code_architecture_setup[exp_label]
         folder = joinpath(@__DIR__,"..","data", string(code_dirname(cfg.code)), string(cfg.qpu_sizes))
         if !isfile(joinpath(folder, "network_specs.jls")) || !isfile(joinpath(folder, "code_params.jls"))
-            error("The serialized specification and parameter files for this experiment are missing. Please run create_code_network_data($exp_label).")
+            error("The serialized specification and parameter files for this experiment are missing. Please run `qdc_setup` with $exp_label.")
         end
         network_specs = deserialize( joinpath(folder, "network_specs.jls"))
         code_params = deserialize( joinpath(folder, "code_params.jls"))

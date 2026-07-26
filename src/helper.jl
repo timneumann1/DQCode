@@ -214,7 +214,7 @@ function data_qubit_partitioning(capacities::Vector{Int}, stabilizers::Stabilize
     assignments = partition.+1 # KaHyPar is a Python-based optimiser based on 0 indexing
     block_sizes = [count(==(b), assignments) for b in 1:k]
     if block_sizes != capacities
-        error("KaHyPar failed to satisfy the capacity constraint with correct block sizes -- please change the capacities or alter the mapping manually")
+        error("`KaHyPar`` failed to satisfy the capacity constraint with correct block sizes -- please change the capacities or alter the mapping manually.")
     end
     mapping = Int[]
     for b in 1:k
@@ -222,7 +222,7 @@ function data_qubit_partitioning(capacities::Vector{Int}, stabilizers::Stabilize
     end
     @assert length(mapping) == nqubits
     @assert sort(mapping) == collect(1:nqubits)
-    @info "DQC qubit mapping determined by KaHyPar: $mapping"
+    @info "DQC qubit mapping determined by `KaHyPar``: $mapping"
     return mapping
 end
 
@@ -374,7 +374,7 @@ function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}; metri
         return count(difference_mask) / length(matrix) 
     elseif metric == "jaccard"
         support_mask = (matrix .!= 0) .| (target_matrix .!= 0) 
-        return count(difference_mask .& support_mask) / count(support_mask) # intersection / union
+        return count(difference_mask .& support_mask) / count(support_mask) # Jaccard distance = 1-intersection / union
     end
 end
 

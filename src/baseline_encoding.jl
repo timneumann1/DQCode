@@ -11,7 +11,6 @@ module BaselineEncoding
 export run_qiskit_baseline, run_mqt_baseline
 
 using ..Types
-using ..TrivariateBicycleCode
 using ..Helper
 
 using QuantumClifford
