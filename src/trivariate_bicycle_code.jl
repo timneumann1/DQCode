@@ -55,18 +55,18 @@ function parity_matrix_xz(c::TrivariateBicycleViaCirculantMat)
     yₚ = Dict(i => kron(Iₗ, circshift(Iₘ, (0,i))) for i in 0:(c.m-1))
     z_period = lcm(c.l,c.m)
     zₚ = Dict(i => kron(circshift(Iₗ, (0,i)), circshift(Iₘ, (0,i))) for i in 0:(z_period-1))
-    A = zeros(Bool, c.l*c.m, c.l*c.m)
+    A = zeros(Int, c.l*c.m, c.l*c.m)
     for (var, pow) in c.A
         mat = var == :x ? xₚ[pow] : (var ==:y ? yₚ[pow] : zₚ[pow] ) 
         A .+= mat
     end
-    A = mod.(A, 2)
-    B = zeros(Bool, c.l*c.m, c.l*c.m)
+    A = Bool.(mod.(A, 2)) # allows for the construction of degenerate codes
+    B = zeros(Int, c.l*c.m, c.l*c.m)
     for (var, pow) in c.B
         mat = var == :x ? xₚ[pow] : (var ==:y ? yₚ[pow] : zₚ[pow] ) 
         B .+= mat
     end
-    B = mod.(B, 2)
+    B = Bool.(mod.(B, 2))
     Hx = hcat(A, B)
     Hz = hcat(B', A')
     return Hx, Hz
