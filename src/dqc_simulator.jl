@@ -430,7 +430,7 @@ defined, and the second (fidelity) as further metric for comparison.
         `faults_matrix_z` (a `k \times 2n` matrix), which collects information about which of the physical errors (first `n` columns regarding physical `X`, 
         last `n` columns regarding physical `Z` errors, matching the ordering in `error_guess`) flip which of the `k` logical
         Z operators / logical Z observables via anti-commutation. The logic here is as follows: 
-        If the j-th `sum_mod = sum_q ( faults_matrix_z[j, q] * error_guess[q] ) mod 2` is 1, then there is an odd number of indices that are jointly supported by both `faults_matrix_z`
+        If the j-th `sum_mod = sum_{q=1:2n) ( faults_matrix_z[j, q] * error_guess[q] ) mod 2` is 1, then there is an odd number of indices that are jointly supported by both `faults_matrix_z`
         and `error_guess` for the given `j`th logical Z operator. In this case, correcting based on `error_guess` will flip the `k`th logical Z operator. This
         is only desirable if there actually was a logical Z observable error on the `k`th logical Z observable, i.e., `sum_mod = measured_logical_Z_bits[j]`. Otherwise,
         a logical failure is recorded.
@@ -492,9 +492,9 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
     # determine `faults_matrix_z` -- the fault matrix is a (2k)x(2n) dimensional matrix → last k rows specify logical Z part
     faults_matrix_z = css_lut_decoder.faults_matrix[end÷2+1:end,:] 
     k = size(faults_matrix_z, 1) 
-    n = size(faults_matrix_z, 2) # n=2*code_params.n, but we define it as n for convenience in later iteration
+    two_n = size(faults_matrix_z, 2) # two_n=2*code_params.n
     @assert k == code_params.k
-    @assert n == 2*code_params.n
+    @assert two_n == 2*code_params.n
     noisefree_syndrome_circ, num_noisefree_syndrome_ancillas, noisefree_syndrome_bits = syndrome_circuit(H, network_specs.num_data_and_comm_qubits + num_ancillas + 1, 
                                                                                                             network_specs.num_comm_qubits + num_ancillas + 1, network_specs)
     # by ordering of `H`, X-type syndrome measurements are performed first
@@ -538,8 +538,8 @@ function dqc_logical_evaluation(data_circuit::Vector{AbstractOperation}, verific
         #-------- (i) Analytical logical error rate computation --------
         for j in 1:k # iterate over the k logical Z operators
             sum_mod = 0
-            # iterate over all the `n=2*code_params.n` physical qubits error locations, the physical Z-errors stored at indices `code_params.n+1:2*code_params.n` should be zero, since they commute with the logical Z operators
-            @inbounds @simd for q in 1:n 
+            # iterate over all the `two_n=2*code_params.n` physical qubits error locations, the physical Z-errors stored at indices `code_params.n+1:two_n` should be zero, since they commute with the logical Z operators
+            @inbounds @simd for q in 1:two_n
                 sum_mod += faults_matrix_z[j, q] * error_guess[q] 
             end
             sum_mod %= 2 
