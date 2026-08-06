@@ -42,7 +42,6 @@ qiskit = pyimport("qiskit")
 qasm2 = pyimport("qiskit.qasm2")
 
 
-
 """
     dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p_bells::Vector{Float64}, 
                                         telegate_idle_depth::Int, p_single_ratio::Float64, p_idle_ratio::Float64,
@@ -73,10 +72,9 @@ is the full circuit including noise channels and noise-free stabiliser measureme
 
 ### Notes
 
-We first check for validity of the noiseless circuit, also with resepct to the DQC evaluation, 
-and then perform a DQC evaluation.
+We first check for validity of the noiseless circuit, also with resepct to the DQC evaluation, and then perform a DQC evaluation.
 
-The effective idle error probability during a telegate is computed as `1-(1-p_idle)^telegate_idle_depth`.
+The effective idle error probability during a telegate is approximated as `p_idle_telegate_layer =1-(1-p_idle)^telegate_idle_depth`.
 We consider the measurement, intitialisation and two-qubit gate error probability to be equal to `p`,
 and disregard the effect of classical communication and crosstalk.
 """
@@ -192,10 +190,9 @@ ancilla register.
 We then parse through this, doing a lot of indexing acrobatics to finally have the encoding circuit in our desired format, where
 data qubits come first, then communication qubits, then ancilla qubits (and lastly ancillas for the noisefree syndrome extraction)
 
-We first check for validity of the noiseless circuit, also with resepct to the DQC evaluation, 
-and then perform a DQC evaluation
+We first check for validity of the noiseless circuit, also with resepct to the DQC evaluation, and then perform a DQC evaluation.
 
-The effective idle error probability during a telegate is computed as `1-(1-p_idle)^telegate_idle_depth`.
+The effective idle error probability during a telegate is approximated as `1-(1-p_idle)^telegate_idle_depth`.
 We consider the measurement, intitialisation and two-qubit gate error probability to be equal to `p`,
 and disregard the effect of crosstalk.
 """
@@ -406,7 +403,8 @@ based on KPIs of logical error rate, fidelity, etc., extracted with noise-free d
 ### Output
 
 Returns a 13-element tuple collecting data about the DQC simulation, including `logical_failures`, `logical_error_rate`, 
-`avg_fidelity`, `acceptance_ratio`, etc.
+`avg_fidelity`, `acceptance_ratio`, etc. The returned `circuit` contains the DQC state preparation and verification circuit as well as 
+the syndrome circuit (but not the logical Z-measurement circuit).
 
 ### Notes
 
@@ -423,8 +421,8 @@ and `n` guesses for Z errors -- we are primarily interested in the first `n` gue
 If the decoder cannot infer an error guess, we register a logical error on all logical qubits, and a fidelity of `0.0` for this run (since the
 resulting state lives outside of the codespace and cannot be corrected). 
 
-If the decoder can make an error guess, we expose two different methods, the first (Z-observable inconsistency) to approximate the logical initialisation error rate as 
-defined, and the second (fidelity) as further metric for comparison.
+If the decoder can make an error guess, we expose two different methods, the first (Z-observable inconsistency) to approximate the true logical initialisation error
+rate, and the second (fidelity) as further metric for comparison.
 
     (i) We noiselessly measure the logical Z observables and compute the logical error rate based on the `measured_logical_Z_bits` as well as 
         `faults_matrix_z` (a `k \times 2n` matrix), which collects information about which of the physical errors (first `n` columns regarding physical `X`, 
@@ -449,12 +447,13 @@ defined, and the second (fidelity) as further metric for comparison.
 
             `avg_fidelity = (avg_fidelity*(samples-1)+x)/samples = avg_fidelity+(x-avg_fidelity)/samples → avg_fidelity += (x-avg_fidelity)/samples`,
         
-        where `samples` is replaced with `sample-discarded_runs`.
+        where `samples` is replaced with `sample-discarded_runs`. This method computes fidelity of the entire resulting state with our target state (not per logical qubit), hence we
+        expect it to lower bound the mean LIER.
 
 In the entire procedure, there are two main sources of uncertainty: the probabilistic noise sampling of errors in the circuit, and the measurement of the logical Z operators. 
-In a real-life experiment, both sources of errors exist (where probabilistically measuring the correct state implies that the system indeed is in the correct state afterwards),
-and method (i) mimics this closely, and allows us to extract the logical initialisation error rate per qubit. With method (ii), we eliminate the second source of uncertainty,
-but measure the fidelity of the entire resulting state with our target state (not per logical qubit).
+In a real-life experiment, both sources of errors exist (where probabilistically measuring the correct state implies that the system indeed is in the correct state afterwards).
+However, by the virtue of our noise channel and correction gates being Pauli gates, the measurement in method (i) is actually deterministic, such that only the first source of uncertainty 
+(noise sampling) remains. (For the fidelity computation in method (ii), such measurement stochasticity does not exist anyways.)
 
 Capping a simulation when a specified number of logical errors has been registered helps to decrease overall runtime (this reduces execution time at
 the cost of granularity in the high-noise regime, which is reasonable).
@@ -684,21 +683,20 @@ Here, for every layer, we count from how many consecutive telegate creation wait
 add the corresponding idling noise with probability `1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer)`. The same idling noise on the 
 telegate qubits that need to wait due to communication qubit conflicts is applied dynamically.
 
-Importantly, we eventually seek to compare the logical initialisation error rate with the physical. Since we are exclusively initialising in the 
-zero state, and measuring in the Z basis, applying a depolarising channel with error probability `p` does not reflect the true error probability. 
-In particular, out of the three Pauli errors {`X`,`Y`,`Z`}, only `X` and `Y` lead to a physical initialisation error. Similarly, for measurements in
-the Z basis, only previous X or Y errors impact the measurement outcome probabilities. Therefore, we apply depolarising noise channels of strength `3/2*p`
-after initialisation and before measurement. Analagously, we adapt the Bell pair initialisation error, as described in `add_telegate`.
+We eventually seek to compare the logical initialisation error rate with the physical. Since we are exclusively initialising in the 
+zero state, and measuring in the Z basis, when applying a depolarising channel with error probability `p`, out of the three Pauli errors {`X`,`Y`,`Z`},
+only `X` and `Y` lead to a physical initialisation or measurement error. Therefore, our noise model captures an `effective' initialisation and 
+measurement error of `2/3*p`.
 
 In `n.mapping`, value `j` at index `i` indicates that qubit `j` is mapped to physical slot `i`. As discussed in `helper.jl`, 
 the list of transpositions `n.mapping_transpositions` (created by the function `perm_to_transpositions`), can be applied from
-right to left to create this DQC mapping. This amount to applying `sSWAP` operations in the reverse order of `n.mapping_transpositions`
-before adding the circuit operations in `data_circuit` (the non-FT encoding circuit) and `verification_circuit` (the FT gadget), and 
-then undoing these SWAPS by applying the  mirror-image afterwards. To identify the DQC index of an operation, we then use
-`n.inv_map[op.q]`, where `op.q` is the unmapped index of the affected qubit in quantum operation `q` (to apply `sHadamard(1)`, we
-need to identify the DQC slot to which qubit `1` has been mapped; this is achieved by retrieving index `1`  of the inverse permutation of `n.mapping`.
-In general, data qubits sit at indices `1:n.num_data_qubits` and are mapped onto the DQC architecture for visualisation purposes, while 
-communication qubits and ancilla qubits are appended to the indices following index `n.num_data_qubits`, while tracking their core assignment with `ancilla_map`.
+right to left to create this DQC mapping. This amount to applying `sSWAP` operations in the reverse order of `n.mapping_transpositions` 
+(where traversing the transpositions from right to left implements the permutation by construction), before adding the circuit operations
+in `data_circuit` (the non-FT encoding circuit) and `verification_circuit` (the FT gadget), and then undoing these SWAPS by applying the  mirror-image afterwards. 
+To identify the DQC index of an operation, we then use `n.inv_map[op.q]`, where `op.q` is the unmapped index of the affected qubit in quantum operation `q` (to 
+apply `sHadamard(1)`, for example, we need to identify the DQC slot to which qubit `1` has been mapped; this is achieved by retrieving index `1`  of the 
+inverse permutation of `n.mapping`). In general, data qubits sit at indices `1:n.num_data_qubits` and are mapped onto the DQC architecture for visualisation
+purposes, while communication qubits and ancilla qubits are appended to the indices following index `n.num_data_qubits`, while tracking their core assignment with `ancilla_map`.
 """
 
 function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation}, verification_circuit::Vector{AbstractOperation}, 
@@ -710,7 +708,7 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
     end     
     #----------- Make encoding circuit DQC-executable ------------   
     layers_enc_circ = build_layers(data_circuit, n.num_data_qubits)    
-    add_noise(circuit, [n.inv_map[data_q] for data_q in collect(1:n.num_data_qubits)], 3/2*noise.p) # initialisation error probability `p`
+    add_noise(circuit, [n.inv_map[data_q] for data_q in collect(1:n.num_data_qubits)], noise.p) # initialisation error probability `p`
     depth = [0,0] # (# regular layers, # telegates layers)
     gate_counts = [0,0,0]
     num_meas = 0
@@ -777,7 +775,7 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
     layers_ver_circ = build_layers(verification_circuit, n.num_data_and_comm_qubits + num_ancillas)
     all_qubits = 1:(n.num_data_and_comm_qubits + num_ancillas)
     ancilla_qubits = setdiff(all_qubits, 1:n.num_data_and_comm_qubits)
-    add_noise(circuit, ancilla_qubits, 3/2*noise.p) #  init noise on ancilla qubits used for verification measurements
+    add_noise(circuit, ancilla_qubits, noise.p) #  init noise on ancilla qubits used for verification measurements
     for layer in layers_ver_circ # analogous to traversal of `layers_enc_circ`
         affected_qubits = Set( Iterators.flatten( [affectedqubits(gate) for gate in layer] ) ) 
         idle_qubits = setdiff(all_qubits, union(Set(n.comm_qubits), affected_qubits))
@@ -851,7 +849,7 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                     push!(telegate_qubits, DQC_target)
                 end
             elseif T <: AbstractMeasurement
-                add_noise(circuit, affectedqubits(gate), 3/2*noise.p) # measurement noise error probability `p` 
+                add_noise(circuit, affectedqubits(gate), noise.p) # measurement noise error probability `p` 
                 push!(circuit, gate) # only ancillas are ever measured, so no DQC mapping required
                 num_meas += 1
             else
@@ -943,9 +941,9 @@ the index of the communication qubit.
 
 When simulating probabilistic Bell pair creation, we abstract away the physical processes that lead to entanglement generation (such as photons 
 being emitted and interacting with a Beam splitter), and instead prepare a perfect Bell state with `[sHadamard(DQC_control), sCNOT(DQC_control, DQC_target)]`, 
-followed by a two-qubit correlated depolarising noise channel. Similar to the discussion in `construct_DQC_executable_circuit`, we adapt the error 
-probability of this channel, noting that out of the 15 non-trivial 2-qubit Pauli strings, only 13 are harmful to the state (`XX` and `ZZ` stabilise the state).
-Thus, each two-qubit depolarising noise channel is performed with error probability `15/13*p_bell`. 
+followed by a two-qubit correlated depolarising noise channel. Similar to the discussion in `construct_DQC_executable_circuit`, out of the 15 non-trivial
+2-qubit Pauli strings, only 12 are harmful to the state (`XX` and `ZZ` stabilise the state), such that each two-qubit depolarising noise channel yields 
+an efftive error probability of `12/15*p_bell`. 
 
 After the completion of a EJPP protocol, we assume that the qubits are reset to the physical |0> state again. We deem this perfect initialisation a
 reasonable simplification since any pre-entanglement initialisation error can be assumed to be absorbed by the Bell pair initialisation error `p_bell`.
@@ -964,7 +962,7 @@ function add_telegate(circuit::Vector{AbstractOperation}, DQC_control::Int, DQC_
     # ---- I. Bell pair creation ----
     push!(circuit, sHadamard(control_comm_index))
     push!(circuit, sCNOT(control_comm_index, target_comm_index))
-    add_noise(circuit, [control_comm_index, target_comm_index], 15/13*noise.p_bell; two_qubits = true) # Bell state initialisation noise `p_bell`
+    add_noise(circuit, [control_comm_index, target_comm_index], noise.p_bell; two_qubits = true) # Bell state initialisation noise `p_bell`
     add_noise(circuit, [DQC_control], noise.p_idle_telegate_layer) # idling noise with probability `p_idle_telegate_layer` on data qubits partaking in telegate
     add_noise(circuit, [DQC_target], noise.p_idle_telegate_layer)  
     # ---- II. CNOT(control, comm_c) + CNOT(comm_t, target) ----
@@ -975,13 +973,13 @@ function add_telegate(circuit::Vector{AbstractOperation}, DQC_control::Int, DQC_
     # ---- III. comm_c + comm_t Measurement ---- 
     classical_register_index_control = control_comm_index - n.num_data_qubits 
     meas_control = sMRZ(control_comm_index, classical_register_index_control ) 
-    add_noise(circuit, [control_comm_index], 3/2*noise.p) # communication qubit measurement noise with error probability `p` 
+    add_noise(circuit, [control_comm_index], noise.p) # communication qubit measurement noise with error probability `p` 
     push!(circuit, meas_control)
     classical_register_index_target = target_comm_index - n.num_data_qubits
     meas_target = sMRZ(target_comm_index, classical_register_index_target)
     push!(circuit, sHadamard(target_comm_index)) # measuring in the X-basis amounts to applying `sHadamard` and measuring in the Z-basis
     add_noise(circuit, [target_comm_index], noise.p_single) 
-    add_noise(circuit, [target_comm_index], 3/2*noise.p) # communication qubit measurement noise with error probability `p`
+    add_noise(circuit, [target_comm_index], noise.p) # communication qubit measurement noise with error probability `p`
     push!(circuit, meas_target)
     add_noise(circuit, [DQC_control], noise.p_idle) # idling depolarising_noise with error probability `p_idle`
     add_noise(circuit, [DQC_target], noise.p_idle) 
