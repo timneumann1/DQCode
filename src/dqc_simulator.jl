@@ -680,7 +680,7 @@ this requires us to track a dictionary of `telegate_pairs`.
 When building the overall circuit, we append the telegate gadget via `add_telegate` and add the respective noise channels (consisting of 
 initialisation, measurement, single- and two-qubit gate, idling and telegate-layer idling errors).
 Here, for every layer, we count from how many consecutive telegate creation wait-time layers (`num_telegates_in_layer`) all non-telegate qubits suffer, and 
-add the corresponding idling noise with probability `1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer)`. The same idling noise on the 
+add the corresponding idling noise `num_telegates_in_layer` times. The same idling noise on the 
 telegate qubits that need to wait due to communication qubit conflicts is applied dynamically.
 
 We eventually seek to compare the logical initialisation error rate with the physical. Since we are exclusively initialising in the 
@@ -742,7 +742,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                     prev_consecutive_telegates_pair_key = get(telegate_pairs, pair_key, 0)
                     prev_max_telegate_layers = isempty(telegate_pairs) ? 0 : maximum(values(telegate_pairs))
                     # noise before the telegate application, due to other telegates using the same communication qubit pair
-                    add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^prev_consecutive_telegates_pair_key ) 
+                    for _ in 1:prev_consecutive_telegates_pair_key
+                        add_noise(circuit, [DQC_control, DQC_target], noise.p_idle_telegate_layer) 
+                    end
+                    # the above replaces the approximation:
+                    # add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^prev_consecutive_telegates_pair_key ) 
                     telegate_pairs[pair_key] = prev_consecutive_telegates_pair_key + 1
                     circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise) # perform telegate between qubits
                     gate_counts[3] += 1                    
@@ -751,7 +755,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                     else
                         # post-apply `maximum(values(telegate_pairs))-(prev_consecutive_telegates_pair_key+1)` layers of `p_idle_telegate_layer` noise on the current `DQC_control` and `DQC_target`
                         @assert prev_max_telegate_layers == maximum(values(telegate_pairs))
-                        add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)) 
+                        for _ in 1:(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)
+                            add_noise(circuit, [DQC_control, DQC_target], noise.p_idle_telegate_layer) 
+                        end
+                        # the above replaces the approximation:
+                        # add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)) 
                     end
                     push!(telegate_qubits, DQC_control)
                     push!(telegate_qubits, DQC_target)
@@ -766,7 +774,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
             depth[1] +=1
         else
             # `telegate_qubits` are excluded from this idling noise application, since idling noise has been applied to them dynamically already
-            add_noise(circuit, setdiff(1:n.num_data_qubits, Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer)  
+            for _ in 1:num_telegates_in_layer
+                add_noise(circuit, setdiff(1:n.num_data_qubits, Set(telegate_qubits)), noise.p_idle_telegate_layer) 
+            end
+            # the above replaces the approximation:
+            # add_noise(circuit, setdiff(1:n.num_data_qubits, Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer)  
             depth[2] += num_telegates_in_layer 
         end
     end
@@ -834,7 +846,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                     prev_consecutive_telegates_pair_key = get(telegate_pairs, pair_key, 0)
                     prev_max_telegate_layers = isempty(telegate_pairs) ? 0 : maximum(values(telegate_pairs))
                     # noise before the telegate application, due to other telegates using the same communication qubit pair
-                    add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^prev_consecutive_telegates_pair_key )
+                    for _ in 1:prev_consecutive_telegates_pair_key
+                        add_noise(circuit, [DQC_control, DQC_target], noise.p_idle_telegate_layer) 
+                    end
+                    # the above replaces the approximation:
+                    # add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^prev_consecutive_telegates_pair_key )
                     telegate_pairs[pair_key] = prev_consecutive_telegates_pair_key + 1
                     circuit = add_telegate(circuit, DQC_control, DQC_target, control_register, target_register, n, noise)
                     gate_counts[3] += 1
@@ -843,7 +859,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                     else
                         # post-apply `maximum(values(telegate_pairs))-(prev_consecutive_telegates_pair_key+1)` layers of `p_idle_telegate_layer` noise on the current `DQC_control` and `DQC_target`
                         @assert prev_max_telegate_layers == maximum(values(telegate_pairs))
-                        add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)) 
+                        for _ in 1:(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)
+                            add_noise(circuit, [DQC_control, DQC_target], noise.p_idle_telegate_layer) 
+                        end
+                        # the above replaces the approximation:
+                        # add_noise(circuit, [DQC_control, DQC_target], 1-(1-noise.p_idle_telegate_layer)^(prev_max_telegate_layers-prev_consecutive_telegates_pair_key-1)) 
                     end
                     push!(telegate_qubits, DQC_control)
                     push!(telegate_qubits, DQC_target)
@@ -862,7 +882,11 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
             depth[1] +=1
         else
             # `telegate_qubits` are excluded from this idling noise application, since idling noise has been applied to them dynamically already
-            add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer) 
+            for _ in 1:num_telegates_in_layer
+                add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(telegate_qubits)), noise.p_idle_telegate_layer) 
+            end
+            # the above replaces the approximation:
+            # add_noise(circuit, setdiff(vcat(1:n.num_data_qubits, n.num_data_and_comm_qubits+1:length(all_qubits)), Set(telegate_qubits)), 1-(1-noise.p_idle_telegate_layer)^num_telegates_in_layer) 
             depth[2] += num_telegates_in_layer 
         end
     end
