@@ -119,7 +119,7 @@ function dqc_non_ft_encoding_simulation(num_samples::Int, ps::Vector{Float64}, p
     for (p, p_bell) in Iterators.product(ps, p_bells)
         p_idle = p*p_idle_ratio
         p_single = p*p_single_ratio
-        p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle-error probability
+        p_idle_telegate_layer = 1-(1-p_idle)^telegate_idle_depth # compute the telegate_layer idle-error probability, where telegate_idle_depth (`eta`) counts the time steps required for a telegate
         noise_model = NoiseSpecs(num_samples,p,p_idle,p_idle_telegate_layer,p_single,p_bell) # for each (p, p_bell), initialise NoiseSpecs(...)
         (
             logical_failures, 
@@ -867,7 +867,7 @@ function construct_DQC_executable_circuit(data_circuit::Vector{AbstractOperation
                 throw("Circuit contains gates that have not been classified as Single- or Two-Qubit gate so far.")
             end
         end
-        num_telegates_in_layer = isempty(telegate_pairs) ? 0 : maximum(values(telegate_pairs))
+        num_telegates_in_layer = isempty(telegate_pairs) ? 0 : maximum(values(telegate_pairs)) # counts the number of telegate rounds per ASAP layer
         if num_telegates_in_layer == 0
             add_noise(circuit, idle_qubits_DQC, noise.p_idle) 
             depth[1] +=1
