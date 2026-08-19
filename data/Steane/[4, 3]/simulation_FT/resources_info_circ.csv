@@ -1,2 +1,2 @@
 method,num_comm_qubits,num_registers,num_ancillas,depth_cx_layers,depth_telegate_layers,single_qubit_gates,cx_gates,telegates,measurements,qpu_core_sizes,acceptance_ratio,p,p_bell
-encoding_circ,2,2,1,8,3,3,8,3,1,6;4,0.951908,0.0012499999999999996,0.010000000000000002
+encoding_circ,2,2,1,8,3,3,8,3,1,6;4,0.95038,0.0012499999999999996,0.010000000000000002
