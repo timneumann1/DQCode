@@ -25,7 +25,7 @@ function compare_telegate_counts(df)
         RGBf(255/255, 177/255,  42/255), 
         RGBf( 96/255, 184/255,  72/255),
     ]
-    method_labels = ["Qiskit A-G", "MQT-QECC", "Gottesman (standard)", "Gottesman (compiled)", "warmstart GA", "MCTS"]
+    method_labels = ["Qiskit Greedy", "MQT-QECC", "Gottesman", L"DQC-FT \text{ }Compiled^*", L"Warm-Start\text{ } GA^*", L"MCTS^*"]
     method_to_color_labels = Dict(m => (colors[i], method_labels[i]) for (i, m) in enumerate(opt_methods))
     code_architecture_labels = unique(df.code_architecture_label)   
     num_code_architectures  = length(code_architecture_labels)
@@ -34,16 +34,16 @@ function compare_telegate_counts(df)
     bar_w       = group_width / n_methods
     offsets     = [(i - (n_methods + 1) / 2) * bar_w for i in 1:n_methods]
     code_architecture_positions = collect(1:num_code_architectures)  
-    fig = Figure(size = (max(640, num_code_architectures * 160), 560), fontsize = 14)
+    fig = Figure(size = (max(860, num_code_architectures * 160), 560), fontsize = 14)
     ax = Axis(fig[1, 1];
-        title          = L"\text{Telegate Count per Optimisation Method and Code–Architecture Pair (Non-FT Encoding Circuits)}",
+        title          = L"\text{Raw State Preparation Circuits: Telegate Count per Code–Architecture Pair}",
         ylabel         = L"\text{Telegate count}",
-        titlesize      = 28,
-        titlegap       = 12,
-        xlabelsize     = 24,
-        ylabelsize     = 24,
-        xticks         = (Float64.(code_architecture_positions), latexstring.(code_architecture_labels)),
-        xticklabelsize = 16,
+        titlesize      = 30,
+        titlegap       = 16,
+        xlabelsize     = 30,
+        ylabelsize     = 30,
+        xticks         = (Float64.(code_architecture_positions), split_two_line.(code_architecture_labels)),#latexstring.(code_architecture_labels)),
+        xticklabelsize = 24,
         xgridvisible   = false,
         ygridvisible   = true,
         yminorgridvisible  = true,
@@ -61,17 +61,22 @@ function compare_telegate_counts(df)
         end
         isempty(xs) && continue
         barplot!(ax, xs, vals;
-            width = bar_w * 0.92,
+            width = bar_w * 0.95,
             color = method_to_color_labels[method][1],
             label = L"\text{%$(method_to_color_labels[method][2])}",
         )
     end
     xlims!(ax, 0.5, num_code_architectures + 0.5)
     ylims!(ax, 0, nothing)
-    axislegend(ax, position = :lt, framevisible = true)
+    axislegend(ax, position = :lt, framevisible = true, labelsize = 24)
     save(joinpath(@__DIR__, "../../data/gate_count_comparison.png"), fig)
     save(joinpath(@__DIR__, "../../data/gate_count_comparison.pdf"), fig)
     @info "Saved gate_count_comparison"
+end
+
+function split_two_line(lbl)
+    code, cores = split(lbl, ", "; limit = 2)
+    return code * "\n" * cores
 end
 
 
@@ -83,12 +88,9 @@ function compare_resources(df, data_path)
     @info "Creating circuit vs. measurement resource comparison plot..."
     # ---------------------- Plotting ----------------------
     encoding_methods = ["encoding_circ", "stabiliser_measurement"]
-    colors = [
-        RGBf(  0/255, 154/255, 207/255),     
-        RGBf(255/255, 177/255,  42/255), 
-    ]
-    encoding_labels = [latexstring(L"\text{FT encoding circuit (Acceptance ratio=}"*"$( round( df.acceptance_ratio[1], digits=3))"*L"\text{ for } p="*"$(power_of_10_label(df.p[1], 3))"*L"\text{, }p_{\text{Bell}}="*"$( power_of_10_label(df.p_bell[1], 3) ))"), 
-                        latexstring(L"\text{Distributed Stabiliser Measurements (per round)}")]
+    colors = [RGBf( 33/255, 113/255, 181/255), RGBf(230/255, 159/255,  0/255)]#, RGBf( 33/255, 113/255, 181/255)
+    encoding_labels = [latexstring(L"\text{FT encoding circuit (AR=}"*"$( round( df.acceptance_ratio[1], digits=2))"*L"\text{ for } p="*"$(power_of_10_label(df.p[1], 1))"*L"\text{, }p_{\text{Bell}}="*"$( power_of_10_label(df.p_bell[1], 1) ))"), 
+                        latexstring(L"\text{Distributed Stabiliser Measurements (one round)}")]
     function get_val(method, col)
         rows = df[df.method .== method, :]
         isempty(rows) && return NaN
@@ -107,25 +109,19 @@ function compare_resources(df, data_path)
         
     ]
     row3_metrics = [
-        ("depth_cx_layers",       L"\text{Depth: CX Layers}", L"\text{# of layers}"),
-        ("depth_telegate_layers", L"\text{Depth: Telegate Layers}", L"\text{# of layers}"),
+        ("depth_cx_layers",       L"\text{Depth: CX Rounds}", L"\text{# of rounds}"),
+        ("depth_telegate_layers", L"\text{Depth: Telegate Rounds}", L"\text{# of rounds}"),
     ]
     bar_xs = [1.0, 2.0] 
     common_ax_kwargs = (
         xgridvisible       = false,
         ygridvisible       = true,
-        yminorgridvisible  = true,
-        yminorticksvisible = true,
-        yminorticks        = IntervalsBetween(10),
-        ylabelsize         = 16,
-        titlesize          = 16,
+        ylabelsize         = 22,
+        titlesize          = 22,
+        xticklabelsize = 18,
+        yticklabelsize = 18
     ) 
-    _code_architecture_label = df.code_architecture_label[1]
     fig = Figure(size = (1120, 760), fontsize = 14)
-    Label(fig[1, 1:6], L"\text{|0\rangle_L Initialisation Resource Comparison: Postselected FT Encoding Circuit vs. Distributed Stabiliser Measurement}",
-            fontsize = 20, tellwidth = false)
-    Label(fig[2, 1:6], latexstring("$(_code_architecture_label)"),
-            fontsize = 18, tellwidth = false)
     function draw_panel!(fig_pos, col_key, title_str, ylabel_str; show_legend = false)
         ax = Axis(fig_pos;
             title = title_str,
@@ -143,20 +139,18 @@ function compare_resources(df, data_path)
             )
         end
         ylims!(ax, 0, nothing)
-        show_legend && Legend(fig[6, 3:4], ax,  framevisible = true, labelsize = 16)
+        show_legend && Legend(fig[4, 3:4], ax,  framevisible = false, labelsize = 24)
         return ax
     end
     for (ci, (col_key, title_str, y_label)) in enumerate(row1_metrics)
-        draw_panel!(fig[3, 2*ci-1:2*ci], col_key, title_str, y_label)
+        draw_panel!(fig[1, 2*ci-1:2*ci], col_key, title_str, y_label)
     end
     for (ci, (col_key, title_str, y_label)) in enumerate(row2_metrics)
-        draw_panel!(fig[4, 2*ci:2*ci+1], col_key, title_str, y_label)
+        draw_panel!(fig[2, 2*ci:2*ci+1], col_key, title_str, y_label)
     end
     for (ci, (col_key, title_str, y_label)) in enumerate(row3_metrics)
-        draw_panel!(fig[5, 2*ci:2*ci+1], col_key, title_str, y_label, ; show_legend = (ci == 1))
+        draw_panel!(fig[3, 2*ci:2*ci+1], col_key, title_str, y_label, ; show_legend = (ci == 1))
     end
-    #olsize!(fig.layout, 5, Fixed(1))
-    #rowgap!(fig.layout, 4,5) 
     save(joinpath(data_path, "../../resource_comparison.png"), fig)
     save(joinpath(data_path, "../../resource_comparison.pdf"), fig)
     @info "Saved resource_comparison"
@@ -172,7 +166,7 @@ struct Config
     code::String          
     architecture::String  
     code_architecture_label::String    # for plot legend
-    data_path::String     # for data storage
+    data_path::String                  # for data storage
 end
 
 function load_configs(configs::Vector{Config})::DataFrame
@@ -213,86 +207,88 @@ function analysis_resources(configs)
     compare_resources(df, configs[1].data_path)
 end
 
+# The uncommented lines are included in the optimiser comparison plot
+configs_optimiser = [   
 
-configs_optimiser = [
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/mcts/mcts_stats.csv"),
+    # Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    # Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/mqt_encoding/mqt_encoding_stats.csv"),
+    # Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/warmstart_ga/warm_start_ga_stats.csv"),
+    # Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/mcts/mcts_stats.csv"),
 
-    Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/mcts/mcts_stats.csv"),
+    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
+    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
+    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/mcts/mcts_stats.csv"),
 
-    Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/mcts/mcts_stats.csv"),
+    Config("TrivariateBicycle", "[6,6]", "[[12,2,3]], 2 cores",  "data/TrivariateBicycle/[6, 6]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[6,6]", "[[12,2,3]], 2 cores",  "data/TrivariateBicycle/[6, 6]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[6,6]", "[[12,2,3]], 2 cores",  "data/TrivariateBicycle/[6, 6]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("TrivariateBicycle", "[6,6]", "[[12,2,3]], 2 cores",  "data/TrivariateBicycle/[6, 6]/mcts/mcts_stats.csv"),
 
-    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/mcts/mcts_stats.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", "[[12,2,3]], 3 cores",  "data/TrivariateBicycle/[4, 4, 4]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", "[[12,2,3]], 3 cores",  "data/TrivariateBicycle/[4, 4, 4]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", "[[12,2,3]], 3 cores",  "data/TrivariateBicycle/[4, 4, 4]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", "[[12,2,3]], 3 cores",  "data/TrivariateBicycle/[4, 4, 4]/mcts/mcts_stats.csv"),
 
-    Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/mcts/mcts_stats.csv"),
+    Config("TrivariateBicycle", "[3,3,3,3]", "[[12,2,3]], 4 cores",  "data/TrivariateBicycle/[3, 3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[3,3,3,3]", "[[12,2,3]], 4 cores",  "data/TrivariateBicycle/[3, 3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("TrivariateBicycle", "[3,3,3,3]", "[[12,2,3]], 4 cores",  "data/TrivariateBicycle/[3, 3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("TrivariateBicycle", "[3,3,3,3]", "[[12,2,3]], 4 cores",  "data/TrivariateBicycle/[3, 3, 3, 3]/mcts/mcts_stats.csv"),
 
-    Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/mcts/mcts_stats.csv"),
+    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/mqt_encoding/mqt_encoding_stats.csv"),
+    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/warmstart_ga/warm_start_ga_stats.csv"),
+    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/mcts/mcts_stats.csv"),
 
-    Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/mcts/mcts_stats.csv"),
+    Config("BivariateBicycle", "[9,9]", "[[18,4,4]], 2 cores",  "data/BivariateBicycle/[9, 9]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("BivariateBicycle", "[9,9]", "[[18,4,4]], 2 cores",  "data/BivariateBicycle/[9, 9]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("BivariateBicycle", "[9,9]", "[[18,4,4]], 2 cores",  "data/BivariateBicycle/[9, 9]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("BivariateBicycle", "[9,9]", "[[18,4,4]], 2 cores",  "data/BivariateBicycle/[9, 9]/mcts/mcts_stats.csv"),
 
-    Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/mcts/mcts_stats.csv"),
+    Config("BivariateBicycle", "[6,6,6]", "[[18,4,4]], 3 cores",  "data/BivariateBicycle/[6, 6, 6]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("BivariateBicycle", "[6,6,6]", "[[18,4,4]], 3 cores",  "data/BivariateBicycle/[6, 6, 6]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("BivariateBicycle", "[6,6,6]", "[[18,4,4]], 3 cores",  "data/BivariateBicycle/[6, 6, 6]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("BivariateBicycle", "[6,6,6]", "[[18,4,4]], 3 cores",  "data/BivariateBicycle/[6, 6, 6]/mcts/mcts_stats.csv"),
 
-    Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
-    Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
-    Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
-    Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/mcts/mcts_stats.csv"),
+    Config("BivariateBicycle", "[3,3,3,3,3,3]", "[[18,4,4]], 6 cores",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
+    Config("BivariateBicycle", "[3,3,3,3,3,3]", "[[18,4,4]], 6 cores",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/mqt_encoding/mqt_encoding_stats.csv"),
+    Config("BivariateBicycle", "[3,3,3,3,3,3]", "[[18,4,4]], 6 cores",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/warmstart_ga/warm_start_ga_stats.csv"),
+    Config("BivariateBicycle", "[3,3,3,3,3,3]", "[[18,4,4]], 6 cores",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/mcts/mcts_stats.csv"),
 
 ]
 
 analysis_optimiser(configs_optimiser)
 
 
+# The uncommented lines are included in the resource comparison plot
 configs_resources = [
 
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/resources_info_circ.csv"),
-    Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/resources_info_meas.csv"),
+    #Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/resources_info_circ.csv"),
+    #Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/simulation_FT/resources_info_circ.csv"),
-    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/simulation_FT/resources_info_meas.csv"),
+    #Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/simulation_FT/resources_info_circ.csv"),
+    #Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}",  "data/Shor/[3, 3, 3]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/resources_info_circ.csv"),
-    # Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/resources_info_meas.csv"),
+    #Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/resources_info_circ.csv"),
+    #Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}",  "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/resources_info_circ.csv"),
-    # Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/resources_info_meas.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/resources_info_circ.csv"),
+    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}",  "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/simulation_FT/resources_info_circ.csv"),
-    # Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/simulation_FT/resources_info_meas.csv"),
+    #Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/simulation_FT/resources_info_circ.csv"),
+    #Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}",  "data/TrivariateBicycle/[6, 6]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/simulation_FT/resources_info_circ.csv"),
-    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/simulation_FT/resources_info_meas.csv"),
+    #Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/simulation_FT/resources_info_circ.csv"),
+    #Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  "data/Triangular/[8, 9]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/simulation_FT/resources_info_circ.csv"),
-    # Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/simulation_FT/resources_info_meas.csv"),
+    #Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/resources_info_circ.csv"),
+    #Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/simulation_FT/resources_info_circ.csv"),
-    # Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/simulation_FT/resources_info_meas.csv"),
+    #Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/simulation_FT/resources_info_circ.csv"),
+    #Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  "data/BivariateBicycle/[6, 6, 6]/simulation_FT/resources_info_meas.csv"),
 
-    # Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/resources_info_circ.csv"),
-    # Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 4 cores}",  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/resources_info_meas.csv"),
+    #Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/simulation_FT/resources_info_circ.csv"),
+    #Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  "data/BivariateBicycle/[9, 9]/simulation_FT/resources_info_meas.csv"),
 
 ]
 
