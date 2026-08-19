@@ -10,6 +10,7 @@ All files in `src/` perform one step of the $\texttt{DQCode}$ pipeline, orchestr
 <img src="./data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="250"/>
 </p>
 
+All data produced in this project can be accessed at [https://github.com/timneumann1/DQCode_Data](https://github.com/timneumann1/DQCode_Data).
 
 ## Setup
 
