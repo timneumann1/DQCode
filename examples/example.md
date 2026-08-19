@@ -177,7 +177,7 @@ This produces
 
 ## DQC Simulation
 
-Using the optimised GA circuit, we now run the DQC simulation. In the [DQC simulation script](/scripts/execution/dqc_sim.jl)`scripts/dqc_sim.jl`, we can set the corresponding noise parameters and range. For the below results, we swept noise $p \in [5e-4,1e-2]$, with $p_{Bell} \in [1e-3, 5e-2]$, over $35$ values each. In this study, we sample 250,000 Monte Carlo trajectories of the $35^2 = 1225$ configurations. For each configuration across all experiments, we set the telegate idle depth to $25$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$. (For larger codes, it might be necessary to adjust the noise range for $p$ and $p_{Bell} to be swept in order to find pseudothresholds.)
+Using the optimised GA circuit, we now run the DQC simulation. In the [DQC simulation script](/scripts/execution/dqc_sim.jl) `scripts/dqc_sim.jl`, we can set the corresponding noise parameters and range. For the below results, we swept noise $p \in [5e-4,1e-2]$, with $p_{Bell} \in [1e-3, 5e-2]$, over $35$ values each. In this study, we sample 250,000 Monte Carlo trajectories of the $35^2 = 1225$ configurations. For each configuration across all experiments, we set the telegate idle depth to $25$, the single-qubit error rate to $p/100$ and the idling rate to $p/10$. (For larger codes, it might be necessary to adjust the noise range for $p$ and $p_{Bell} to be swept in order to find pseudothresholds.)
 
 For the simulation, we take the optimised encoding circuit for the logical zero state, append a (flag-based) verification circuit from the Munich Quantum Toolkit QECC package, and then determine the logical error rate of the fault-tolerant encoding under circuit-level and Bell pair initialisation noise, mimicing realistic noise channels under telegate execution. In this example, we choose the `optimal` verification method from MQT-QECC.
 
@@ -208,9 +208,6 @@ Since in the DQC simulation, we simulate the execution of the raw encoding circu
 </p>
 There's a lot going on in this circuit. Firstly, the first seven qubits are our data qubits. The (noiseless) SWAP operations at the very beginning of the circuit serve to visualise that we have mapped our qubits in a specific way (based on the hypergraph partitioning determined by distributed QEC cycles). (The SWAP operations are noiseless, since in a real experiment, one would simply relabel the qubits at the beginning of the circuit; this is different from SWAP operations that occur in the middle of the circuit, which might necessitate tele-operations). Additionally, we find two communication qubits (qubits $8$ and $9$), which enable our telegates between the two cores. Earlier, we identified that two CNOT gates are telegates: CNOT(1,3) and CNOT(4,7). These telegates have been replaced with the corresponding the EJPP protocol, making use of the respective communication qubits. The $10^{\text{th}}$ qubit stems from the verification circuit, and is used to discard runs that violated the FT criterion (and resulted in harmful errors from low-weight errors). Also, there are classical lines storing the measurement information from the circuit.
 
-The full circuit, including noise-free stabiliser measurements, is stored as a [.tex file](/data/Steane/[4,%203]/simulation_FT/full_circuit.tex).
-
-
 We can inspect the data stored by the above simulation in the 
 [simulation data file](/data/Steane/%5B4,%20%33%5D/simulation_FT/dqc_sim_data.csv).
 
@@ -230,7 +227,7 @@ as well as 2d heatmaps including the Bell state initialisation error probability
 
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="350"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="450"/>
 </p>
 
 We can also create other visualisations (see `data/`), based on the data that has been gathered in the optimisation and evaluation runs.
@@ -251,6 +248,6 @@ For the Steane-code, we find that the FT encoding circuit needs less telegates a
 A visualisation of the resource estimation gives insight into how quantum operation counts and depth compare between the Fault-tolerant logical zero state encoding and the distributed stabiliser measurement initialisation approach. It should be noted that fault tolerance in the unitary encoding circuit approach comes at the cost of post-selection (see information about `acceptance ratio` in the plot), whereas to achieve fault-tolerance with repeated stabiliser measurements, one commonly performs `d` rounds of stabiliser measurements, where `d` stands for the distance of the code (`distance = 3` for the Steane code).
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="750"/>
+<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="850"/>
 </p>
 

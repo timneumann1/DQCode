@@ -6,6 +6,11 @@ This repository investigates fault-tolerant logical zero state encoding of quant
 
 All files in `src/` perform one step of the $\texttt{DQCode}$ pipeline, orchestrated by `DQCode.jl`, which serves as the central entrypoint to all functionalities.
 
+<p align="center">
+<img src="./data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="250"/>
+</p>
+
+
 ## Setup
 
 In order for you to use $\texttt{DQCode}$, a number of setup steps should be followed. Firstly, pick a disk location and create a project folder.
