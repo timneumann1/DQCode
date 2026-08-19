@@ -158,7 +158,9 @@ Finally, let's take a look at the optimised circuit the genetic search produced:
 <p align="center">
 <img src="../data/Steane/%5B4,%203%5D/warmstart_ga/GA_circuit.png" alt="Warm-start GA encoding circuit" width="320"/>
 </p>
-How did the optimisation perform in a DQC setting? Find out in the [GA statistics data .csv file](/data/Steane/%5B4,%20%33%5D/warmstart_ga/warm_start_ga_stats.csv).
+How did the optimisation perform in a DQC setting? Find out in the 
+
+[GA statistics data .csv file](/data/Steane/%5B4,%20%33%5D/warmstart_ga/warm_start_ga_stats.csv).
 
 As the file reveals, we need two telegates for the distributed implementation!
 
