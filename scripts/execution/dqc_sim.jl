@@ -7,13 +7,36 @@ isdir(mqt_path) || error("Cannot find qecc at $mqt_path. Clone qecc next to DQCo
 exp_label = "steane_4_3" # available configurations are stored and can be adapted in src/experiment/config.jl
 
 circuit_path = "warmstart_ga/GA_circuit.jls" # set circuit path (within {code}/{architecture}/ folder) pointing to the circit to simulate
-method = "optimal" # "optimal", "heuristic" or "none" 
+method = "optimal" # verification circuit synthesis: "optimal", "heuristic" or "none" 
 
 num_samples = 5e5                                               # FIXED to 5e5
-ps = 10 .^ range(log10(1.25e-3),log10(1e-2),length=24)         # FIXED to 24
-p_bells = 10 .^ range(log10(1e-2),log10(3e-2), length=24)   # FIXED to 24
+ps = 10 .^ range(log10(1.25e-3),log10(1e-2),length=24)          # FIXED to 24
+p_bells = 10 .^ range(log10(1e-2),log10(3.1e-2), length=24)   # FIXED to 24
 telegate_idle_depth = 12                                        # FIXED
 p_single_ratio = 1/100                                          # FIXED
 p_idle_ratio = 1/10                                             # FIXED
 DQCode.dqc_simulation(exp_label, mqt_path, circuit_path, Int(num_samples), ps, p_bells,
                         telegate_idle_depth, p_single_ratio, p_idle_ratio, method) # perform the DQC simulation
+
+
+### Sample Noise Ranges:
+
+### Steane
+#ps = 10 .^ range(log10(1.25e-3),log10(1e-2),length=24)    
+#p_bells = 10 .^ range(log10(1e-2),log10(3.1e-2), length=24) 
+
+### Shor
+#ps = 10 .^ range(log10(3.1e-4),log10(3.1e-3),length=24)    
+#p_bells = 10 .^ range(log10(3.1e-3),log10(2e-2), length=24) 
+
+### Trivariate
+#ps = 10 .^ range(log10(1.75e-4),log10(9e-4),length=24)    
+#p_bells = 10 .^ range(log10(9e-4),log10(7.95e-3), length=24) 
+
+### Color
+#ps = 10 .^ range(log10(5.5e-4),log10(5.5e-3),length=24)    
+#p_bells = 10 .^ range(log10(5.5e-3),log10(3e-2), length=24) 
+
+### Bivariate
+#ps = 10 .^ range(log10(4.0e-5),log10(2.5e-4),length=24)    
+#p_bells = 10 .^ range(log10(2.5e-4),log10(2.5e-3), length=24) 
