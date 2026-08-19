@@ -164,6 +164,7 @@ $\texttt{DQCode}$ draws upon a rich collection of (general and quantum informati
 - `Qiskit`: https://github.com/Qiskit/qiskit/blob/main/qiskit/synthesis/clifford/clifford_decompose_full.py
 - `QuantikZ`: arXiv:1809.03842
 - `HiGHS`: https://doi.org/10.1007/s12532-017-0130-5
+- `LsqFit`: https://github.com/JuliaNLSolvers/LsqFit.jl?tab=readme-ov-file
 - `Karlsruhe Hypergraph Partitioning (KaHyPar)`: https://kahypar.org, https://github.com/kahypar/KaHyPar.jl
 > [!NOTE]
 > The `POMDPs` library as well as the `KaHyPar.jl` library are licensed under a MIT "Expat" license. The `KaHyPar C++` library is licensed under the GPL License: https://github.com/kahypar/KaHyPar.jl?tab=License-1-ov-file.
