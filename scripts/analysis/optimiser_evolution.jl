@@ -35,11 +35,13 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
     hidexdecorations!(ax_gates, grid=false)
     rowgap!(fig.layout, 10)
     outpath = joinpath(dir, "optimisation_evolution.pdf")
+    outpath2 = joinpath(dir, "optimisation_evolution.png")
     save(outpath, fig)
+    save(outpath2, fig)
 end
 
-code = "TrivariateBicycle"   # QEC Code
-qpu_sizes = "[6, 6]"         # QPU Size
+code = "Steane"   # QEC Code
+qpu_sizes = "[4, 3]"         # QPU Size
 
 # ------ GA ------ 
 ga_dir = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "warmstart_ga")
