@@ -374,7 +374,7 @@ function tableau_distance(matrix::Matrix{Int}, target_matrix::Matrix{Int}; metri
         return count(difference_mask) / length(matrix) 
     elseif metric == "jaccard"
         support_mask = (matrix .!= 0) .| (target_matrix .!= 0) 
-        return count(difference_mask .& support_mask) / count(support_mask) # Jaccard distance = 1-intersection / union
+        return count(difference_mask .& support_mask) / count(support_mask) # Jaccard distance is then computed as `d_J = 1-tableau_distance = intersection / union`
     end
 end
 
