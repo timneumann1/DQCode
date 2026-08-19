@@ -194,6 +194,6 @@ Functionality has been tested for MacOS.
 ### Citation
 ```
 author: {Tim Neumann}
-title: {Simulating DQC-optimised fault-tolerant logical $|0\rangle_L$ state encoding}
+title: {DQCode: Fault-Tolerant Zero State Preparation for Small qLDPC Codes on Near-Term Distributed Quantum Architectures}
 year: {2026}
 ```

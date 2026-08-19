@@ -59,7 +59,7 @@ Core 1 contains qubits [2, 3, 6, 7]
 Core 2 contains qubits [1, 4, 5]
 ```
 
-## Qiskit baseline encoding
+## Qiskit Baseline 
 
 Next, we use the qiskit library to obtain a baseline encoding. The method exposed in qiskit is meant to synthesised general stabiliser tableaus on a monolithic all-to-all architecture, so we expect it to perform poorly when evaluated with respect to telegates.
 
@@ -73,7 +73,7 @@ This saves the qiskit baseline data to `data/Steane/[4, 3]/qiskit_encoding`.
 Here, you should fine the encoding circuit produced by Qiskit
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="450"/>
+<img src="../data/Steane/%5B4,%203%5D/qiskit_encoding/qiskit_encoding_circuit.png" alt="Qiskit encoding circuit" width="400"/>
 </p>
 
 You can also take a look at the gate counts here:
@@ -90,6 +90,7 @@ Here, we chose the `heuristic` method for the verification circuit, yielding the
 <p align="center">
 <img src="../data/Steane/%5B4,%203%5D/mqt_encoding/mqt_encoding_circuit.png" alt="MQT encoding circuit" width="250"/>
 </p>
+
 ## Monte Carlo Tree Search
 
 Having explored the baselines, we now perform a Monte Carlo Tree Search for an efficient $|0\rangle_L$ encoding circuit. For this, set the correct label in the [GA script](/scripts/execution/dqc_mcts.jl) and set your the MCTS hyperparameters in the [experiment configuration file](/src/experiment_config.jl). In the current configuration, we use the hyperparameters
@@ -120,7 +121,7 @@ How did the optimisation perform in a DQC setting? Find out in the [MCTS statist
 
 As the file reveals, we need four telegates for the distributed implementation!
 
-## Genetic Search for efficient encoding circuits
+## Genetic Algorithm
 
 As a second optimiser, it is time initialise our genetic algorithm, which is seeded with optimised Gottesman encoding circuits as warm-start circuit. 
 
@@ -170,7 +171,7 @@ include("scripts/analysis/optimiser_evolution.jl")
 This produces 
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="500"/>
+<img src="../data/Steane/%5B4,%203%5D/warmstart_ga/optimisation_evolution.png" alt="Optimiser Evolution" width="350"/>
 </p>
 
 
@@ -222,17 +223,14 @@ include("scripts/analysis/logical_rate.jl")
 This saves a log-log plot containing the logical initialisation error scaling per physical initialisation error rate `p`
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/qec_threshold_FT.png" alt="log-log plot" width="700"/>
+<img src="../data/Steane/%5B4,%203%5D/qec_threshold_FT.png" alt="log-log plot" width="350"/>
 </p>
 
 as well as 2d heatmaps including the Bell state initialisation error probability `p_Bell` to `/data/Steane/[4, 3]/`.
 
-<p align="center">
-<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_FT.png" alt="2d" width="700"/>
-</p>
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="700"/>
+<img src="../data/Steane/%5B4,%203%5D/2d_heatmap_ratio_FT.png" alt="2d ratio" width="350"/>
 </p>
 
 We can also create other visualisations (see `data/`), based on the data that has been gathered in the optimisation and evaluation runs.
@@ -253,6 +251,6 @@ For the Steane-code, we find that the FT encoding circuit needs less telegates a
 A visualisation of the resource estimation gives insight into how quantum operation counts and depth compare between the Fault-tolerant logical zero state encoding and the distributed stabiliser measurement initialisation approach. It should be noted that fault tolerance in the unitary encoding circuit approach comes at the cost of post-selection (see information about `acceptance ratio` in the plot), whereas to achieve fault-tolerance with repeated stabiliser measurements, one commonly performs `d` rounds of stabiliser measurements, where `d` stands for the distance of the code (`distance = 3` for the Steane code).
 
 <p align="center">
-<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="1000"/>
+<img src="../data/Steane/%5B4,%203%5D/resource_comparison.png" alt="2d ratio" width="750"/>
 </p>
 
