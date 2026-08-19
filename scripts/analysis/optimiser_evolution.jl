@@ -5,33 +5,42 @@ using CairoMakie
 
 
 function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, single_q_counts,two_q_counts, telegate_counts )#, genetic_params::GeneticParameters)
-    title_str = "Evolution of optimiser metrics for $optimiser_label"         
-    fig = Figure(size = (800, 900))
+    fig = Figure(size = (800, 900), fontsize = 18)
     if optimiser_label == "Warm-Start Genetic Algorithm"
-        ax_fit   = Axis(fig[1, 1], ylabel="Fitness", title=title_str)
+        ax_fit   = Axis(fig[1, 1], ylabel=L"\text{Fitness}", 
+                            ylabelsize = 36, xlabelsize = 36,
+                            xticklabelsize =28, yticklabelsize = 28)
     elseif optimiser_label == "Monte Carlo Tree Search"
-        ax_fit   = Axis(fig[1, 1], ylabel="Reward", title=title_str)
+        ax_fit   = Axis(fig[1, 1], ylabel=L"\text{Reward}", 
+                            titlegap = 8,ylabelsize = 36, xlabelsize = 36,
+                            xticklabelsize = 28, yticklabelsize = 28)
     end
-    ax_gates = Axis(fig[2, 1], ylabel="Gate Counts")
-    ax_fid   = Axis(fig[3, 1], xlabel="Generation", ylabel="Fidelity")
+    ax_gates = Axis(fig[2, 1], ylabel=L"\text{Gate Counts}",# titlesize = 26,
+                            ylabelsize = 36, xlabelsize = 36,
+                            xticklabelsize = 28, yticklabelsize = 28)
+    ax_fid   = Axis(fig[3, 1], xlabel=L"\text{Generation}", ylabel=L"\text{Fidelity}",
+                            ylabelsize = 36, xlabelsize = 36,
+                            xticklabelsize = 28, yticklabelsize = 28)
     generations = 1:length(fitness_scores)
-    lines!(ax_fit, generations, fitness_scores, color=:seagreen4, linewidth=2)
-    lines!(ax_gates, generations, single_q_counts, label="Single-qubit", color=:goldenrod, linewidth=2)
-    lines!(ax_gates, generations, two_q_counts,    label="Two-qubit",    color=:steelblue,  linewidth=2)
-    lines!(ax_gates, generations, telegate_counts, label="Telegates",    color=:crimson, linewidth=2)
-    axislegend(ax_gates, position=:rt) 
-    lines!(ax_fid, generations, fidelities, color=:green, linewidth=2)
+    lines!(ax_fit, generations, fitness_scores, color=:seagreen4, linewidth=3)
+    lines!(ax_gates, generations, single_q_counts, label=L"\text{Hadamard}", color=:goldenrod, linewidth=3)
+    lines!(ax_gates, generations, two_q_counts,    label=L"\text{Intra-Core}",    color=:steelblue,  linewidth=3)
+    lines!(ax_gates, generations, telegate_counts, label=L"\text{Inter-Core}",    color=:crimson, linewidth=3)
+    axislegend(ax_gates, position=:rc, labelsize=24, framevisible = false,
+           foreground_color_legend = nothing) 
+    lines!(ax_fid, generations, fidelities, color=:green, linewidth=3)
     ylims!(ax_fid, minimum(fidelities) - 0.05, 1.05)
     linkxaxes!(ax_fit, ax_gates, ax_fid)
     hidexdecorations!(ax_fit, grid=false)
     hidexdecorations!(ax_gates, grid=false)
     rowgap!(fig.layout, 10)
-    outpath = joinpath(dir, "optimisation_evolution.png")
+    outpath = joinpath(dir, "optimisation_evolution.pdf")
     save(outpath, fig)
 end
 
-code = "Steane"
-qpu_sizes = "[4, 3]"
+code = "TrivariateBicycle"   # QEC Code
+qpu_sizes = "[6, 6]"         # QPU Size
+
 # ------ GA ------ 
 ga_dir = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "warmstart_ga")
 ga_evol = CSV.read(joinpath(ga_dir,"genetic_evolution.csv"), DataFrame)
