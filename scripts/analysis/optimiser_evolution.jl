@@ -4,7 +4,7 @@ using CSV, DataFrames
 using CairoMakie
 
 
-function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, single_q_counts,two_q_counts, telegate_counts )#, genetic_params::GeneticParameters)
+function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities, single_q_counts,two_q_counts, telegate_counts )
     fig = Figure(size = (800, 900), fontsize = 18)
     if optimiser_label == "Warm-Start Genetic Algorithm"
         ax_fit   = Axis(fig[1, 1], ylabel=L"\text{Fitness}", 
@@ -40,8 +40,9 @@ function plot_evolution(dir, optimiser_label::String, fitness_scores, fidelities
     save(outpath2, fig)
 end
 
-code = "Steane"   # QEC Code
-qpu_sizes = "[4, 3]"         # QPU Size
+### NOTE: The code-architecture pair needs to be specified below.
+code = "Steane"        # QEC Code
+qpu_sizes = "[4, 3]"   # QPU Size
 
 # ------ GA ------ 
 ga_dir = joinpath(@__DIR__, "..", "..", "data", "$code/$qpu_sizes", "warmstart_ga")

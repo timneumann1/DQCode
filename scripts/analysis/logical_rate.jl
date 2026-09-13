@@ -61,23 +61,22 @@ function log_log_plot(df, data_path; ft = true, monolithic = false)
         lines!(ax1, p_range, p_range, color = :gray20,  linestyle = :dash, linewidth = 2.5)#,  label = L"p_L = p")
         text!(ax1, p_range[end], p_range[end], text = L"\text{LIER} = p", color = :gray20, align = (:right, :bottom), offset = (13, -50), fontsize = 24)
 
-        # p_L = p²  (slope 2 in log-log)
-        lines!(ax1, p_range, 200*p_range.^2, color = :gray40, linestyle = :dot, linewidth = 2.5)#, label = L"p_L = 100 p^2")
+        # p_L = p²  (slope 2 in log-log space)
+        lines!(ax1, p_range, 200*p_range.^2, color = :gray40, linestyle = :dot, linewidth = 2.5)
         text!(ax1, p_range[end], 200*p_range[end]^2, text = L"\text{LIER} \sim p^2", color = :gray40, align = (:right, :bottom), offset = (20, -65), fontsize = 24)
     else
         # p_L = p  (slope 1 in log-log for pseudothreshold)
-        lines!(ax1, p_range, p_range, color = :gray20,  linestyle = :dash, linewidth = 2.5)#,  label = L"p_L = p")
+        lines!(ax1, p_range, p_range, color = :gray20,  linestyle = :dash, linewidth = 2.5)
         text!(ax1, p_range[end], p_range[end], text = L"\text{LIER} = p", color = :gray20, align = (:right, :bottom), offset = (13, -45), fontsize = 24)
 
-        # p_L = p^3  (slope 3 in log-log)
-        lines!(ax1, p_range, 500*p_range.^3, color = :gray40, linestyle = :dot, linewidth = 2.5)#, label = L"p_L = 500 p^3")
+        # p_L = p^3  (slope 3 in log-log space)
+        lines!(ax1, p_range, 500*p_range.^3, color = :gray40, linestyle = :dot, linewidth = 2.5)
         text!(ax1, p_range[end], 500*p_range[end]^3, text = L"\text{LIER} \sim p^3", color = :gray40, align = (:right, :bottom), offset = (19, -65), fontsize = 24)
-
     end
     colors = [RGBf( 35/255, 139/255,  69/255), RGBf(230/255, 159/255,  0/255), RGBf( 33/255, 113/255, 181/255)]  
     for (idx,p_bell) in enumerate(p_bells_plot)
         df_bell = copy(df[(df.p_bell .== p_bell), :])
-        @info "Bell state error: $p_bell"
+        @info "Bell state initialisation error probability: $p_bell"
         df_ = copy(df_bell[(df_bell.logical_error_rate.>0.0), :])
         @info "Deleted $(nrow(df_bell)-nrow(df_)) row(s) because of 0.0 logical error rate"
         sort!(df_, :p)
@@ -86,7 +85,7 @@ function log_log_plot(df, data_path; ft = true, monolithic = false)
         df_.var_AR = 1 ./ ( df_.n_samples) .* (df_.acceptance_ratio) .* (1 .- df_.acceptance_ratio)
         df_.std_error_AR = sqrt.(max.(df_.var_AR, 0.0))
         if idx ==1
-            a, b = power_law_fit(df_.p, df_.logical_error_rate) # a = C, b = \alpha in the main text. We only determine scaling exponent for the lowest bell pair noise
+            a, b = power_law_fit(df_.p, df_.logical_error_rate) # a = C, b = \alpha in the thesis document; we only determine scaling exponent for the lowest bell pair noise
             if monolithic # bell pair noise is irrelevant in this case
                 fit_label = L"\text{Power law fit: p_L=%$(round(a, digits=2))\, p^{%$( round(b, digits=2))} }"
             else
@@ -151,7 +150,6 @@ function two_d_plot(df, data_path; ft = true)
         ratio[p_to_i[r.p], pb_to_j[r.p_bell]] = r.ratio_logical_phys
         LER[p_to_i[r.p], pb_to_j[r.p_bell]] = r.logical_error_rate
     end
-    _code_architecture_label = df.code_architecture_label[1]
     # ---------------------- Plot 2D Ratio Heatmap ----------------------
     fig = Figure(size = (800, 620), fontsize = 14)
     ax = Axis(fig[1, 1]; 
@@ -289,7 +287,7 @@ function pre_decoding_vs_logical_plot(df, data_path; ft = true)
     scatter!(ax, df_.p, df_.x_error_pre_decoding_rate; color = col_pre_x, marker = :circle, markersize = 12)
     lines!(ax, df_.p, df_.z_error_pre_decoding_rate; color = col_pre_z, linestyle=linestyles[2], linewidth = 2, label=L"\text{Pre-Decoding Physical Z-Error Rate}")
     scatter!(ax, df_.p, df_.z_error_pre_decoding_rate; color = col_pre_z, marker = :circle, markersize = 12)
-    lines!(ax, df_.p, df_.logical_error_rate; color = col_logical,linestyle=linestyles[3], linewidth = 2, label=L"\text{LIER}"),   #L"\text{Logical } |0\rangle_L^{\otimes k} \text{ Initialisation Error Rate}"), 
+    lines!(ax, df_.p, df_.logical_error_rate; color = col_logical,linestyle=linestyles[3], linewidth = 2, label=L"\text{LIER}")
     scatter!(ax, df_.p, df_.logical_error_rate; color = col_logical, marker = :diamond, markersize = 12)
     axislegend(ax, position = :lt, framevisible=false, labelsize=24)
     if ft
@@ -431,7 +429,7 @@ function compare_logical_error_rate(df)
     lines!(ax, p_range_ext, p_range_ext, color = :gray20,  linestyle = :dash, linewidth = 2.5)
     text!(ax, p_range_ext[end], p_range_ext[end], text = L"\text{LIER} = p", color = :gray20, align = (:right, :bottom), offset = (13, -40), fontsize = 16)
     # p_L = p²  (slope 2 in log-log)
-    lines!(ax, p_range_ext, 15*(p_range_ext).^2, color = :gray40, linestyle = :dot, linewidth = 2.5)#, label = L"\text{LIER} \sim p^2")
+    lines!(ax, p_range_ext, 15*(p_range_ext).^2, color = :gray40, linestyle = :dot, linewidth = 2.5)
     text!(ax, p_range_ext[end], 15*p_range_ext[end]^2, text = L"\text{LIER} \sim p^2", color = :gray40, align = (:right, :top), offset = (17, -50), fontsize = 16)
     for (idx, config_label) in enumerate(labels)
         df_ = df[df.code_architecture_label .== config_label, :]
@@ -501,18 +499,20 @@ function analysis_dqc_sim(configs)
     end
 end
 
-# select one or more code-architecture pair(s) for plotting
+### NOTE: Select one or more code-architecture pair(s) for plotting; depending on the selection, the respective 
+###        functions will be executed. 
 configs_dqc_sim = [
     Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}", 1, 3,  "data/Steane/[4, 3]/simulation_FT/dqc_sim_data.csv"),
-    Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}", 1, 3, "data/Shor/[3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
-    Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}", 2, 3,  "data/TrivariateBicycle/[6, 6]/simulation_FT/dqc_sim_data.csv"),
-    Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}", 2,3, "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/dqc_sim_data.csv"),
-    #Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}", 2,3, "data/TrivariateBicycle/[4, 4, 4]/simulation_non_FT/dqc_sim_data.csv"),  # need to set ft=false above
-    Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}", 2,3, "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
-    Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  4, 5,"data/Triangular/[8, 9]/simulation_FT/dqc_sim_data.csv"),
-    Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  4,4, "data/BivariateBicycle/[9, 9]/simulation_FT/dqc_sim_data.csv"),
-    Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  4,4, "data/BivariateBicycle/[6, 6, 6]/simulation_FT/dqc_sim_data.csv"),
-    Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 6 cores}", 4,4,  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
+    # Config("Shor", "[3,3,3]", L"[[9,1,3]], \text{ 3 cores}", 1, 3, "data/Shor/[3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
+    # Config("TrivariateBicycle", "[6,6]", L"[[12,2,3]], \text{ 2 cores}", 2, 3,  "data/TrivariateBicycle/[6, 6]/simulation_FT/dqc_sim_data.csv"),
+    # Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}", 2,3, "data/TrivariateBicycle/[4, 4, 4]/simulation_FT/dqc_sim_data.csv"),
+    # # Note: to plot non-FT data, please manually set `ft=false` in all function calls in `analysis_dqc_sim` above
+    # #Config("TrivariateBicycle", "[4,4,4]", L"[[12,2,3]], \text{ 3 cores}", 2,3, "data/TrivariateBicycle/[4, 4, 4]/simulation_non_FT/dqc_sim_data.csv"), 
+    # Config("TrivariateBicycle", "[3,3,3,3]", L"[[12,2,3]], \text{ 4 cores}", 2,3, "data/TrivariateBicycle/[3, 3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
+    # Config("Color", "[8,9]", L"[[17,1,5]], \text{ 2 cores}",  4, 5,"data/Triangular/[8, 9]/simulation_FT/dqc_sim_data.csv"),
+    # Config("BivariateBicycle", "[9,9]", L"[[18,4,4]], \text{ 2 cores}",  4,4, "data/BivariateBicycle/[9, 9]/simulation_FT/dqc_sim_data.csv"),
+    # Config("BivariateBicycle", "[6,6,6]", L"[[18,4,4]], \text{ 3 cores}",  4,4, "data/BivariateBicycle/[6, 6, 6]/simulation_FT/dqc_sim_data.csv"),
+    # Config("BivariateBicycle", "[3,3,3,3,3,3]", L"[[18,4,4]], \text{ 6 cores}", 4,4,  "data/BivariateBicycle/[3, 3, 3, 3, 3, 3]/simulation_FT/dqc_sim_data.csv"),
 ]
 
 analysis_dqc_sim(configs_dqc_sim)

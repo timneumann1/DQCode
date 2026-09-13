@@ -120,7 +120,7 @@ On the $\texttt{DQCode}$ side, you should now see have access to the following f
 ## Usage
 
 > [!NOTE]
-> Here we briefly introduce how to use $\texttt{DQCode}$. For an overview over the entire pipeline, with sample outputs based on the Steane [[7,1,3]] code on two QPUs, please refer to the [examples](examples/example.md) markdown file. This provides an overview over the entire pipeline and contextualises the role of each of the scripts in $\texttt{DQCode}$. 
+> Here we briefly introduce how to use $\texttt{DQCode}$. For an overview over the entire pipeline, with sample outputs based on the Steane [[7,1,3]] code on two QPUs, please refer to the [examples](examples/example.md) markdown file. This provides an overview over the entire pipeline and contextualises the role of each of the scripts in $\texttt{DQCode}$. Should anything be unclear, please don't hesitate to open an issue or contact me directly at tim01.neumann@gmail.com.
 
 Available code-network configurations are defined (and can easily be appended) in the [experiment configuration](src/experiment_config.jl) file.
 

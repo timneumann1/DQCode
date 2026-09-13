@@ -1,4 +1,4 @@
-# logical_rate.jl
+# resources.jl
 
 using CairoMakie, LaTeXStrings
 using CairoMakie: Axis
@@ -42,7 +42,7 @@ function compare_telegate_counts(df)
         titlegap       = 16,
         xlabelsize     = 30,
         ylabelsize     = 30,
-        xticks         = (Float64.(code_architecture_positions), split_two_line.(code_architecture_labels)),#latexstring.(code_architecture_labels)),
+        xticks         = (Float64.(code_architecture_positions), split_two_line.(code_architecture_labels)),
         xticklabelsize = 24,
         xgridvisible   = false,
         ygridvisible   = true,
@@ -88,7 +88,7 @@ function compare_resources(df, data_path)
     @info "Creating circuit vs. measurement resource comparison plot..."
     # ---------------------- Plotting ----------------------
     encoding_methods = ["encoding_circ", "stabiliser_measurement"]
-    colors = [RGBf( 33/255, 113/255, 181/255), RGBf(230/255, 159/255,  0/255)]#, RGBf( 33/255, 113/255, 181/255)
+    colors = [RGBf( 33/255, 113/255, 181/255), RGBf(230/255, 159/255,  0/255)]
     encoding_labels = [latexstring(L"\text{FT encoding circuit (AR=}"*"$( round( df.acceptance_ratio[1], digits=2))"*L"\text{ for } p="*"$(power_of_10_label(df.p[1], 1))"*L"\text{, }p_{\text{Bell}}="*"$( power_of_10_label(df.p_bell[1], 1) ))"), 
                         latexstring(L"\text{Distributed Stabiliser Measurements (one round)}")]
     function get_val(method, col)
@@ -157,7 +157,6 @@ function compare_resources(df, data_path)
 end
 
 
-
 # ------------------------------------------
 # ------------------ Helper ----------------
 # ------------------------------------------
@@ -207,7 +206,8 @@ function analysis_resources(configs)
     compare_resources(df, configs[1].data_path)
 end
 
-# The uncommented lines are included in the optimiser comparison plot
+### NOTE: The uncommented lines are include in the optimiser comparison plot.
+
 configs_optimiser = [   
 
     # Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/qiskit_encoding/qiskit_encoding_stats.csv"),
@@ -260,7 +260,9 @@ configs_optimiser = [
 analysis_optimiser(configs_optimiser)
 
 
-# The uncommented lines are included in the resource comparison plot
+### NOTE: The uncommented lines are included in the resource comparison plot. The visualisation assumes input of
+### only one code-architecture pair.
+
 configs_resources = [
 
     #Config("Steane", "[4,3]", L"[[7,1,3]], \text{ 2 cores}",  "data/Steane/[4, 3]/simulation_FT/resources_info_circ.csv"),
