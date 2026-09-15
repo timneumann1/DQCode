@@ -52,8 +52,9 @@ Before we install the required Julia dependencies, first make sure that you have
 https://julialang.org/downloads/. This code has been tested on MacOS for `julia 1.12.6` (the latest stable Julia release as of May 2026). Once available, enter the Julia REPL, activate the default project location and install the required dependencies via
 ```
 julia 
-] activate .
-] instantiate
+]
+activate .
+instantiate
 ```
 
 > [!IMPORTANT]
@@ -131,7 +132,8 @@ To initialise a specific code-architecture configuration, indicate the correspon
 
 ```
 julia
-] activate .
+]
+activate .
 include("scripts/execution/dqc_setup.jl")
 ```
 
